@@ -221,6 +221,8 @@ pub fn jdk_super(class: &str) -> Option<&'static str> {
         | "java.lang.ExceptionInInitializerError"
         | "java.lang.NoClassDefFoundError" => "java.lang.LinkageError",
         "java.lang.AbstractMethodError" => "java.lang.IncompatibleClassChangeError",
+        "org.opentest4j.AssertionFailedError" | "org.opentest4j.MultipleFailuresError" => "java.lang.AssertionError",
+        "org.opentest4j.TestAbortedException" => "java.lang.RuntimeException",
         _ => return None,
     })
 }

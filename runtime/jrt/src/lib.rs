@@ -6,6 +6,7 @@
 
 pub mod array;
 pub mod io;
+pub mod junit;
 pub mod lambda;
 pub mod lang;
 pub mod num;

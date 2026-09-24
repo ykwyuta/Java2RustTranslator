@@ -293,7 +293,7 @@ final class JirBuilder {
             }
             stmts.addAll(m.body().stmts());
             methods.add(new Decl.MethodDecl(m.ref(), m.kind(), params, new Stmt.Block(stmts, m.body().pos()), m.isPublic(), m.isPrivate(),
-                    m.isMain(), m.overrides(), m.rustName(), m.javadoc(), m.pos()));
+                    m.isMain(), m.overrides(), m.rustName(), m.javadoc(), m.pos(), m.annotations()));
         }
         return t.withBodies(fields, methods, t.instanceInit(), t.staticInit(), t.enumConstants());
     }
@@ -495,7 +495,8 @@ final class JirBuilder {
                 && params.get(0).type().equals(new JType.ArrayType(JType.STRING));
         List<String> overrides = kind == Decl.MethodKind.INSTANCE ? overriddenMethods(ee, owner) : List.of();
         return new Decl.MethodDecl(ref, kind, params, body, !ee.getModifiers().contains(Modifier.PRIVATE),
-                ee.getModifiers().contains(Modifier.PRIVATE), isMain, overrides, null, elements.getDocComment(ee), pos(mt));
+                ee.getModifiers().contains(Modifier.PRIVATE), isMain, overrides, null, elements.getDocComment(ee), pos(mt),
+                ee.getAnnotationMirrors().stream().map(a -> ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString()).toList());
     }
 
     /**

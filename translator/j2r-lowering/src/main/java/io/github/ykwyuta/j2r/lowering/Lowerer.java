@@ -17,6 +17,7 @@ import io.github.ykwyuta.j2r.rir.RItem;
 import io.github.ykwyuta.j2r.rir.RStmt;
 import io.github.ykwyuta.j2r.rir.RType;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -251,6 +252,10 @@ public final class Lowerer {
             body.add(new RItem.Impl(List.of(), self, implItems()));
             if (t.isConcrete()) {
                 body.add(objectImpl());
+                RItem tests = testModule();
+                if (tests != null) {
+                    body.add(tests);
+                }
             }
             List<RItem> items = new ArrayList<>();
             items.add(new RItem.Use(List.of("allow(unused_imports)"), "jrt::prelude::*"));
@@ -427,6 +432,116 @@ public final class Lowerer {
                 }
             }
             return items;
+        }
+
+        // ------------------------------------------------------------ JUnit のテスト
+
+        private static final String[] TEST = {"org.junit.jupiter.api.Test", "org.junit.Test"};
+        private static final String[] BEFORE_EACH = {"org.junit.jupiter.api.BeforeEach", "org.junit.Before"};
+        private static final String[] AFTER_EACH = {"org.junit.jupiter.api.AfterEach", "org.junit.After"};
+        private static final String[] BEFORE_ALL = {"org.junit.jupiter.api.BeforeAll", "org.junit.BeforeClass"};
+        private static final String[] AFTER_ALL = {"org.junit.jupiter.api.AfterAll", "org.junit.AfterClass"};
+        private static final String[] DISABLED = {"org.junit.jupiter.api.Disabled", "org.junit.Ignore"};
+
+        /** このクラスとスーパークラスの、注釈の付いたメソッド（スーパークラスのものが先。JUnit の順序）。 */
+        private List<ProgramIndex.MethodInfo> annotated(String... annotations) {
+            List<ProgramIndex.TypeInfo> chain = new ArrayList<>();
+            for (ProgramIndex.TypeInfo cur = ti; cur != null;
+                 cur = cur.decl().superclass() == null ? null : cx.index().type(cur.decl().superclass())) {
+                chain.add(0, cur);
+            }
+            List<ProgramIndex.MethodInfo> out = new ArrayList<>();
+            for (ProgramIndex.TypeInfo c : chain) {
+                for (Decl.MethodDecl m : c.decl().methods()) {
+                    if (m.hasAnnotation(annotations) && m.body() != null) {
+                        out.add(new ProgramIndex.MethodInfo(m, c));
+                    }
+                }
+            }
+            return out;
+        }
+
+        /**
+         * {@code @Test} メソッドを {@code #[test]} 関数にしたテストモジュール。JUnit と同じく、テストごとに新しい
+         * インスタンスを作り、{@code @BeforeEach} / {@code @AfterEach} で囲む（{@code @BeforeAll} / {@code @AfterAll} も
+         * テストごとに実行する。static フィールドはスレッドローカルで、Rust のテストは別々のスレッドで動くため）。
+         */
+        private RItem testModule() {
+            List<ProgramIndex.MethodInfo> tests = annotated(TEST);
+            if (tests.isEmpty()) {
+                return null;
+            }
+            Decl.MethodDecl ctor = t.methods().stream().filter(m -> m.isConstructor() && m.params().isEmpty()).findFirst()
+                    .orElse(null);
+            boolean hasCtor = t.methods().stream().anyMatch(Decl.MethodDecl::isConstructor);
+            if (ctor == null && hasCtor) {
+                cx.diags().report(DiagnosticCode.UNSUPPORTED_API, t.pos(), "test class " + t.qualifiedName() + " needs a no-arg constructor");
+                return null;
+            }
+            List<RItem> fns = new ArrayList<>();
+            Set<String> names = new HashSet<>();
+            for (ProgramIndex.MethodInfo test : tests) {
+                if (!test.decl().params().isEmpty() || test.decl().isStatic()) {
+                    cx.diags().report(DiagnosticCode.UNSUPPORTED_API, test.decl().pos(), "test method with parameters: " + test.decl().name());
+                    continue;
+                }
+                RExpr newThis = path(self + "::" + (ctor == null ? "new" : ctor.rustName()));
+                RExpr alloc = new RExpr.Call(newThis, List.of());
+                if (ctor != null && cx.throwing().isThrowing(ctor)) {
+                    alloc = new RExpr.Try(alloc);
+                }
+                List<RStmt> each = new ArrayList<>();
+                for (ProgramIndex.MethodInfo b : annotated(BEFORE_EACH)) {
+                    each.add(testCall(b));
+                }
+                each.add(testCall(test));
+                List<RStmt> after = new ArrayList<>();
+                for (ProgramIndex.MethodInfo a : annotated(AFTER_EACH)) {
+                    after.add(testCall(a));
+                }
+                List<RStmt> all = new ArrayList<>();
+                for (ProgramIndex.MethodInfo b : annotated(BEFORE_ALL)) {
+                    all.add(testCall(b));
+                }
+                all.add(new RStmt.Let("this", false, null, alloc));
+                all.add(new RStmt.ExprStmt(new RExpr.Try(call("jrt::junit::with_after", resultClosure(each), resultClosure(after))), true));
+                List<RStmt> afterAll = new ArrayList<>();
+                for (ProgramIndex.MethodInfo a : annotated(AFTER_ALL)) {
+                    afterAll.add(testCall(a));
+                }
+                RExpr body = afterAll.isEmpty() ? resultClosure(all)
+                        : call("jrt::junit::with_after", resultClosure(all), resultClosure(afterAll));
+                RExpr run = call("jrt::junit::run_test", new RExpr.Lit("\"" + t.qualifiedName() + "." + test.decl().name() + "\""),
+                        new RExpr.Closure(true, List.of(), null, body));
+                String name = Naming.valueName(test.decl().name());
+                while (!names.add(name)) {
+                    name = name + "_";
+                }
+                List<String> attrs = new ArrayList<>(List.of("test"));
+                if (test.decl().hasAnnotation(DISABLED)) {
+                    attrs.add("ignore");
+                }
+                fns.add(new RItem.Fn(List.of(), attrs, "", name, List.of(), null, block(List.of(new RStmt.ExprStmt(run, true)), null)));
+            }
+            List<RItem> items = new ArrayList<>();
+            items.add(new RItem.Use(List.of(), "super::*"));
+            items.addAll(fns);
+            return new RItem.Mod(List.of("cfg(test)"), "__tests", items);
+        }
+
+        /** {@code (|| -> JResult<()> { stmts; Ok(()) })()}。 */
+        private RExpr resultClosure(List<RStmt> stmts) {
+            return new RExpr.Call(new RExpr.Closure(false, List.of(), new RType("JResult<()>"),
+                    block(stmts, Conversions.ok(path("()")))), List.of());
+        }
+
+        private RStmt testCall(ProgramIndex.MethodInfo m) {
+            List<RExpr> args = m.decl().isStatic() ? List.of() : List.of(new RExpr.Unary("&", path("this")));
+            RExpr c = new RExpr.Call(path(imp.type(m.owner()) + "::" + m.decl().rustName()), args);
+            if (cx.throwing().isThrowing(m.decl())) {
+                c = new RExpr.Try(c);
+            }
+            return new RStmt.ExprStmt(c, true);
         }
 
         private Decl.MethodDecl defaultConstructor() {

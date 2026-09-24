@@ -6,3 +6,4 @@ java.util.stream.yaml
 java.util.regex.yaml
 java.util.more.yaml
 java.util.concurrent.yaml
+org.junit.yaml

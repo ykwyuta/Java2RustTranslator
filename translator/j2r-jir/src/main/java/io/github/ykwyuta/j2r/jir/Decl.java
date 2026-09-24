@@ -112,10 +112,28 @@ public final class Decl {
      */
     public record MethodDecl(MethodRef ref, MethodKind kind, List<Param> params, Stmt.Block body, boolean isPublic,
                              boolean isPrivate, boolean isMain, List<String> overrides, String rustName,
-                             String javadoc, SourcePos pos) {
+                             String javadoc, SourcePos pos, List<String> annotations) {
         public MethodDecl {
             params = List.copyOf(params);
             overrides = List.copyOf(overrides);
+            annotations = annotations == null ? List.of() : List.copyOf(annotations);
+        }
+
+        /** 注釈のないメソッド。 */
+        public MethodDecl(MethodRef ref, MethodKind kind, List<Param> params, Stmt.Block body, boolean isPublic,
+                          boolean isPrivate, boolean isMain, List<String> overrides, String rustName,
+                          String javadoc, SourcePos pos) {
+            this(ref, kind, params, body, isPublic, isPrivate, isMain, overrides, rustName, javadoc, pos, List.of());
+        }
+
+        /** 完全修飾名の注釈（{@code org.junit.jupiter.api.Test} など）が付いているか。 */
+        public boolean hasAnnotation(String... qualifiedNames) {
+            for (String n : qualifiedNames) {
+                if (annotations.contains(n)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         public String name() {
@@ -135,11 +153,11 @@ public final class Decl {
         }
 
         public MethodDecl withRustName(String n) {
-            return new MethodDecl(ref, kind, params, body, isPublic, isPrivate, isMain, overrides, n, javadoc, pos);
+            return new MethodDecl(ref, kind, params, body, isPublic, isPrivate, isMain, overrides, n, javadoc, pos, annotations);
         }
 
         public MethodDecl withBody(Stmt.Block b) {
-            return new MethodDecl(ref, kind, params, b, isPublic, isPrivate, isMain, overrides, rustName, javadoc, pos);
+            return new MethodDecl(ref, kind, params, b, isPublic, isPrivate, isMain, overrides, rustName, javadoc, pos, annotations);
         }
     }
 
