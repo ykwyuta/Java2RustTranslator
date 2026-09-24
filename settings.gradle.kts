@@ -16,6 +16,7 @@ val translatorModules = listOf(
     "j2r-rir",
     "j2r-mappings",
     "j2r-lowering",
+    "j2r-spring",
     "j2r-backend",
     "j2r-driver",
     "j2r-cli",

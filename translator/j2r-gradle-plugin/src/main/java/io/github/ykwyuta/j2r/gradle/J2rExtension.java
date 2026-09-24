@@ -34,6 +34,12 @@ public abstract class J2rExtension {
     /** 追加の API マッピング定義（YAML）のディレクトリ。 */
     public abstract ConfigurableFileCollection getMappingDirs();
 
+    /** 入力が使うフレームワーク（none / spring）。 */
+    public abstract Property<String> getFramework();
+
+    /** MyBatis の Mapper XML と schema.sql を探すリソースのディレクトリ（既定: main ソースセットの resources）。 */
+    public abstract ConfigurableFileCollection getResourceDirs();
+
     /** 変換後に cargo check を実行するか。 */
     public abstract Property<Boolean> getCargoCheck();
 

@@ -10,4 +10,7 @@ public sealed interface RStmt {
     record ExprStmt(RExpr expr, boolean semi) implements RStmt {}
 
     record Comment(String text) implements RStmt {}
+
+    /** {@code let pattern = init else { elseBlock };} */
+    record LetElse(String pattern, RExpr init, RExpr.Block elseBlock) implements RStmt {}
 }

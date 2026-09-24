@@ -10,6 +10,7 @@
 | M3 例外・ジェネリクス・ラムダ | **完了**: 例外は `Result` で伝える（送出しうるメソッドは固定点の例外フロー解析で求める。ランタイム例外も catch できる）、try/catch/finally・try-with-resources、ジェネリクス（消去）、ラムダ・メソッド参照、コレクション・ストリーム API・Optional・正規表現、JUnit 5 のテストの変換 |
 | M4 イディオム化 | 未着手 |
 | M5 規模対応・周辺機能 | 一部: スレッドと `java.util.concurrent` を決定的なスケジューラで実行する（実際の並列実行は未着手） |
+| F1 フレームワーク（Spring） | 一部: `--framework spring` で Mapper（MyBatis）・サービス（`@Transactional`）・ドメインを sqlx の crate に変換する。Web 層（コントローラ・Thymeleaf）は未着手（[07-spring-to-rust.md](07-spring-to-rust.md) §7） |
 
 E2E テスト 25 件（`tests/e2e`）と JUnit 変換のテスト（`tests/junit`）がすべて JVM と一致する。
 
@@ -63,6 +64,14 @@ NullPointerException の詳細メッセージ、`StackOverflowError`、プラッ
 - スレッド（S4）: 実際に並列に実行する（`Arc` / `Mutex`。現在は 1 つの OS スレッドで決まった順に実行する）
 - ユーザ定義 API マッピング、`@Weak` 等の変換ヒント注釈（`j2r-annotations` jar として提供）
 - 実 OSS コーパス回帰（夜間 CI）
+
+## F1: フレームワーク（Spring Boot + MyBatis + Thymeleaf → axum + sqlx + askama）
+- **済**: 宣言のメタ情報（注釈の値・消去前の型・JSpecify の `@Nullable`）、`@Mapper` + Mapper XML / 注釈の SQL → sqlx の関数
+  （動的 SQL は `QueryBuilder`）、`@Service` → トランザクションを張る構造体、エンティティ・record・enum・例外
+- 次: Web 層（`@Controller` → axum のハンドラとルート、フォームと Bean Validation → serde + validator）、
+  Thymeleaf → askama のテンプレート、`@Configuration` の `@Bean` → `AppState` の組み立て
+- その後: `<foreach>`・`resultMap`、サービス間の呼び出し（トランザクションの伝播）、Spring Data JDBC / JPA
+- **到達点**: examples/todo-app の Rust 版をすべて生成し、compare.sh で Spring 版と一致する
 
 ## M6（実験）: LLM 後処理プラグイン
 - `todo!()` 箇所や `J2R-PERF` 診断箇所を対象に LLM でリライト案を生成

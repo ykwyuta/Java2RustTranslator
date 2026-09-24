@@ -42,6 +42,21 @@ public sealed interface JType {
         }
     }
 
+    /**
+     * 型引数付きのクラス型（{@code List<Todo>}）。JIR の式・文の型には現れず、{@link DeclInfo#genericType()} でだけ使う。
+     * 型変数・ワイルドカードは上限の型にする。
+     */
+    record Parameterized(String qualifiedName, java.util.List<JType> args) implements JType {
+        public Parameterized {
+            args = java.util.List.copyOf(args);
+        }
+
+        @Override
+        public String javaName() {
+            return qualifiedName + args.stream().map(JType::javaName).collect(java.util.stream.Collectors.joining(",", "<", ">"));
+        }
+    }
+
     /** 変換器が扱えない型（型変数、交差型など）。 */
     record Unsupported(String description) implements JType {
         @Override

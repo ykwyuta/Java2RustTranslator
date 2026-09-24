@@ -9,7 +9,7 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use validator::{Validate, ValidationError};
 
-use crate::domain::Todo;
+use todo_core::domain::Todo;
 
 /// 登録・編集フォーム。name 属性は title / description / dueDate / done。
 #[derive(Debug, Default, Clone, Deserialize, Validate)]

@@ -5,15 +5,15 @@ use axum::extract::{Path, Query, State};
 use axum::response::{IntoResponse, Response};
 use axum_messages::Messages;
 use serde::Deserialize;
+use todo_core::domain::TodoFilter;
 
+use super::global_exception_handler::AppError;
 use super::redirect;
 use super::todo_form::{FieldErrors, TodoForm};
 use super::views::{TodoFormView, TodoListView};
 use crate::AppState;
-use crate::domain::TodoFilter;
-use crate::service::ServiceError;
 
-type Result<T> = std::result::Result<T, ServiceError>;
+type Result<T> = std::result::Result<T, AppError>;
 
 /// @RequestParam(name = "filter", required = false) と @RequestParam(name = "q", required = false)
 #[derive(Debug, Default, Deserialize)]
@@ -70,7 +70,7 @@ pub async fn create(
     };
     let todo = state
         .todo_service
-        .create(input.title, input.description, input.due_date)
+        .create(&input.title, input.description.as_deref(), input.due_date)
         .await?;
     messages.info(format!("「{}」を追加しました", todo.title));
     Ok(redirect("/todos"))
@@ -108,8 +108,8 @@ pub async fn update(
         .todo_service
         .update(
             id,
-            input.title,
-            input.description,
+            &input.title,
+            input.description.as_deref(),
             input.due_date,
             input.done,
         )

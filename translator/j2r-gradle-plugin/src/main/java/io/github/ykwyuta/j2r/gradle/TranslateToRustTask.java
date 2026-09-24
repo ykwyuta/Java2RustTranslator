@@ -60,6 +60,13 @@ public abstract class TranslateToRustTask extends DefaultTask {
     @Input
     public abstract Property<Boolean> getCargoCheck();
 
+    @Input
+    public abstract Property<String> getFramework();
+
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getResourceDirs();
+
     @OutputDirectory
     public abstract DirectoryProperty getOutputDir();
 
@@ -85,6 +92,14 @@ public abstract class TranslateToRustTask extends DefaultTask {
         }
         if (getCargoCheck().get()) {
             args.add("--cargo-check");
+        }
+        args.add("--framework");
+        args.add(getFramework().get().toUpperCase(java.util.Locale.ROOT));
+        for (File d : getResourceDirs().getFiles()) {
+            if (d.exists()) {
+                args.add("--resources");
+                args.add(d.getAbsolutePath());
+            }
         }
         if (!getCompileClasspath().isEmpty()) {
             args.add("--classpath");

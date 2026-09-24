@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.library.mapper.BookMapper">
+
+    <select id="search" resultType="Book">
+        SELECT id, title, author, stock, archived
+        FROM books
+        <where>
+            archived = FALSE
+            <if test="keyword != null and keyword != ''">
+                AND (title ILIKE '%' || #{keyword} || '%' OR author ILIKE '%' || #{keyword} || '%')
+            </if>
+            <if test="inStockOnly">
+                AND stock &gt; 0
+            </if>
+        </where>
+        <choose>
+            <when test="sort.name() == 'STOCK_DESC'">
+                ORDER BY stock DESC, id
+            </when>
+            <otherwise>
+                ORDER BY title, id
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findIdsByAuthor" resultType="long">
+        SELECT id FROM books WHERE author = #{author} ORDER BY id
+    </select>
+
+    <update id="updateSelective">
+        UPDATE books
+        <set>
+            title = #{title},
+            <if test="author != null">author = #{author},</if>
+            <if test="stock gte 0">stock = #{stock},</if>
+        </set>
+        WHERE id = #{id}
+    </update>
+
+    <update id="archive">
+        UPDATE books SET archived = TRUE WHERE id = #{id} AND archived = FALSE
+    </update>
+</mapper>

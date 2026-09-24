@@ -19,6 +19,8 @@ import java.util.Objects;
  * @param mappingDirs     追加の API マッピング定義（YAML）ディレクトリ
  * @param javaRelease     入力 Java の言語レベル（javac --release）
  * @param cargoCheck      出力後に cargo check を実行するか
+ * @param framework       入力が使うフレームワーク（SPRING なら Spring Boot + MyBatis の変換規則を使う）
+ * @param resourceDirs    リソースのディレクトリ（MyBatis の Mapper XML・schema.sql を探す。framework が SPRING のとき）
  */
 public record TranslatorOptions(
         List<Path> sources,
@@ -31,9 +33,14 @@ public record TranslatorOptions(
         Path runtimePath,
         List<Path> mappingDirs,
         int javaRelease,
-        boolean cargoCheck) {
+        boolean cargoCheck,
+        Framework framework,
+        List<Path> resourceDirs) {
 
     public enum Mode { FAITHFUL, IDIOMATIC }
+
+    /** NONE: JDK だけを使う Java（jrt の上に変換する）。SPRING: Spring Boot + MyBatis（axum / sqlx の構成に変換する）。 */
+    public enum Framework { NONE, SPRING }
 
     /** VENDOR: jrt のソースを出力先にコピーする（既定）。PATH: 指定ディレクトリの jrt を path 依存で参照する。 */
     public enum RuntimeDependency { VENDOR, PATH }
@@ -43,6 +50,8 @@ public record TranslatorOptions(
         sources = List.copyOf(sources);
         classpath = List.copyOf(classpath);
         mappingDirs = List.copyOf(mappingDirs);
+        framework = framework == null ? Framework.NONE : framework;
+        resourceDirs = resourceDirs == null ? List.of() : List.copyOf(resourceDirs);
     }
 
     public static Builder builder() {
@@ -53,6 +62,8 @@ public record TranslatorOptions(
         private final List<Path> sources = new ArrayList<>();
         private final List<Path> classpath = new ArrayList<>();
         private final List<Path> mappingDirs = new ArrayList<>();
+        private final List<Path> resourceDirs = new ArrayList<>();
+        private Framework framework = Framework.NONE;
         private Path outputDir;
         private String crateName = "translated";
         private String mainClass;
@@ -73,10 +84,12 @@ public record TranslatorOptions(
         public Builder runtimePath(Path p) { runtime = RuntimeDependency.PATH; runtimePath = p; return this; }
         public Builder javaRelease(int r) { javaRelease = r; return this; }
         public Builder cargoCheck(boolean b) { cargoCheck = b; return this; }
+        public Builder framework(Framework f) { framework = f; return this; }
+        public Builder addResourceDir(Path p) { resourceDirs.add(p); return this; }
 
         public TranslatorOptions build() {
             return new TranslatorOptions(sources, classpath, outputDir, crateName, mainClass, mode,
-                    runtime, runtimePath, mappingDirs, javaRelease, cargoCheck);
+                    runtime, runtimePath, mappingDirs, javaRelease, cargoCheck, framework, resourceDirs);
         }
     }
 }

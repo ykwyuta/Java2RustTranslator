@@ -36,7 +36,7 @@ public final class MangleOverloads implements Pass {
             }
             units.add(new Decl.CompilationUnit(u.packageName(), u.sourcePath(), types));
         }
-        return new Decl.Program(units);
+        return program.withUnits(units);
     }
 
     private static List<Decl.MethodDecl> mangle(List<Decl.MethodDecl> methods) {

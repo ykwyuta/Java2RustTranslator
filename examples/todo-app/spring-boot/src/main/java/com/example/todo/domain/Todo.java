@@ -2,15 +2,16 @@ package com.example.todo.domain;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import org.jspecify.annotations.Nullable;
 
 /** todos テーブルの 1 行。MyBatis が列名（snake_case）をプロパティ（camelCase）に対応付ける。 */
 public class Todo {
 
     private Long id;
     private String title;
-    private String description;
+    private @Nullable String description;
     private boolean done;
-    private LocalDate dueDate;
+    private @Nullable LocalDate dueDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -35,11 +36,11 @@ public class Todo {
         this.title = title;
     }
 
-    public String getDescription() {
+    public @Nullable String getDescription() {
         return description;
     }
 
-    public void setDescription(String description) {
+    public void setDescription(@Nullable String description) {
         this.description = description;
     }
 
@@ -51,11 +52,11 @@ public class Todo {
         this.done = done;
     }
 
-    public LocalDate getDueDate() {
+    public @Nullable LocalDate getDueDate() {
         return dueDate;
     }
 
-    public void setDueDate(LocalDate dueDate) {
+    public void setDueDate(@Nullable LocalDate dueDate) {
         this.dueDate = dueDate;
     }
 

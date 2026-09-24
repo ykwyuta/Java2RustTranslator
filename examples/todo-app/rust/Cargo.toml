@@ -1,4 +1,5 @@
 # 移行先: axum + sqlx + askama + PostgreSQL。
+# Web 層（このクレート、手書き）と、j2r が Spring Boot 版から生成した Mapper・サービス・ドメイン（../rust-core）からなる。
 # 移行元の Spring Boot 版は ../spring-boot、対応関係は docs/07-spring-to-rust.md を参照。
 [package]
 name = "todo"
@@ -10,11 +11,13 @@ publish = false
 [workspace]
 
 [dependencies]
+# j2r --framework spring で ../spring-boot から生成した crate（./gradlew translateToRust）
+todo_core = { path = "../rust-core" }
 # Spring MVC（DispatcherServlet・@Controller）
 axum = "0.8"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.7", features = ["fs", "trace"] }
-# MyBatis（Mapper・動的 SQL）と DataSource・@Transactional
+# DataSource（接続プール）。Mapper・@Transactional の変換は todo_core にある
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "migrate", "macros"] }
 # Thymeleaf
 askama = "0.16"
@@ -32,7 +35,6 @@ config = { version = "0.15", default-features = false, features = ["toml"] }
 # ログ（SLF4J + Logback）
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-thiserror = "2"
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }

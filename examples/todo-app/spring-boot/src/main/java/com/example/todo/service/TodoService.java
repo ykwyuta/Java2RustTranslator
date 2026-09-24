@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.jspecify.annotations.Nullable;
 
 @Service
 @Transactional
@@ -23,7 +24,7 @@ public class TodoService {
     }
 
     @Transactional(readOnly = true)
-    public List<Todo> findAll(TodoFilter filter, String keyword) {
+    public List<Todo> findAll(TodoFilter filter, @Nullable String keyword) {
         return todoMapper.findAll(filter, keyword == null ? null : keyword.strip());
     }
 
@@ -37,7 +38,7 @@ public class TodoService {
         return new TodoSummary(todoMapper.countByDone(false), todoMapper.countByDone(true));
     }
 
-    public Todo create(String title, String description, LocalDate dueDate) {
+    public Todo create(String title, @Nullable String description, @Nullable LocalDate dueDate) {
         LocalDateTime now = now();
         Todo todo = new Todo();
         todo.setTitle(title);
@@ -50,7 +51,7 @@ public class TodoService {
         return todo;
     }
 
-    public Todo update(long id, String title, String description, LocalDate dueDate, boolean done) {
+    public Todo update(long id, String title, @Nullable String description, @Nullable LocalDate dueDate, boolean done) {
         Todo todo = findById(id);
         todo.setTitle(title);
         todo.setDescription(description);

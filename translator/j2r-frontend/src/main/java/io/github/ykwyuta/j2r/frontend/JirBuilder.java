@@ -59,7 +59,9 @@ import io.github.ykwyuta.j2r.common.DiagnosticCode;
 import io.github.ykwyuta.j2r.common.Diagnostics;
 import io.github.ykwyuta.j2r.common.SourcePos;
 import io.github.ykwyuta.j2r.jir.BinaryOp;
+import io.github.ykwyuta.j2r.jir.Annotation;
 import io.github.ykwyuta.j2r.jir.Decl;
+import io.github.ykwyuta.j2r.jir.DeclInfo;
 import io.github.ykwyuta.j2r.jir.Expr;
 import io.github.ykwyuta.j2r.jir.JType;
 import io.github.ykwyuta.j2r.jir.MethodRef;
@@ -116,6 +118,8 @@ final class JirBuilder {
     private final Elements elements;
     private final CompilationUnitTree cu;
     private final Set<String> programTypes;
+    /** 宣言のメタ情報（注釈・消去前の型）の書き込み先。プログラム全体で共有する。 */
+    private final java.util.Map<String, DeclInfo> info;
     private final Diagnostics diags;
     private final String file;
     private final TypeMirror throwableType;
@@ -147,7 +151,9 @@ final class JirBuilder {
     /** 型の名前付け（メンバー型は javac の名前、ローカル・匿名クラスは合成した名前）。 */
     private record TypeNaming(String qname, String simpleName, String outer, boolean hasOuter) {}
 
-    JirBuilder(JavacTask task, Trees trees, CompilationUnitTree cu, Set<String> programTypes, Diagnostics diags) {
+    JirBuilder(JavacTask task, Trees trees, CompilationUnitTree cu, Set<String> programTypes, Diagnostics diags,
+               java.util.Map<String, DeclInfo> info) {
+        this.info = info;
         this.trees = trees;
         this.types = task.getTypes();
         this.elements = task.getElements();
@@ -385,6 +391,7 @@ final class JirBuilder {
                                 new Expr.StaticField(qname, ve.getSimpleName().toString(), ft, pos(vt)), init, ft, pos(vt)), pos(vt)));
                         init = null;
                     }
+                    recordInfo(DeclInfo.fieldKey(qname, ve.getSimpleName().toString()), ve, ve.asType());
                     fields.add(new Decl.FieldDecl(ve.getSimpleName().toString(), ft, isStatic, ve.getModifiers().contains(Modifier.FINAL),
                             init, isStatic ? ve.getConstantValue() : null, !ve.getModifiers().contains(Modifier.PRIVATE),
                             elements.getDocComment(ve), pos(vt)));
@@ -411,10 +418,12 @@ final class JirBuilder {
         if (kind == Decl.TypeKind.RECORD) {
             for (RecordComponentElement rc : te.getRecordComponents()) {
                 components.add(new Decl.Param(rc.getSimpleName().toString(), type(rc.asType())));
+                recordInfo(DeclInfo.fieldKey(qname, rc.getSimpleName().toString()), rc, rc.asType());
             }
             addRecordMembers(te, components, fields, methods);
         }
 
+        recordInfo(DeclInfo.typeKey(qname), te, null);
         out.add(new Decl.TypeDecl(naming.simpleName(), qname, pkg, kind,
                 te.getModifiers().contains(Modifier.ABSTRACT) || kind == Decl.TypeKind.INTERFACE,
                 superclass, interfaces, allSupertypes(te), outer, inner,
@@ -471,8 +480,10 @@ final class JirBuilder {
 
     private Decl.MethodDecl methodDecl(TreePath path, MethodTree mt, ExecutableElement ee, TypeElement owner, Decl.TypeKind ownerKind) {
         MethodRef ref = methodRef(ee);
+        recordInfo(DeclInfo.methodKey(ref), ee, ee.getKind() == ElementKind.CONSTRUCTOR ? null : ee.getReturnType());
         List<Decl.Param> params = new ArrayList<>();
         for (VariableElement p : ee.getParameters()) {
+            recordInfo(DeclInfo.paramKey(ref, params.size()), p, p.asType());
             params.add(new Decl.Param(p.getSimpleName().toString(), type(p.asType())));
         }
         Decl.MethodKind kind = ee.getKind() == ElementKind.CONSTRUCTOR ? Decl.MethodKind.CONSTRUCTOR
@@ -1779,6 +1790,56 @@ final class JirBuilder {
             };
         }
         return t;
+    }
+
+    // ================================================================== 宣言のメタ情報
+
+    /** 宣言 e の注釈（宣言の注釈と、型 t に付いた型注釈）と消去前の型を記録する。 */
+    private void recordInfo(String key, javax.lang.model.element.Element e, TypeMirror t) {
+        java.util.Map<String, Annotation> anns = new java.util.LinkedHashMap<>();
+        for (javax.lang.model.element.AnnotationMirror a : e.getAnnotationMirrors()) {
+            Annotation an = annotation(a);
+            anns.putIfAbsent(an.type(), an);
+        }
+        if (t != null) {
+            for (javax.lang.model.element.AnnotationMirror a : t.getAnnotationMirrors()) {
+                Annotation an = annotation(a);
+                anns.putIfAbsent(an.type(), an);
+            }
+        }
+        info.put(key, new DeclInfo(List.copyOf(anns.values()), t == null ? null : genericType(t)));
+    }
+
+    private Annotation annotation(javax.lang.model.element.AnnotationMirror a) {
+        java.util.Map<String, Object> values = new java.util.LinkedHashMap<>();
+        a.getElementValues().forEach((k, v) -> values.put(k.getSimpleName().toString(), annotationValue(v.getValue())));
+        return new Annotation(qualifiedNameOf((TypeElement) a.getAnnotationType().asElement()), values);
+    }
+
+    private Object annotationValue(Object v) {
+        return switch (v) {
+            case TypeMirror tm -> qualifiedName(tm);
+            case VariableElement ve -> ve.getSimpleName().toString();
+            case javax.lang.model.element.AnnotationMirror am -> annotation(am);
+            case List<?> l -> l.stream().map(x -> annotationValue(((javax.lang.model.element.AnnotationValue) x).getValue())).toList();
+            default -> v;
+        };
+    }
+
+    /** 消去前の型（型引数付きのクラス型は {@link JType.Parameterized}）。 */
+    private JType genericType(TypeMirror t) {
+        if (t.getKind() == javax.lang.model.type.TypeKind.DECLARED && t instanceof DeclaredType dt && !dt.getTypeArguments().isEmpty()) {
+            List<JType> args = new ArrayList<>();
+            for (TypeMirror a : dt.getTypeArguments()) {
+                args.add(genericType(a));
+            }
+            return new JType.Parameterized(qualifiedNameOf((TypeElement) dt.asElement()), args);
+        }
+        if (t.getKind() == javax.lang.model.type.TypeKind.WILDCARD && t instanceof javax.lang.model.type.WildcardType w
+                && w.getExtendsBound() != null) {
+            return genericType(w.getExtendsBound());
+        }
+        return type(t);
     }
 
     // ================================================================== 型・位置・診断

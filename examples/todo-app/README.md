@@ -6,7 +6,8 @@
 | ディレクトリ | 構成 |
 |---|---|
 | [spring-boot/](spring-boot) | Spring Boot 4.1 + Spring MVC + MyBatis 3.5 + Thymeleaf + PostgreSQL（Java 21、Gradle） |
-| [rust/](rust) | axum 0.8 + sqlx 0.9 + askama 0.16 + PostgreSQL（Rust 1.94 以上） |
+| [rust-core/](rust-core) | Mapper・サービス・ドメイン（sqlx 0.9）。**j2r が spring-boot/ から生成**する（手で編集しない） |
+| [rust/](rust) | Web 層（axum 0.8 + askama 0.16）とアプリの組み立て。手で変換した。rust-core を path 依存で使う（Rust 1.94 以上） |
 
 機能: 一覧（すべて / 未完了 / 完了の絞り込み、タイトルの検索、件数、期限切れの表示）、追加・編集（入力検証）、
 完了 / 未完了の切り替え、削除、完了済みの一括削除、操作後のメッセージ表示（フラッシュ属性）。
@@ -28,7 +29,7 @@ createdb -O todo todo
 psql -c 'ALTER USER todo CREATEDB'   # Rust 版のテスト（#[sqlx::test]）と compare.sh が DB を作るため
 ```
 
-表は起動時に作られる（Spring は `schema.sql`、Rust は `migrations/`。どちらも `CREATE TABLE IF NOT EXISTS`）。
+表は起動時に作られる（Spring は `schema.sql`、Rust はそれを j2r がコピーした `rust-core/migrations/`。`CREATE TABLE IF NOT EXISTS`）。
 
 ## Spring Boot 版
 
@@ -39,6 +40,16 @@ cd spring-boot
 ```
 
 接続先は環境変数 `DATABASE_URL`（JDBC URL）・`DATABASE_USERNAME`・`DATABASE_PASSWORD`、ポートは `PORT` で変えられる。
+
+## Rust 版を生成し直す
+
+```sh
+cd spring-boot
+./gradlew translateToRust   # j2r --framework spring で ../rust-core を作り直す
+```
+
+`build.gradle.kts` の `j2r { framework.set("spring") ... }` で設定している（このリポジトリの変換器を composite build で使う）。
+`@Controller` などの Web 層と設定クラスは変換しないので、情報の診断（J2R-SPRING-SKIPPED）が出る。
 
 ## Rust 版
 

@@ -101,6 +101,9 @@ public sealed interface RExpr {
 
     record FieldInit(String name, RExpr value) {}
 
+    /** {@code expr.await}。 */
+    record Await(RExpr expr) implements RExpr {}
+
     /** 例外（Err）の伝播 {@code expr?}。 */
     record Try(RExpr expr) implements RExpr {}
 

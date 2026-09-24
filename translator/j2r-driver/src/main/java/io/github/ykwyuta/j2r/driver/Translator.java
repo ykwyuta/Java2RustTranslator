@@ -15,7 +15,9 @@ import io.github.ykwyuta.j2r.jir.Decl;
 import io.github.ykwyuta.j2r.lowering.ApiMappings;
 import io.github.ykwyuta.j2r.lowering.LoweredCrate;
 import io.github.ykwyuta.j2r.lowering.Lowerer;
+import io.github.ykwyuta.j2r.passes.DesugarStringConcat;
 import io.github.ykwyuta.j2r.passes.PassManager;
+import io.github.ykwyuta.j2r.spring.SpringTranslator;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +45,9 @@ public final class Translator {
         if (program == null) {
             return new Result(false, options.outputDir(), diags.all(), List.of());
         }
+        if (options.framework() == TranslatorOptions.Framework.SPRING) {
+            return translateSpring(program, options, diags);
+        }
         program = PassManager.standard().run(program);
         ProgramIndex index = new ProgramIndex(program);
         ApiMappings mappings = ApiMappings.load(options.mappingDirs());
@@ -63,6 +68,38 @@ public final class Translator {
         }
         writeReport(options.outputDir(), diags.all());
         return new Result(!diags.hasErrors(), options.outputDir(), diags.all(), files);
+    }
+
+    /**
+     * Spring Boot + MyBatis のアプリを axum / sqlx の構成の crate に変換する（docs/07-spring-to-rust.md）。
+     * Result の files のパスは出力先のルートからの相対パス。
+     */
+    private static Result translateSpring(Decl.Program program, TranslatorOptions options, Diagnostics diags) {
+        program = new PassManager(List.of(new DesugarStringConcat())).run(program);
+        List<SpringTranslator.GeneratedFile> generated = SpringTranslator.translate(program, options.resourceDirs(),
+                options.crateName(), diags);
+        Path root = options.outputDir();
+        try {
+            CargoProjectWriter.deleteRecursively(root.resolve("src"));
+            CargoProjectWriter.deleteRecursively(root.resolve("migrations"));
+            for (SpringTranslator.GeneratedFile g : generated) {
+                Path p = root.resolve(g.path());
+                Files.createDirectories(p.getParent());
+                Files.writeString(p, g.content(), StandardCharsets.UTF_8);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        if (options.cargoCheck()) {
+            CargoRunner.Result r = CargoRunner.check(root);
+            if (!r.ok()) {
+                diags.report(DiagnosticCode.CARGO_ERROR, SourcePos.UNKNOWN, "cargo check failed:\n" + r.output().strip());
+            }
+        }
+        writeReport(root, diags.all());
+        List<CargoProjectWriter.GeneratedFile> files = generated.stream()
+                .map(g -> new CargoProjectWriter.GeneratedFile(g.path(), g.content())).toList();
+        return new Result(!diags.hasErrors(), root, diags.all(), files);
     }
 
     /** j2r-report.json: 診断の一覧（CI やエディタ連携で読むため）。 */

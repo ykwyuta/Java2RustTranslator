@@ -1,7 +1,7 @@
 plugins { java }
 
 // 横断テスト: tests/e2e（JVM と cargo run の出力比較）、tests/junit（JUnit と cargo test の結果の比較）と
-// tests/golden（生成コードのスナップショット）。
+// tests/golden（生成コードのスナップショット）と tests/spring（--framework spring のスナップショットと cargo check）。
 dependencies {
     testImplementation(project(":j2r-driver"))
     testImplementation(project(":j2r-backend"))
@@ -16,5 +16,6 @@ tasks.test {
     inputs.dir(repoRoot.resolve("tests/e2e")).withPropertyName("e2eCases")
     inputs.dir(repoRoot.resolve("tests/golden")).withPropertyName("goldenCases")
     inputs.dir(repoRoot.resolve("tests/junit")).withPropertyName("junitCases")
+    inputs.dir(repoRoot.resolve("tests/spring")).withPropertyName("springCases")
     inputs.dir(repoRoot.resolve("runtime/jrt/src")).withPropertyName("jrtSources")
 }

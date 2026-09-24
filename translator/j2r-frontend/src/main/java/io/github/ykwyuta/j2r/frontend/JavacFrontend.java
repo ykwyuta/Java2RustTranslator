@@ -80,10 +80,11 @@ public final class JavacFrontend {
                 }
             }
             List<Decl.CompilationUnit> out = new ArrayList<>();
+            java.util.Map<String, io.github.ykwyuta.j2r.jir.DeclInfo> info = new java.util.HashMap<>();
             for (CompilationUnitTree cu : parsed) {
-                out.add(new JirBuilder(task, trees, cu, programTypes, diags).build());
+                out.add(new JirBuilder(task, trees, cu, programTypes, diags, info).build());
             }
-            return new Decl.Program(out);
+            return new Decl.Program(out, info);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

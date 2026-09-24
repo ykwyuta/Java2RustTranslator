@@ -7,10 +7,29 @@ import java.util.List;
 public final class Decl {
     private Decl() {}
 
-    /** 変換単位全体。 */
-    public record Program(List<CompilationUnit> units) {
+    /**
+     * 変換単位全体。
+     *
+     * @param info 宣言のメタ情報（注釈・消去前の型。キーは {@link DeclInfo#typeKey} など）
+     */
+    public record Program(List<CompilationUnit> units, java.util.Map<String, DeclInfo> info) {
         public Program {
             units = List.copyOf(units);
+            info = java.util.Map.copyOf(info);
+        }
+
+        public Program(List<CompilationUnit> units) {
+            this(units, java.util.Map.of());
+        }
+
+        /** units を差し替えた Program（メタ情報は引き継ぐ）。 */
+        public Program withUnits(List<CompilationUnit> newUnits) {
+            return new Program(newUnits, info);
+        }
+
+        /** キーのメタ情報（なければ {@link DeclInfo#EMPTY}）。 */
+        public DeclInfo info(String key) {
+            return info.getOrDefault(key, DeclInfo.EMPTY);
         }
 
         public java.util.stream.Stream<TypeDecl> types() {

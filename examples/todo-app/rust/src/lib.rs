@@ -1,10 +1,8 @@
 //! Spring Boot の自動構成（DataSource・DispatcherServlet・静的リソース・セッション）を
 //! 手で組み立てる部分。main.rs とテストの両方から使う。
+//!
+//! Mapper・サービス・ドメインは j2r が Spring Boot 版から生成した todo_core（../rust-core）にある。
 
-pub mod clock;
-pub mod domain;
-pub mod mapper;
-pub mod service;
 pub mod web;
 
 use std::sync::Arc;
@@ -17,8 +15,8 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
-use crate::clock::{Clock, SystemClock};
-use crate::service::todo_service::TodoService;
+use todo_core::clock::{Clock, SystemClock};
+use todo_core::service::TodoService;
 
 /// application.yml の内容。
 #[derive(Debug, Deserialize)]
@@ -46,7 +44,7 @@ pub async fn connect(config: &AppConfig) -> Result<PgPool, sqlx::Error> {
         .max_connections(10)
         .connect(&config.database_url)
         .await?;
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    todo_core::MIGRATOR.run(&pool).await?;
     Ok(pool)
 }
 

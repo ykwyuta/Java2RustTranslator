@@ -1875,7 +1875,7 @@ dependencies = [
  "http-body-util",
  "serde",
  "sqlx",
- "thiserror",
+ "todo_core",
  "tokio",
  "tower",
  "tower-http",
@@ -1883,6 +1883,15 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "validator",
+]
+
+[[package]]
+name = "todo_core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "sqlx",
+ "thiserror",
 ]
 
 [[package]]

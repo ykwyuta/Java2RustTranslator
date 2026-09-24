@@ -174,7 +174,7 @@ public final class CargoProjectWriter {
         }
     }
 
-    private static void deleteRecursively(Path p) throws IOException {
+    public static void deleteRecursively(Path p) throws IOException {
         if (!Files.exists(p)) {
             return;
         }

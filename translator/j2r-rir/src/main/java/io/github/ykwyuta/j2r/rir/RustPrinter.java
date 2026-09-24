@@ -28,16 +28,32 @@ public final class RustPrinter {
     static final int P_ATOM = 16;
 
     private static final int INLINE_LIMIT = 80;
+    /** これより長い行は、メソッドの連鎖・引数・関数の仮引数を折り返す（rustfmt の max_width）。 */
+    private static final int MAX_WIDTH = 100;
 
     private final StringBuilder out = new StringBuilder();
     private int indent;
+    /** 長い行を折り返すか（{@link #printWrapped}）。 */
+    private final boolean wrap;
 
     private RustPrinter(int indent) {
+        this(indent, false);
+    }
+
+    private RustPrinter(int indent, boolean wrap) {
         this.indent = indent;
+        this.wrap = wrap;
     }
 
     public static String print(RFile file) {
         RustPrinter p = new RustPrinter(0);
+        p.file(file);
+        return p.out.toString();
+    }
+
+    /** 1 行が {@value #MAX_WIDTH} 文字を超える場合に、メソッドの連鎖・引数・関数の仮引数を rustfmt のように折り返して出力する。 */
+    public static String printWrapped(RFile file) {
+        RustPrinter p = new RustPrinter(0, true);
         p.file(file);
         return p.out.toString();
     }
@@ -83,26 +99,34 @@ public final class RustPrinter {
                 if (!fn.vis().isEmpty()) {
                     out.append(fn.vis()).append(' ');
                 }
+                if (fn.async()) {
+                    out.append("async ");
+                }
                 out.append("fn ").append(fn.name()).append('(');
-                for (int i = 0; i < fn.params().size(); i++) {
-                    RItem.Param p = fn.params().get(i);
-                    if (i > 0) {
-                        out.append(", ");
+                List<String> params = new java.util.ArrayList<>();
+                for (RItem.Param p : fn.params()) {
+                    params.add((p.mut() ? "mut " : "") + p.name() + (p.type() != null ? ": " + p.type().text() : ""));
+                }
+                String ret = fn.ret() != null && !fn.ret().equals(RType.UNIT) ? " -> " + fn.ret().text() : "";
+                if (wrap && column() + String.join(", ", params).length() + 1 + ret.length() + 2 > MAX_WIDTH && !params.isEmpty()) {
+                    indent++;
+                    for (String p : params) {
+                        newline();
+                        out.append(p).append(',');
                     }
-                    out.append(p.mut() ? "mut " : "").append(p.name());
-                    if (p.type() != null) {
-                        out.append(": ").append(p.type().text());
-                    }
+                    indent--;
+                    newline();
+                } else {
+                    out.append(String.join(", ", params));
                 }
                 out.append(')');
-                if (fn.ret() != null && !fn.ret().equals(RType.UNIT)) {
-                    out.append(" -> ").append(fn.ret().text());
-                }
+                out.append(ret);
                 out.append(' ');
                 block(fn.body(), true);
             }
             case RItem.Struct st -> {
                 docs(st.docs());
+                attrs(st.attrs());
                 if (st.fields().isEmpty()) {
                     out.append("pub struct ").append(st.name()).append(';');
                 } else {
@@ -119,6 +143,21 @@ public final class RustPrinter {
                     newline();
                     out.append('}');
                 }
+            }
+            case RItem.Enum en -> {
+                docs(en.docs());
+                attrs(en.attrs());
+                out.append("pub enum ").append(en.name()).append(" {");
+                indent++;
+                for (RItem.Variant v : en.variants()) {
+                    newline();
+                    docs(v.docs());
+                    attrs(v.attrs());
+                    out.append(v.text()).append(',');
+                }
+                indent--;
+                newline();
+                out.append('}');
             }
             case RItem.Impl im -> {
                 for (String a : im.attrs()) {
@@ -165,9 +204,19 @@ public final class RustPrinter {
                 for (String a : u.attrs()) {
                     out.append("#[").append(a).append("]\n");
                 }
-                out.append("use ").append(u.path()).append(';');
+                out.append(u.pub() ? "pub use " : "use ").append(u.path()).append(';');
             }
             case RItem.ModDecl m -> out.append(m.pub() ? "pub mod " : "mod ").append(m.name()).append(';');
+            case RItem.TypeAlias t -> {
+                docs(t.docs());
+                out.append(t.pub() ? "pub type " : "type ").append(t.name()).append(" = ").append(t.type().text()).append(';');
+            }
+            case RItem.Static st -> {
+                docs(st.docs());
+                out.append(st.pub() ? "pub static " : "static ").append(st.name()).append(": ").append(st.type().text()).append(" = ");
+                expr(st.value(), 0);
+                out.append(';');
+            }
             case RItem.Mod m -> {
                 for (String a : m.attrs()) {
                     out.append("#[").append(a).append(']');
@@ -189,6 +238,13 @@ public final class RustPrinter {
                 out.append('}');
             }
             case RItem.Comment c -> comment(c.text());
+        }
+    }
+
+    private void attrs(List<String> attrs) {
+        for (String a : attrs) {
+            out.append("#[").append(a).append(']');
+            newline();
         }
     }
 
@@ -231,6 +287,13 @@ public final class RustPrinter {
                 }
             }
             case RStmt.Comment c -> comment(c.text());
+            case RStmt.LetElse l -> {
+                out.append("let ").append(l.pattern()).append(" = ");
+                expr(l.init(), 0);
+                out.append(" else ");
+                block(l.elseBlock(), true);
+                out.append(';');
+            }
         }
     }
 
@@ -309,6 +372,7 @@ public final class RustPrinter {
             case RExpr.Field f -> P_POSTFIX;
             case RExpr.Index i -> P_POSTFIX;
             case RExpr.Try t -> P_POSTFIX;
+            case RExpr.Await a -> P_POSTFIX;
             case RExpr.IfLet i -> P_BLOCKLIKE;
             case RExpr.StructLit sl -> P_ATOM;
             case RExpr.Array a -> P_ATOM;
@@ -389,12 +453,13 @@ public final class RustPrinter {
 
     private void exprNoParen(RExpr e) {
         switch (e) {
-            case RExpr.Lit l -> out.append(l.text());
+            case RExpr.Lit l -> lit(l.text());
             case RExpr.Path p -> out.append(p.path());
             case RExpr.Call c -> {
                 expr(c.fn(), P_POSTFIX);
                 args(c.args(), '(', ')');
             }
+            case RExpr.MethodCall m when chain(m) -> { }
             case RExpr.MethodCall m -> {
                 expr(m.receiver(), P_POSTFIX);
                 out.append('.').append(m.method());
@@ -403,9 +468,9 @@ public final class RustPrinter {
             case RExpr.Macro m -> {
                 out.append(m.name()).append('!');
                 if (m.name().equals("vec")) {
-                    args(m.args(), '[', ']');
+                    args(m.args(), '[', ']', false);
                 } else {
-                    args(m.args(), '(', ')');
+                    args(m.args(), '(', ')', false);
                 }
             }
             case RExpr.Template t -> {
@@ -550,6 +615,17 @@ public final class RustPrinter {
                 indent++;
                 for (RExpr.FieldInit f : sl.fields()) {
                     newline();
+                    if (f.name().equals("..")) {
+                        // 構造体更新構文 ..base（末尾のカンマは付けない）
+                        out.append("..");
+                        expr(f.value(), 0);
+                        continue;
+                    }
+                    if (wrap && f.value() instanceof RExpr.Path p && p.path().equals(f.name())) {
+                        // フィールド名と同じ変数の省略形
+                        out.append(f.name()).append(',');
+                        continue;
+                    }
                     out.append(f.name()).append(": ");
                     expr(f.value(), 0);
                     out.append(',');
@@ -558,15 +634,106 @@ public final class RustPrinter {
                 newline();
                 out.append('}');
             }
+            case RExpr.Try t when chain(t) -> { }
             case RExpr.Try t -> {
                 expr(t.expr(), P_POSTFIX);
                 out.append('?');
+            }
+            case RExpr.Await a when chain(a) -> { }
+            case RExpr.Await a -> {
+                expr(a.expr(), P_POSTFIX);
+                out.append(".await");
             }
             case RExpr.Index i -> {
                 expr(i.receiver(), P_POSTFIX);
                 out.append('[').append(i.index()).append(']');
             }
         }
+    }
+
+    /**
+     * リテラル。文字列リテラルの行継続（{@code \} + 改行。次の行の先頭の空白は Rust が捨てる）は、
+     * 続きの行を 1 段深くインデントする。
+     */
+    private void lit(String text) {
+        String[] lines = text.split("\\\\\n *", -1);
+        out.append(lines[0]);
+        for (int i = 1; i < lines.length; i++) {
+            out.append("\\\n").append("    ".repeat(indent + 1)).append(lines[i]);
+        }
+    }
+
+    /** 1 行に書いたときの式。 */
+    private static String flat(RExpr e) {
+        RustPrinter p = new RustPrinter(0);
+        p.expr(e, 0);
+        return p.out.toString();
+    }
+
+    /** 現在の行の桁（0 始まり）。 */
+    private int column() {
+        return out.length() - out.lastIndexOf("\n") - 1;
+    }
+
+    /**
+     * メソッド呼び出し・.await・? が 3 つ以上続く連鎖が 1 行に収まらない場合、要素ごとに改行して出力する（rustfmt と同じ）。
+     * 出力したら true。
+     */
+    private boolean chain(RExpr e) {
+        if (!wrap) {
+            return false;
+        }
+        List<RExpr> elems = new java.util.ArrayList<>();
+        RExpr root = e;
+        int calls = 0;
+        while (true) {
+            if (root instanceof RExpr.MethodCall m) {
+                elems.add(m);
+                calls++;
+                root = m.receiver();
+            } else if (root instanceof RExpr.Await a) {
+                elems.add(a);
+                root = a.expr();
+            } else if (root instanceof RExpr.Try t) {
+                elems.add(t);
+                root = t.expr();
+            } else {
+                break;
+            }
+        }
+        if (calls < 2 || elems.size() < 3) {
+            return false;
+        }
+        String flat = flat(e);
+        if (!flat.contains("\n") && column() + flat.length() <= MAX_WIDTH) {
+            return false;
+        }
+        int start = out.length();
+        expr(root, P_POSTFIX);
+        // 根が複数行（閉じ括弧だけの行で終わる）なら、rustfmt と同じく連鎖を根と同じ深さに置く。
+        boolean deeper = out.indexOf("\n", start) < 0;
+        if (deeper) {
+            indent++;
+        }
+        for (int i = elems.size() - 1; i >= 0; i--) {
+            switch (elems.get(i)) {
+                case RExpr.MethodCall m -> {
+                    newline();
+                    out.append('.').append(m.method());
+                    args(m.args(), '(', ')');
+                }
+                case RExpr.Await a -> {
+                    newline();
+                    out.append(".await");
+                }
+                case RExpr.Try t -> out.append('?');
+                default -> throw new IllegalStateException();
+            }
+        }
+        if (deeper) {
+            indent--;
+        }
+        return true;
     }
 
     private void label(String label) {
@@ -576,6 +743,29 @@ public final class RustPrinter {
     }
 
     private void args(List<RExpr> args, char open, char close) {
+        args(args, open, close, wrap);
+    }
+
+    private void args(List<RExpr> args, char open, char close, boolean mayBreak) {
+        if (mayBreak && !args.isEmpty() && open == '(') {
+            List<String> flat = args.stream().map(RustPrinter::flat).toList();
+            boolean multiline = flat.stream().anyMatch(f -> f.contains("\n"));
+            boolean blocky = args.stream().anyMatch(a -> a instanceof RExpr.Closure c && c.body() instanceof RExpr.Block
+                    || a instanceof RExpr.Block);
+            if (!blocky && (multiline || column() + String.join(", ", flat).length() + 2 > MAX_WIDTH)) {
+                out.append(open);
+                indent++;
+                for (RExpr a : args) {
+                    newline();
+                    expr(a, 0);
+                    out.append(',');
+                }
+                indent--;
+                newline();
+                out.append(close);
+                return;
+            }
+        }
         out.append(open);
         for (int i = 0; i < args.size(); i++) {
             if (i > 0) {

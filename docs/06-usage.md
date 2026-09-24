@@ -47,6 +47,8 @@ j2r {
     // outputDir.set(layout.buildDirectory.dir("rust"))
     // mappingDirs.from("j2r-mappings")      // 独自の API マッピング（YAML）
     // cargoCheck.set(true)                  // 変換後に cargo check も実行する
+    // framework.set("spring")               // Spring Boot + MyBatis の変換規則を使う（§9）
+    // resourceDirs.from("src/main/resources") // --framework spring の Mapper XML・schema.sql（既定: main の resources）
 }
 ```
 
@@ -93,6 +95,8 @@ cd out && cargo run
 | `--runtime-path` | jrt を同梱せず、指定したディレクトリの jrt を path 依存で参照する |
 | `--cargo-check` | 変換後に `cargo check` を実行し、エラーを診断として報告する |
 | `--release` | 入力の Java 言語レベル（既定: 21） |
+| `--framework` | `NONE`（既定）/ `SPRING`（Spring Boot + MyBatis のアプリを sqlx の crate に変換する。§9） |
+| `--resources` | `--framework SPRING` で Mapper XML と schema.sql を探すディレクトリ |
 | `@file` | 引数をファイルから読む（ソースが多い場合） |
 
 終了コードは、変換できれば 0（未対応機能の警告があっても 0）、javac のエラーなどで変換できなければ 1。
@@ -178,3 +182,14 @@ classes:
 最初は Maven での利用を検討したが、ビルドは Gradle に統一した。Maven から使いたい場合は、同じ `Translator` API を
 呼ぶ Maven プラグイン（`j2r-maven-plugin`）を追加するか、`exec-maven-plugin` で j2r-cli を実行すればよい
 （どちらも未実装）。
+
+## 9. Spring Boot + MyBatis のアプリを変換する（--framework spring）
+
+`--framework spring`（Gradle プラグインでは `framework.set("spring")`）を指定すると、jrt の上に変換する代わりに、
+Spring Boot + MyBatis のアプリの **`@Mapper`（+ Mapper XML）・`@Service`・それらが使うクラス / record / enum / 例外**を、
+sqlx を使う Rust のライブラリ crate に変換する。Web 層（`@Controller` など）と設定クラスは変換しない。
+
+- 型検査に Spring・MyBatis の jar が要るので、コンパイルクラスパスを渡す（Gradle プラグインは自動で渡す）。
+- 参照型の null は JSpecify の `@Nullable`（`@NullMarked` のパッケージ）で決める。`@Nullable` の型が `Option<T>` になる。
+- 変換規則・変換する範囲・未対応の機能は [07-spring-to-rust.md](07-spring-to-rust.md) の §3・§7。
+- 利用例: [examples/todo-app](../examples/todo-app)（`spring-boot/` で `./gradlew translateToRust` を実行すると `rust-core/` を作り直す）。

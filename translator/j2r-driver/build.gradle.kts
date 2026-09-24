@@ -5,5 +5,6 @@ dependencies {
     implementation(project(":j2r-passes"))
     implementation(project(":j2r-analysis"))
     implementation(project(":j2r-lowering"))
+    implementation(project(":j2r-spring"))
     implementation(project(":j2r-backend"))
 }

@@ -33,6 +33,7 @@ public class J2rPlugin implements Plugin<Project> {
         ext.getCrateName().convention(project.getName());
         ext.getOutputDir().convention(project.getLayout().getBuildDirectory().dir("rust"));
         ext.getMode().convention("faithful");
+        ext.getFramework().convention("none");
         ext.getCargoCheck().convention(false);
         ext.getTranslatorVersion().convention(pluginVersion());
 
@@ -54,6 +55,8 @@ public class J2rPlugin implements Plugin<Project> {
             t.getCrateName().set(ext.getCrateName());
             t.getMainClass().set(ext.getMainClass());
             t.getMode().set(ext.getMode());
+            t.getFramework().set(ext.getFramework());
+            t.getResourceDirs().from(ext.getResourceDirs());
             t.getCargoCheck().set(ext.getCargoCheck());
             t.getOutputDir().set(ext.getOutputDir());
             t.getLauncher().convention(toolchains.launcherFor(spec -> spec.getLanguageVersion().set(JavaLanguageVersion.of(21))));
@@ -62,6 +65,7 @@ public class J2rPlugin implements Plugin<Project> {
         project.getPlugins().withType(JavaPlugin.class, p -> {
             SourceSet main = project.getExtensions().getByType(SourceSetContainer.class).getByName(SourceSet.MAIN_SOURCE_SET_NAME);
             ext.getSources().from(main.getJava().getSourceDirectories());
+            ext.getResourceDirs().from(main.getResources().getSourceDirectories());
             translate.configure(t -> t.getCompileClasspath().from(main.getCompileClasspath()));
         });
 

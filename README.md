@@ -5,8 +5,9 @@ javac の Compiler Tree API で型付きの構文木を得てから、独自の�
 
 - 設計・先行プロジェクトの調査: [docs/](docs/README.md)
 - 使い方の詳細・対応範囲: [docs/06-usage.md](docs/06-usage.md)
-- Spring Boot の Web アプリを Rust に移すときの標準構成と変換規則: [docs/07-spring-to-rust.md](docs/07-spring-to-rust.md)
-  （同じ Todo 管理アプリの Spring Boot 版と Rust 版: [examples/todo-app](examples/todo-app)）
+- Spring Boot の Web アプリを Rust に移すときの標準構成（axum・sqlx・askama）と変換規則: [docs/07-spring-to-rust.md](docs/07-spring-to-rust.md)。
+  `--framework spring` で MyBatis の Mapper・`@Service`・ドメインを sqlx の crate に自動変換できる
+  （Todo 管理アプリの Spring Boot 版と Rust 版: [examples/todo-app](examples/todo-app)）
 
 現在の対応範囲は、手続き的な Java（プリミティブ型・String・配列・制御構文）に加えて、クラス・継承・インタフェース・
 enum・record・sealed・内部 / 匿名 / ローカルクラス、Java と同じクラスの初期化、null とボクシング、ジェネリクスとコレクション、

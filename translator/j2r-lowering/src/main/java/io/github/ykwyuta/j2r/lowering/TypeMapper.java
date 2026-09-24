@@ -39,6 +39,7 @@ final class TypeMapper {
                 yield mapped != null ? mapped : "JObject";
             }
             case JType.NullType n -> "JObject";
+            case JType.Parameterized g -> text(new JType.ClassType(g.qualifiedName()));
             case JType.Unsupported u -> UNSUPPORTED;
         };
     }
@@ -51,6 +52,7 @@ final class TypeMapper {
             case JType.ClassType c -> JType.isString(c) ? Kind.STRING
                     : mappings.rustType(c.qualifiedName()) != null ? Kind.MAPPED : Kind.OBJECT;
             case JType.NullType n -> Kind.OBJECT;
+            case JType.Parameterized g -> kind(new JType.ClassType(g.qualifiedName()));
             case JType.Unsupported u -> Kind.UNSUPPORTED;
         };
     }

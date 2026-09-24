@@ -5,9 +5,10 @@ use askama::Template;
 use askama_web::WebTemplate;
 use chrono::NaiveDate;
 
+use todo_core::domain::Todo;
+use todo_core::service::TodoSummary;
+
 use super::todo_form::{FieldErrors, TodoForm};
-use crate::domain::Todo;
-use crate::service::TodoSummary;
 
 /// templates/todos/list.html
 #[derive(Template, WebTemplate)]
@@ -15,7 +16,7 @@ use crate::service::TodoSummary;
 pub struct TodoListView {
     pub todos: Vec<Todo>,
     pub summary: TodoSummary,
-    pub filter: &'static str,
+    pub filter: String,
     pub q: String,
     pub today: NaiveDate,
     /// フラッシュ属性 "message"

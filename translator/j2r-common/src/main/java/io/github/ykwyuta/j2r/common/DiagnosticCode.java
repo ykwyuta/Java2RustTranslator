@@ -16,6 +16,10 @@ public enum DiagnosticCode {
     LOSSY_SURROGATE("J2R-LOSSY-SURROGATE", Severity.WARNING),
     NAME_COLLISION("J2R-NAME-COLLISION", Severity.WARNING),
     NO_MAIN("J2R-NO-MAIN", Severity.INFO),
+    /** Spring モード: まだ変換しない層（Web 層・設定クラスなど）。 */
+    SPRING_SKIPPED("J2R-SPRING-SKIPPED", Severity.INFO),
+    /** Spring モード: 変換できない構文・API・MyBatis の機能（todo!() を生成）。 */
+    SPRING_UNSUPPORTED("J2R-SPRING-UNSUPPORTED", Severity.WARNING),
     CARGO_ERROR("J2R-CARGO", Severity.ERROR),
     INTERNAL("J2R-INTERNAL", Severity.ERROR);
 

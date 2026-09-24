@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+import org.jspecify.annotations.Nullable;
 
 @Controller
 @RequestMapping("/todos")
@@ -31,8 +32,8 @@ public class TodoController {
 
     @GetMapping
     public String list(
-            @RequestParam(name = "filter", required = false) String filterParam,
-            @RequestParam(name = "q", required = false) String keyword,
+            @RequestParam(name = "filter", required = false) @Nullable String filterParam,
+            @RequestParam(name = "q", required = false) @Nullable String keyword,
             Model model) {
         TodoFilter filter = TodoFilter.fromParam(filterParam);
         model.addAttribute("todos", todoService.findAll(filter, keyword));
@@ -89,7 +90,7 @@ public class TodoController {
     @PostMapping("/{id}/toggle")
     public String toggle(
             @PathVariable long id,
-            @RequestParam(name = "filter", required = false) String filterParam,
+            @RequestParam(name = "filter", required = false) @Nullable String filterParam,
             RedirectAttributes redirectAttributes) {
         todoService.toggle(id);
         redirectAttributes.addAttribute("filter", TodoFilter.fromParam(filterParam).param());

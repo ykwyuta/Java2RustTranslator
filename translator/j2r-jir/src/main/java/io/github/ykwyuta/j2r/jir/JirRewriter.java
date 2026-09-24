@@ -28,7 +28,7 @@ public abstract class JirRewriter {
             }
             units.add(new Decl.CompilationUnit(u.packageName(), u.sourcePath(), types));
         }
-        return new Decl.Program(units);
+        return program.withUnits(units);
     }
 
     public Decl.TypeDecl apply(Decl.TypeDecl t) {

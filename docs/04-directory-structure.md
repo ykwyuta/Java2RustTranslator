@@ -35,6 +35,7 @@ Java2RustTranslator/
 │   ├── j2r-rir/                     # RIR（Rust IR）の定義と RustPrinter（優先順位に基づく括弧付け）
 │   ├── j2r-mappings/                # JDK API のマッピング規則（YAML リソースのみ）
 │   ├── j2r-lowering/                # JIR → RIR の変換（Lowerer）、型の対応（TypeMapper）、マッピング規則の読み込み
+│   ├── j2r-spring/                  # --framework spring: Spring Boot + MyBatis → sqlx の crate（docs/07-spring-to-rust.md）
 │   ├── j2r-backend/                 # Cargo プロジェクトの書き出し、jrt ソースの同梱、cargo の実行
 │   ├── j2r-driver/                  # パイプライン全体の実行（ライブラリ API: Translator.translate(options)）
 │   ├── j2r-cli/                     # コマンドライン `j2r`（picocli）。installDist で配布物を作る
@@ -61,10 +62,13 @@ Java2RustTranslator/
 │   ├── e2e/<カテゴリ>/<ケース>/     # 差分実行テスト: src/**/*.java（+ 任意の stdin.txt）
 │   ├── junit/<カテゴリ>/<ケース>/   # JUnit テストの変換: src/**/*.java（JUnit と cargo test の結果を比べる）
 │   ├── golden/<カテゴリ>/<ケース>/  # ゴールデンテスト: src/**/*.java + expected/（生成される src/ の中身）
+│   ├── spring/<ケース>/             # --framework spring のゴールデンテスト: src/main/{java,resources} + expected/
+│   │   └── (stubs/)                 #   Spring・MyBatis・JSpecify の注釈のスタブ
 │   └── corpus/                      # 実プロジェクトの回帰コーパス（予定）
 │
 ├── examples/
-│   └── hello-gradle/                # Gradle プラグインの利用例（./gradlew translateToRust cargoRun）
+│   ├── hello-gradle/                # Gradle プラグインの利用例（./gradlew translateToRust cargoRun）
+│   └── todo-app/                    # Spring Boot → Rust の移行例（spring-boot/・rust/（Web 層）・rust-core/（j2r が生成））
 │
 └── .github/workflows/ci.yml         # cargo test + gradle build（単体・ゴールデン・E2E）+ 利用例の実行
 ```
@@ -73,6 +77,7 @@ Java2RustTranslator/
 
 ```
 j2r-cli ─▶ j2r-driver ─┬─▶ j2r-backend ───▶ j2r-rir ─▶ j2r-common
+                       ├─▶ j2r-spring ───┬─▶ j2r-rir, j2r-jir（--framework spring）
                        ├─▶ j2r-lowering ─┬─▶ j2r-rir
                        │                 ├─▶ j2r-jir ─▶ j2r-common
                        │                 ├─▶ j2r-analysis ─▶ j2r-jir
@@ -106,6 +111,7 @@ j2r-test-harness ─▶ j2r-driver, j2r-backend
 | j2r-analysis | `…j2r.analysis` | `ProgramIndex`, `LocalMutability` |
 | j2r-rir | `…j2r.rir` | `RItem`, `RStmt`, `RExpr`, `RType`, `RFile`, `RustPrinter` |
 | j2r-lowering | `…j2r.lowering` | `Lowerer`, `TypeMapper`, `ApiMappings`, `LoweredCrate` |
+| j2r-spring | `…j2r.spring` | `SpringTranslator`, `SpringModel`, `BodyLowerer`, `MapperGenerator`, `ServiceGenerator` |
 | j2r-backend | `…j2r.backend` | `CargoProjectWriter`, `CargoRunner` |
 | j2r-driver | `…j2r.driver` | `Translator` |
 | j2r-cli | `…j2r.cli` | `Main` |

@@ -5,19 +5,20 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.jspecify.annotations.Nullable;
 
 /** 登録・編集フォーム。name 属性は title / description / dueDate / done。 */
 public class TodoForm {
 
     @NotBlank(message = "タイトルを入力してください")
     @Size(max = 100, message = "タイトルは100文字以内で入力してください")
-    private String title;
+    private @Nullable String title;
 
     @Size(max = 1000, message = "説明は1000文字以内で入力してください")
-    private String description;
+    private @Nullable String description;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
-    private LocalDate dueDate;
+    private @Nullable LocalDate dueDate;
 
     private boolean done;
 
@@ -32,38 +33,38 @@ public class TodoForm {
 
     /** 前後の空白を除いたタイトル。 */
     public String normalizedTitle() {
-        return title.strip();
+        return title == null ? "" : title.strip();
     }
 
     /** 空の説明は null として保存する。 */
-    public String normalizedDescription() {
+    public @Nullable String normalizedDescription() {
         if (description == null || description.isBlank()) {
             return null;
         }
         return description.strip();
     }
 
-    public String getTitle() {
+    public @Nullable String getTitle() {
         return title;
     }
 
-    public void setTitle(String title) {
+    public void setTitle(@Nullable String title) {
         this.title = title;
     }
 
-    public String getDescription() {
+    public @Nullable String getDescription() {
         return description;
     }
 
-    public void setDescription(String description) {
+    public void setDescription(@Nullable String description) {
         this.description = description;
     }
 
-    public LocalDate getDueDate() {
+    public @Nullable LocalDate getDueDate() {
         return dueDate;
     }
 
-    public void setDueDate(LocalDate dueDate) {
+    public void setDueDate(@Nullable LocalDate dueDate) {
         this.dueDate = dueDate;
     }
 
