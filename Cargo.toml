@@ -1,0 +1,4 @@
+# Rust ランタイム crate のワークスペース（生成コードが依存する jrt）。
+[workspace]
+resolver = "2"
+members = ["runtime/jrt"]

@@ -1,0 +1,4 @@
+# j2r が既定で読み込むマッピング定義（このディレクトリ内のファイル名）
+java.lang.yaml
+java.io.yaml
+java.util.yaml
