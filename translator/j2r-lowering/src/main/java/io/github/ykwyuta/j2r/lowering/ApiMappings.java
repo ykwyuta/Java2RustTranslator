@@ -70,22 +70,31 @@ public final class ApiMappings {
         }
         for (Object o : classes) {
             Map<String, Object> c = (Map<String, Object>) o;
-            String cls = (String) c.get("class");
-            if (cls == null) {
+            Object clsValue = c.get("class");
+            if (clsValue == null) {
                 throw new IllegalArgumentException(origin + ": entry without 'class'");
             }
-            if (c.get("rustType") instanceof String rt) {
-                rustTypes.put(cls, rt);
+            // class には 1 つのクラス名か、同じ規則を共有するクラス名のリスト（List / ArrayList / ... など）を書ける。
+            List<String> classNames = clsValue instanceof List<?> l ? (List<String>) l : List.of((String) clsValue);
+            for (String cls : classNames) {
+                addClass(cls, c);
             }
-            for (Map<String, Object> f : list(c.get("fields"))) {
-                fields.put(cls + "#" + f.get("name"), (String) f.get("rust"));
-            }
-            for (Map<String, Object> f : list(c.get("methods"))) {
-                methods.put(cls + "#" + normalize((String) f.get("sig")), (String) f.get("rust"));
-            }
-            for (Map<String, Object> f : list(c.get("constructors"))) {
-                constructors.put(cls + "#" + normalize((String) f.get("sig")), (String) f.get("rust"));
-            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void addClass(String cls, Map<String, Object> c) {
+        if (c.get("rustType") instanceof String rt) {
+            rustTypes.put(cls, rt);
+        }
+        for (Map<String, Object> f : list(c.get("fields"))) {
+            fields.put(cls + "#" + f.get("name"), (String) f.get("rust"));
+        }
+        for (Map<String, Object> f : list(c.get("methods"))) {
+            methods.put(cls + "#" + normalize((String) f.get("sig")), (String) f.get("rust"));
+        }
+        for (Map<String, Object> f : list(c.get("constructors"))) {
+            constructors.put(cls + "#" + normalize((String) f.get("sig")), (String) f.get("rust"));
         }
     }
 

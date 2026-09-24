@@ -20,6 +20,7 @@ pub struct JString {
 
 #[derive(Clone)]
 enum Repr {
+    Null,
     Static(&'static str),
     Heap(Rc<str>),
 }
@@ -42,10 +43,29 @@ impl JString {
         JString { repr: Repr::Static(s), ascii: is_ascii_const(s) }
     }
 
+    /// Java の `null`。
+    pub const fn null() -> JString {
+        JString { repr: Repr::Null, ascii: false }
+    }
+
+    pub fn is_null(&self) -> bool {
+        matches!(self.repr, Repr::Null)
+    }
+
+    /// 中身。null なら NullPointerException。
     pub fn as_str(&self) -> &str {
         match &self.repr {
+            Repr::Null => throw("java.lang.NullPointerException", None),
             Repr::Static(s) => s,
             Repr::Heap(s) => s,
+        }
+    }
+
+    fn opt_str(&self) -> Option<&str> {
+        match &self.repr {
+            Repr::Null => None,
+            Repr::Static(s) => Some(s),
+            Repr::Heap(s) => Some(s),
         }
     }
 
@@ -104,13 +124,14 @@ impl JString {
         }
     }
 
-    /// `equals(Object)`（引数が String の場合）。
-    pub fn equals(&self, other: &JString) -> bool {
-        self.as_str() == other.as_str()
+    /// `equals(Object)`。引数は String でも Object でもよい（String 以外なら false）。
+    pub fn equals<T: EqArg + ?Sized>(&self, other: &T) -> bool {
+        let me = self.as_str();
+        other.string_value().is_some_and(|o| o.opt_str() == Some(me))
     }
 
     pub fn equals_ignore_case(&self, other: &JString) -> bool {
-        self.length() == other.length()
+        !other.is_null() && self.length() == other.length()
             && self.as_str().chars().zip(other.as_str().chars()).all(|(a, b)| {
                 a == b || a.to_uppercase().eq(b.to_uppercase()) || a.to_lowercase().eq(b.to_lowercase())
             })
@@ -283,16 +304,17 @@ impl From<&str> for JString {
     }
 }
 
-/// Java の `null` を表せないため、既定値は空文字列とする（変換時に J2R-LOSSY-NULL 診断が出る）。
+/// 参照型の既定値は Java と同じく null。
 impl Default for JString {
     fn default() -> JString {
-        JString::from_static("")
+        JString::null()
     }
 }
 
+/// 値の比較（null どうしは等しい）。
 impl PartialEq for JString {
     fn eq(&self, other: &JString) -> bool {
-        self.as_str() == other.as_str()
+        self.opt_str() == other.opt_str()
     }
 }
 
@@ -300,7 +322,7 @@ impl Eq for JString {}
 
 impl Hash for JString {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_str().hash(state)
+        self.opt_str().hash(state)
     }
 }
 
@@ -319,12 +341,102 @@ impl Ord for JString {
 
 impl fmt::Display for JString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
+        f.write_str(self.opt_str().unwrap_or("null"))
     }
 }
 
 impl fmt::Debug for JString {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Debug::fmt(self.as_str(), f)
+        match self.opt_str() {
+            Some(s) => fmt::Debug::fmt(s, f),
+            None => f.write_str("null"),
+        }
     }
+}
+
+/// `String.equals(Object)` の引数になれる型。
+pub trait EqArg {
+    /// 値が String なら Some。
+    fn string_value(&self) -> Option<JString>;
+}
+
+impl EqArg for JString {
+    fn string_value(&self) -> Option<JString> {
+        if self.is_null() {
+            None
+        } else {
+            Some(self.clone())
+        }
+    }
+}
+
+impl EqArg for crate::object::JObject {
+    fn string_value(&self) -> Option<JString> {
+        if self.instance_of("java.lang.String") {
+            Some(self.cast_string())
+        } else {
+            None
+        }
+    }
+}
+
+impl JString {
+    /// `String.join(sep, elements)`（elements は Iterable）。
+    pub fn join(sep: &JString, elements: &crate::object::JObject) -> JString {
+        let parts: Vec<String> = crate::util::collections::to_vec(elements)
+            .iter()
+            .map(|x| {
+                let mut s = String::new();
+                crate::JStringify::append_to(x, &mut s);
+                s
+            })
+            .collect();
+        JString::from(parts.join(sep.as_str()))
+    }
+
+    /// `String.join(sep, a, b, ...)`。
+    pub fn join_array<T: Clone + crate::JStringify>(sep: &JString, elements: &JArray<T>) -> JString {
+        let parts: Vec<String> = elements
+            .to_vec()
+            .iter()
+            .map(|x| {
+                let mut s = String::new();
+                x.append_to(&mut s);
+                s
+            })
+            .collect();
+        JString::from(parts.join(sep.as_str()))
+    }
+
+    /// `split(regex)`。正規表現は、メタ文字を含まない文字列・1 文字の文字クラス・`\\s+` などのよく使う形に対応する。
+    /// Java と同じく末尾の空文字列は取り除き、先頭の幅 0 の一致では分割しない。
+    pub fn split(&self, regex: &JString) -> JArray<JString> {
+        let s = self.as_str();
+        let pieces: Vec<&str> = match crate::lang::regex::SimpleRegex::parse(regex.as_str()) {
+            Some(re) => re.split(s),
+            None => crate::rt::throw(
+                "java.lang.UnsupportedOperationException",
+                Some(&format!("regex not supported by the translator: {}", regex.as_str())),
+            ),
+        };
+        let mut out: Vec<JString> = pieces.into_iter().map(JString::from).collect();
+        while out.len() > 1 && out.last().is_some_and(|x| x.is_empty()) {
+            out.pop();
+        }
+        if out.len() == 1 && out[0].is_empty() && !s.is_empty() {
+            out.clear();
+        }
+        JArray::from_vec(out)
+    }
+
+    /// `String.valueOf(Object)`。
+    pub fn value_of_object(o: &crate::object::JObject) -> JString {
+        crate::util::misc::objects_to_string(o.clone())
+    }
+
+    /// `compareToIgnoreCase(String)`。
+    pub fn compare_to_ignore_case(&self, other: &JString) -> i32 {
+        self.to_lower_case().compare_to(&other.to_lower_case())
+    }
+
 }

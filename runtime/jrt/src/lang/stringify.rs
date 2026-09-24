@@ -46,7 +46,11 @@ impl JStringify for str {
 
 impl JStringify for JString {
     fn append_to(&self, out: &mut String) {
-        out.push_str(self.as_str())
+        if self.is_null() {
+            out.push_str("null")
+        } else {
+            out.push_str(self.as_str())
+        }
     }
 }
 

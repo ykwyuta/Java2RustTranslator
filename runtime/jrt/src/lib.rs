@@ -1,20 +1,25 @@
 //! jrt: Java2RustTranslator が生成する Rust コードのためのランタイム。
 //!
-//! Java の意味論（整数演算、文字列、配列、標準出力、未捕捉例外による終了など）を
-//! 安全な Rust だけで提供する。対応表は docs/03-translation-rules.md を参照。
+//! Java の意味論（整数演算、文字列、配列、オブジェクト参照と null、例外、ラムダ、コレクション、
+//! 標準入出力など）を安全な Rust だけで提供する。対応表は docs/03-translation-rules.md を参照。
 #![forbid(unsafe_code)]
 
 pub mod array;
 pub mod io;
+pub mod lambda;
 pub mod lang;
 pub mod num;
+pub mod object;
 pub mod rt;
 pub mod util;
 
 pub use array::JArray;
+pub use lambda::lambda;
+pub use lang::boxed::{box_bool, box_f32, box_f64, box_i16, box_i32, box_i64, box_i8, box_u16};
 pub use lang::string::JString;
 pub use lang::stringify::{JChar, JStringify};
-pub use rt::{run_main, throw_new};
+pub use object::{alloc, JObject, Object, ObjectBase};
+pub use rt::{run_main, throw, throw_obj, try_block, Flow};
 
 /// 変換器が扱えない Java の型の代わりに置くプレースホルダ型。
 #[derive(Clone, Debug, Default)]
@@ -30,6 +35,9 @@ pub mod prelude {
     pub use crate::array::JArray;
     pub use crate::lang::string::JString;
     pub use crate::lang::stringify::JChar;
+    pub use crate::object::JObject;
+    pub use crate::object::Object as _;
+    pub use crate::util::collections::Collections as _;
     pub use crate::{jconcat, jstr};
 }
 

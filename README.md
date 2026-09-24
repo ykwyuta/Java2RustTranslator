@@ -6,7 +6,10 @@ javac の Compiler Tree API で型付きの構文木を得てから、独自の�
 - 設計・先行プロジェクトの調査: [docs/](docs/README.md)
 - 使い方の詳細・対応範囲: [docs/06-usage.md](docs/06-usage.md)
 
-現在の対応範囲は static メソッドを中心とした手続き的な Java（プリミティブ型・String・配列・制御構文・一部の JDK API）。
+現在の対応範囲は、手続き的な Java（プリミティブ型・String・配列・制御構文）に加えて、クラス・継承・インタフェース・
+enum・record・内部 / 匿名 / ローカルクラス、null とボクシング、ジェネリクスと主なコレクション、ラムダ・メソッド参照、
+例外（try/catch/finally・try-with-resources）、switch 式・パターン、`String.format` / `printf` と可変長引数。
+詳しくは [docs/06-usage.md §5](docs/06-usage.md#5-現在変換できる範囲)。
 Java と同じ実行結果になることを、JVM と `cargo run` の出力を比べる E2E テストで確認している。
 
 ## Gradle プラグインで変換する

@@ -8,7 +8,7 @@ import java.util.List;
  *
  * @param files       クラスごとの .rs ファイル
  * @param modules     各ファイルのモジュールパス（files と同順）
- * @param mainModule  main メソッドを持つクラスのモジュールパス（なければ null）
+ * @param mainModule  main メソッドを持つクラスのパス（モジュールパス + 構造体名。なければ null）
  */
 public record LoweredCrate(List<RFile> files, List<List<String>> modules, List<String> mainModule) {
     public LoweredCrate {

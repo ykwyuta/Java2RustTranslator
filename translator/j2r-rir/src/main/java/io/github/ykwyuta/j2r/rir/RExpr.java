@@ -75,10 +75,39 @@ public sealed interface RExpr {
 
     record Arm(String pattern, RExpr body) {}
 
-    /** クロージャ {@code |params| body}。 */
-    record Closure(List<String> params, RExpr body) implements RExpr {
+    /** クロージャ {@code [move] |params| [-> ret] body}（ret を書く場合、body はブロック）。 */
+    record Closure(boolean move, List<String> params, RType ret, RExpr body) implements RExpr {
         public Closure {
             params = List.copyOf(params);
+        }
+
+        public static Closure of(List<String> params, RExpr body) {
+            return new Closure(false, params, null, body);
+        }
+    }
+
+    /** フィールド参照 {@code receiver.name}。 */
+    record Field(RExpr receiver, String name) implements RExpr {}
+
+    /** {@code if let pattern = value { then } [else elseBranch]}。 */
+    record IfLet(String pattern, RExpr value, Block then, RExpr elseBranch) implements RExpr {}
+
+    /** 構造体リテラル {@code Name { a: x, b: y }}。 */
+    record StructLit(String name, List<FieldInit> fields) implements RExpr {
+        public StructLit {
+            fields = List.copyOf(fields);
+        }
+    }
+
+    record FieldInit(String name, RExpr value) {}
+
+    /** 添字 {@code receiver[index]}。 */
+    record Index(RExpr receiver, int index) implements RExpr {}
+
+    /** 配列式 {@code [a, b, c]}。 */
+    record Array(List<RExpr> elements) implements RExpr {
+        public Array {
+            elements = List.copyOf(elements);
         }
     }
 

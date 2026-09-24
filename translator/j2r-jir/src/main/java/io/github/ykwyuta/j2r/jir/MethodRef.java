@@ -11,11 +11,16 @@ import java.util.stream.Collectors;
  * @param paramTypes  消去後の仮引数型
  * @param returnType  消去後の戻り値型
  * @param isStatic    static メソッドか
+ * @param ownerInterface 宣言した型がインタフェースか
  */
-public record MethodRef(String owner, String name, List<JType> paramTypes, JType returnType, boolean isStatic) {
+public record MethodRef(String owner, String name, List<JType> paramTypes, JType returnType, boolean isStatic, boolean ownerInterface) {
 
     public MethodRef {
         paramTypes = List.copyOf(paramTypes);
+    }
+
+    public MethodRef(String owner, String name, List<JType> paramTypes, JType returnType, boolean isStatic) {
+        this(owner, name, paramTypes, returnType, isStatic, false);
     }
 
     /** マッピング規則・名前表で使うシグネチャ（例: {@code max(int,int)}）。 */

@@ -98,21 +98,25 @@ cd out && cargo run
 終了コードは、変換できれば 0（未対応機能の警告があっても 0）、javac のエラーなどで変換できなければ 1。
 診断は標準エラーと `<出力先>/j2r-report.json` に出る。
 
-## 5. 現在変換できる範囲（M0〜M1）
+## 5. 現在変換できる範囲
 
 | 分類 | 対応している | 未対応（診断を出して `todo!()` を生成する） |
 |---|---|---|
-| クラス | static メソッド・static フィールドだけを持つクラス（複数クラス・複数パッケージ可） | インスタンスフィールド・コンストラクタ・インスタンスメソッド・継承・インタフェース・enum・record・内部クラス |
-| 型 | プリミティブ型、`String`、配列（多次元を含む）、`StringBuilder`、`Scanner` | ボクシング、ジェネリクス、コレクション（`List` / `Map` など）、`null` |
-| 演算 | Java と同じ意味の四則演算・剰余・シフト・ビット演算・比較・キャスト（オーバーフロー、ゼロ除算の例外、`MIN / -1` など） | — |
-| 文 | if / while / do-while / for / 拡張 for（配列）/ ラベル付き break・continue / switch（`->` 形式、fall-through しない `:` 形式、int・char・String） | fall-through する switch、switch 式、try/catch/finally、ラムダ |
-| 例外 | `throw new X()` / `throw new X("msg")`、実行時例外（配列の範囲外、ゼロ除算、数値の解析失敗など）は未捕捉例外として終了（終了コード 1） | 例外の捕捉 |
-| JDK API | `System.out` / `System.err` / `System.in`、`Math`、`String`、`StringBuilder`、`Integer` / `Long` / `Double` / `Boolean` / `Character` の static メソッド、`Arrays`、`Scanner`（一覧は `translator/j2r-mappings/src/main/resources/j2r/mappings/*.yaml`） | 上記以外（YAML にマッピングを追加すれば使える） |
+| クラス | インスタンスフィールド・コンストラクタ（オーバーロード、`this(...)` / `super(...)`）・インスタンスメソッド・static メンバ・static 初期化ブロック・インスタンス初期化子、継承・抽象クラス・`super.m()`、インタフェース（default / static メソッド）、`enum`（フィールド・コンストラクタ・メソッド・`values()` / `valueOf` / `ordinal` / `name`・`switch`）、`record`（アクセサ・`equals` / `hashCode` / `toString`・コンパクトコンストラクタ）、static 入れ子クラス・内部クラス（`outer.new Inner()`、`Outer.this`）・匿名クラス・ローカルクラス（外側のローカル変数の捕捉を含む） | 本体付きの enum 定数、JDK のクラス（例外以外）の継承、`sealed` による網羅性の利用 |
+| 型 | プリミティブ型、`String`、配列（多次元を含む）、`null`、ボクシング（`Integer` 等。`Integer.valueOf` のキャッシュも Java と同じ）、ジェネリクス（消去して変換）、`List` / `ArrayList` / `LinkedList` / `ArrayDeque` / `Map` / `HashMap` / `LinkedHashMap` / `TreeMap` / `Set` / `HashSet` / `LinkedHashSet` / `TreeSet` / `PriorityQueue` / `Iterator` / `Map.Entry`、`Random`、`StringBuilder`、`Scanner` | 上記以外のコレクション、ストリーム API |
+| 演算 | Java と同じ意味の四則演算・剰余・シフト・ビット演算・比較・キャスト（オーバーフロー、ゼロ除算の例外、`MIN / -1` など）、`instanceof`（型パターンを含む）、参照の `==` | — |
+| 文 | if / while / do-while / for / 拡張 for（配列・`Iterable`）/ ラベル付き break・continue / switch 文（`->` 形式、fall-through する `:` 形式、int・char・String・enum）/ switch 式（`yield`）/ 型パターン・`case null`・ガード（`when`） | record パターン |
+| 例外 | `throw`、try / catch（複数の型・マルチキャッチ）/ finally、try-with-resources（suppressed を含む）、ユーザ定義例外クラス、`getMessage` / `getCause` / `printStackTrace`（スタックトレースの行は出ない）、実行時例外（NPE・配列の範囲外・ゼロ除算・`ClassCastException`・数値の解析失敗など）。未捕捉なら Java と同じ表示で終了コード 1 | — |
+| ラムダ | ラムダ式・メソッド参照（static・インスタンス・`this::`・`Type::instanceMethod`・`new`）、ユーザ定義の関数型インタフェース、`Runnable` / `Supplier` / `Consumer` / `Function` / `BiFunction` / `Predicate` / `UnaryOperator` / `BinaryOperator` / `Comparator`（`comparing` / `thenComparing` / `reversed` など） | — |
+| 文字列 | 連結、`String` の主なメソッド、`String.format` / `printf`（`%d` `%s` `%f` `%x` `%c` `%b` `%e` `%n` `%%`、幅・精度・フラグ）、`String.join` / `split`（単純な正規表現）、可変長引数 | 完全な正規表現 |
+| JDK API | `System.out` / `System.err` / `System.in`、`Math`、`Objects`、`Collections`、`Arrays`、ボックス型の static メソッド、`Object` のメソッド（一覧は `translator/j2r-mappings/src/main/resources/j2r/mappings/*.yaml`） | 上記以外（YAML にマッピングを追加すれば使える） |
 
 意味の違い（診断で知らせる）:
 - `String` どうしの `==` は値の比較に変換する（`J2R-LOSSY-STRING-IDENTITY`）。
-- 初期化子のない参照型の static フィールドや `new String[n]` の要素は、`null` の代わりに空文字列・長さ 0 の配列になる（`J2R-LOSSY-NULL`）。
-- static フィールドの初期化は Java のクラス初期化（まとめて一度）ではなく、フィールドごとに最初のアクセス時に行う。
+- static フィールドの初期化は Java のクラス初期化（まとめて一度）ではなく、フィールドごとに最初のアクセス時に行う
+  （static 初期化ブロックは最初のアクセスの前に一度だけ実行する）。
+- マルチスレッドは未対応（static フィールドはスレッドごとに持つ）。
+- `Object.hashCode()` の既定値（識別ハッシュ）とそれを使う `toString()` の値は JVM と異なる。
 - 出力は常に UTF-8（Java はプラットフォームの文字コードに従う）。
 
 ## 6. 独自の API マッピングを追加する

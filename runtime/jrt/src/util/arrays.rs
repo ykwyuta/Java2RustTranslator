@@ -110,3 +110,152 @@ fn check_range(len: i32, from: i32, to: i32) {
         throw("java.lang.ArrayIndexOutOfBoundsException", Some(&format!("Array index out of range: {to}")));
     }
 }
+
+/// `Arrays.sort(T[], comparator)` / `Arrays.sort(Object[])`（安定ソート。comparator が null なら compareTo）。
+/// 要素は String でも Object でもよい（比較のときに Object として扱う）。
+pub fn sort_objects<T: Clone + Into<crate::JObject>>(a: &JArray<T>, comparator: &crate::JObject) {
+    let mut v = a.to_vec();
+    v.sort_by(|x, y| crate::util::core::compare_with(comparator, &x.clone().into(), &y.clone().into()).cmp(&0));
+    a.with_mut(|dst| *dst = v);
+}
+
+/// `Arrays.sort(T[], from, to, comparator)`。
+pub fn sort_objects_range<T: Clone + Into<crate::JObject>>(a: &JArray<T>, from: i32, to: i32, comparator: &crate::JObject) {
+    check_range(a.length(), from, to);
+    let mut v = a.to_vec();
+    v[from as usize..to as usize].sort_by(|x, y| crate::util::core::compare_with(comparator, &x.clone().into(), &y.clone().into()).cmp(&0));
+    a.with_mut(|dst| *dst = v);
+}
+
+/// `Arrays.hashCode(int[])` など。
+pub fn hash_code<T: Clone + JavaHash>(a: &JArray<T>) -> i32 {
+    if a.is_null() {
+        return 0;
+    }
+    a.to_vec().iter().fold(1i32, |h, x| h.wrapping_mul(31).wrapping_add(x.java_hash()))
+}
+
+/// 要素の hashCode（`Arrays.hashCode` 用）。
+pub trait JavaHash {
+    fn java_hash(&self) -> i32;
+}
+
+impl JavaHash for i32 {
+    fn java_hash(&self) -> i32 {
+        *self
+    }
+}
+impl JavaHash for i64 {
+    fn java_hash(&self) -> i32 {
+        (*self ^ ((*self as u64) >> 32) as i64) as i32
+    }
+}
+impl JavaHash for i8 {
+    fn java_hash(&self) -> i32 {
+        *self as i32
+    }
+}
+impl JavaHash for i16 {
+    fn java_hash(&self) -> i32 {
+        *self as i32
+    }
+}
+impl JavaHash for f64 {
+    fn java_hash(&self) -> i32 {
+        let bits = if self.is_nan() { 0x7ff8000000000000u64 } else { self.to_bits() };
+        (bits ^ (bits >> 32)) as i32
+    }
+}
+impl JavaHash for f32 {
+    fn java_hash(&self) -> i32 {
+        if self.is_nan() { 0x7fc00000 } else { self.to_bits() as i32 }
+    }
+}
+impl<T> JavaHash for JArray<T> {
+    fn java_hash(&self) -> i32 {
+        if self.is_null() { 0 } else { self.length().wrapping_mul(0x61c8_8647) }
+    }
+}
+impl JavaHash for u16 {
+    fn java_hash(&self) -> i32 {
+        *self as i32
+    }
+}
+impl JavaHash for bool {
+    fn java_hash(&self) -> i32 {
+        if *self { 1231 } else { 1237 }
+    }
+}
+impl JavaHash for JString {
+    fn java_hash(&self) -> i32 {
+        if self.is_null() { 0 } else { self.hash_code() }
+    }
+}
+impl JavaHash for crate::JObject {
+    fn java_hash(&self) -> i32 {
+        crate::object::hash_nullable(self)
+    }
+}
+
+/// 配列の文字列化（`"" + array` / `println(array)`）: Java と同じく `型@ハッシュ` 形式。
+impl<T> JStringify for JArray<T> {
+    fn append_to(&self, out: &mut String) {
+        if self.is_null() {
+            out.push_str("null");
+        } else {
+            out.push_str("[@");
+            out.push_str(&format!("{:x}", self.length() as u32 ^ 0x1b6d_3586));
+        }
+    }
+}
+
+/// `Arrays.deepToString(Object[])`（多次元配列の中身も文字列にする）。
+pub fn deep_to_string<T: DeepToString>(a: &T) -> JString {
+    let mut s = String::new();
+    a.deep(&mut s);
+    JString::from(s)
+}
+
+/// `Arrays.deepToString` の要素。
+pub trait DeepToString {
+    fn deep(&self, out: &mut String);
+}
+
+impl<T: DeepToString + Clone> DeepToString for JArray<T> {
+    fn deep(&self, out: &mut String) {
+        if self.is_null() {
+            out.push_str("null");
+            return;
+        }
+        out.push('[');
+        for (i, x) in self.to_vec().iter().enumerate() {
+            if i > 0 {
+                out.push_str(", ");
+            }
+            x.deep(out);
+        }
+        out.push(']');
+    }
+}
+
+macro_rules! deep_leaf {
+    ($($t:ty),*) => {
+        $(impl DeepToString for $t {
+            fn deep(&self, out: &mut String) {
+                self.append_to(out)
+            }
+        })*
+    };
+}
+deep_leaf!(i8, i16, i32, i64, f32, f64, bool, JString, crate::JObject);
+
+impl DeepToString for u16 {
+    fn deep(&self, out: &mut String) {
+        crate::JChar(*self).append_to(out)
+    }
+}
+
+/// `Arrays.stream(a).sum()` の代わりに使う合計（int[]）。
+pub fn sum_i32(a: &JArray<i32>) -> i32 {
+    a.to_vec().iter().fold(0i32, |s, x| s.wrapping_add(*x))
+}

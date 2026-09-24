@@ -11,10 +11,16 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * 各メソッドに Rust の関数名を割り当てる。Rust にはオーバーロードがないため、
- * 同名メソッドが複数ある場合のみ引数型から接尾辞を付ける（例: {@code max_i32_i32}, {@code max_f64_f64}）。
+ * 各メソッド・コンストラクタに Rust の関数名を割り当てる。Rust にはオーバーロードがないため、
+ * 同名のものが複数ある場合のみ引数型から接尾辞を付ける（例: {@code max_i32_i32}, {@code max_f64_f64}）。
+ *
+ * <p>コンストラクタは {@code new}（オブジェクト生成）、static / インスタンスメソッドは snake_case。
+ * 変換器が生成する関連関数（{@code of}, {@code new} など）と衝突する名前には {@code _} を付ける。
  */
 public final class MangleOverloads implements Pass {
+    /** 変換器が型ごとに生成する関連関数の名前。 */
+    public static final Set<String> RESERVED = Set.of("new", "of", "values", "value_of");
+
     @Override
     public String name() {
         return "MangleOverloads";
@@ -36,14 +42,14 @@ public final class MangleOverloads implements Pass {
     private static List<Decl.MethodDecl> mangle(List<Decl.MethodDecl> methods) {
         Map<String, Integer> counts = new HashMap<>();
         for (Decl.MethodDecl m : methods) {
-            counts.merge(m.name(), 1, Integer::sum);
+            counts.merge(baseName(m), 1, Integer::sum);
         }
         Set<String> used = new HashSet<>();
         List<Decl.MethodDecl> out = new ArrayList<>();
         for (Decl.MethodDecl m : methods) {
-            String base = Naming.toSnakeCase(m.name());
+            String base = baseName(m);
             String name = base;
-            if (counts.get(m.name()) > 1) {
+            if (counts.get(base) > 1) {
                 StringBuilder sb = new StringBuilder(base);
                 for (Decl.Param p : m.params()) {
                     sb.append('_').append(suffix(p.type()));
@@ -57,9 +63,17 @@ public final class MangleOverloads implements Pass {
             for (int i = 2; !used.add(unique); i++) {
                 unique = name + "_" + i;
             }
-            out.add(m.withRustName(Naming.escape(unique)));
+            out.add(m.withRustName(m.isConstructor() ? unique : Naming.escape(unique)));
         }
         return out;
+    }
+
+    private static String baseName(Decl.MethodDecl m) {
+        if (m.isConstructor()) {
+            return "new";
+        }
+        String n = Naming.toSnakeCase(m.name());
+        return RESERVED.contains(n) ? n + "_" : n;
     }
 
     static String suffix(JType t) {

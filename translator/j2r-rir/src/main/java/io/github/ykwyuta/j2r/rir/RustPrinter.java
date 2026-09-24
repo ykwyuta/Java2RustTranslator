@@ -76,13 +76,23 @@ public final class RustPrinter {
         switch (item) {
             case RItem.Fn fn -> {
                 docs(fn.docs());
-                out.append(fn.pub() ? "pub fn " : "fn ").append(fn.name()).append('(');
+                for (String a : fn.attrs()) {
+                    out.append("#[").append(a).append(']');
+                    newline();
+                }
+                if (!fn.vis().isEmpty()) {
+                    out.append(fn.vis()).append(' ');
+                }
+                out.append("fn ").append(fn.name()).append('(');
                 for (int i = 0; i < fn.params().size(); i++) {
                     RItem.Param p = fn.params().get(i);
                     if (i > 0) {
                         out.append(", ");
                     }
-                    out.append(p.mut() ? "mut " : "").append(p.name()).append(": ").append(p.type().text());
+                    out.append(p.mut() ? "mut " : "").append(p.name());
+                    if (p.type() != null) {
+                        out.append(": ").append(p.type().text());
+                    }
                 }
                 out.append(')');
                 if (fn.ret() != null && !fn.ret().equals(RType.UNIT)) {
@@ -90,6 +100,45 @@ public final class RustPrinter {
                 }
                 out.append(' ');
                 block(fn.body(), true);
+            }
+            case RItem.Struct st -> {
+                docs(st.docs());
+                if (st.fields().isEmpty()) {
+                    out.append("pub struct ").append(st.name()).append(';');
+                } else {
+                    out.append("pub struct ").append(st.name()).append(" {");
+                    indent++;
+                    for (RItem.Field f : st.fields()) {
+                        newline();
+                        if (!f.vis().isEmpty()) {
+                            out.append(f.vis()).append(' ');
+                        }
+                        out.append(f.name()).append(": ").append(f.type().text()).append(',');
+                    }
+                    indent--;
+                    newline();
+                    out.append('}');
+                }
+            }
+            case RItem.Impl im -> {
+                for (String a : im.attrs()) {
+                    out.append("#[").append(a).append(']');
+                    newline();
+                }
+                out.append("impl ").append(im.header()).append(" {");
+                indent++;
+                boolean first = true;
+                for (RItem it : im.items()) {
+                    if (!first) {
+                        out.append('\n');
+                    }
+                    newline();
+                    item(it);
+                    first = false;
+                }
+                indent--;
+                newline();
+                out.append('}');
             }
             case RItem.Const c -> {
                 docs(c.docs());
@@ -237,6 +286,11 @@ public final class RustPrinter {
             case RExpr.Continue c -> P_JUMP;
             case RExpr.Return r -> P_JUMP;
             case RExpr.Closure c -> P_JUMP;
+            case RExpr.Field f -> P_POSTFIX;
+            case RExpr.Index i -> P_POSTFIX;
+            case RExpr.IfLet i -> P_BLOCKLIKE;
+            case RExpr.StructLit sl -> P_ATOM;
+            case RExpr.Array a -> P_ATOM;
             case RExpr.Block b -> P_BLOCKLIKE;
             case RExpr.If i -> P_BLOCKLIKE;
             case RExpr.While w -> P_BLOCKLIKE;
@@ -261,6 +315,13 @@ public final class RustPrinter {
     }
 
     private void expr(RExpr e, int minPrec) {
+        if (minPrec == 0 && e instanceof RExpr.Template) {
+            // テンプレートが全体を括弧で囲んでいても、どんな式でもよい位置では括弧を外す（unused_parens 警告を避ける）。
+            int start = out.length();
+            exprNoParen(e);
+            stripOuterParens(start);
+            return;
+        }
         if (precedence(e) < minPrec) {
             out.append('(');
             exprNoParen(e);
@@ -268,6 +329,41 @@ public final class RustPrinter {
         } else {
             exprNoParen(e);
         }
+    }
+
+    /** out の start 以降が、対応する 1 組の括弧で全体を囲んだ式なら、その括弧を外す。 */
+    private void stripOuterParens(int start) {
+        int end = out.length();
+        if (end - start < 2 || out.charAt(start) != '(' || out.charAt(end - 1) != ')') {
+            return;
+        }
+        int depth = 0;
+        boolean inString = false;
+        for (int i = start; i < end; i++) {
+            char c = out.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i++;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '(' || c == '[' || c == '{') {
+                depth++;
+            } else if (c == ')' || c == ']' || c == '}') {
+                depth--;
+                if (depth == 0 && i != end - 1) {
+                    return;
+                }
+            } else if (c == ',' && depth == 1) {
+                return; // タプル
+            }
+        }
+        out.deleteCharAt(end - 1);
+        out.deleteCharAt(start);
     }
 
     private void exprNoParen(RExpr e) {
@@ -398,8 +494,52 @@ public final class RustPrinter {
                 out.append('}');
             }
             case RExpr.Closure c -> {
+                if (c.move()) {
+                    out.append("move ");
+                }
                 out.append('|').append(String.join(", ", c.params())).append("| ");
-                expr(c.body(), 0);
+                if (c.ret() != null) {
+                    out.append("-> ").append(c.ret().text()).append(' ');
+                    block((RExpr.Block) c.body(), true);
+                } else {
+                    expr(c.body(), 0);
+                }
+            }
+            case RExpr.Field f -> {
+                expr(f.receiver(), P_POSTFIX);
+                out.append('.').append(f.name());
+            }
+            case RExpr.Array a -> args(a.elements(), '[', ']');
+            case RExpr.IfLet i -> {
+                out.append("if let ").append(i.pattern()).append(" = ");
+                expr(i.value(), 0);
+                out.append(' ');
+                block(i.then(), true);
+                if (i.elseBranch() != null) {
+                    out.append(" else ");
+                    if (i.elseBranch() instanceof RExpr.Block b) {
+                        block(b, true);
+                    } else {
+                        exprNoParen(i.elseBranch());
+                    }
+                }
+            }
+            case RExpr.StructLit sl -> {
+                out.append(sl.name()).append(" {");
+                indent++;
+                for (RExpr.FieldInit f : sl.fields()) {
+                    newline();
+                    out.append(f.name()).append(": ");
+                    expr(f.value(), 0);
+                    out.append(',');
+                }
+                indent--;
+                newline();
+                out.append('}');
+            }
+            case RExpr.Index i -> {
+                expr(i.receiver(), P_POSTFIX);
+                out.append('[').append(i.index()).append(']');
             }
         }
     }

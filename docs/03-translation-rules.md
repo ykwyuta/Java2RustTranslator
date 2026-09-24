@@ -3,6 +3,24 @@
 本書は lowering（JIR → RIR）の仕様である。各規則には **既定（faithful）** と、解析で条件を満たした場合の
 **格上げ（idiomatic）** を記す。表現戦略 S0〜S4 は [02-architecture.md §5](02-architecture.md) を参照。
 
+> **現在の実装との対応**: 本書の規則のうち、現在の lowering が生成するのは次の既定表現である（格上げは未実装）。
+> 設計当初の `Ref<T>` + `trait CApi` の案は、多重継承（インタフェース）と null の扱いを単純にするため次の形に置き換えた。
+>
+> | Java | 生成する Rust |
+> |---|---|
+> | 参照型（String・配列以外） | `JObject`（null は `JObject::null()`）。`String` は `JString`、配列は `JArray<T>`（どちらも null あり） |
+> | クラス `C` | `struct C { __super: S, フィールド: Cell<_>/RefCell<_> }` と `impl jrt::Object for C` |
+> | インスタンスメソッド `m` | `C::m(this: &JObject, ...)`。オーバーライドがあれば `this.is::<D>()` で分岐するディスパッチ関数 `C::m` と本体 `C::m_impl` |
+> | コンストラクタ | `C::new(...) -> JObject`（確保して `__init`）と `C::__init(this, ...)`。オーバーロードは `new_<型>` |
+> | インタフェース | 本体を持たない `struct I;` とディスパッチ関数・default メソッド |
+> | `enum` / `record` | 定数ごとの `JObject`（`values()` / `valueOf`）/ アクセサと `equals`・`hashCode`・`toString` を生成したクラス |
+> | 内部・匿名・ローカルクラス | 外側のクラスのモジュールの入れ子の型。外側のインスタンスは `__outer`、捕捉したローカル変数は `__cap_名前` フィールド |
+> | ボクシング | `jrt::box_i32(x)` など（`Integer` のキャッシュも Java と同じ）/ `o.unbox_i32()` |
+> | ジェネリクス | 消去して `JObject`。javac が挿入する検査キャストに相当する `checkcast` を入れる |
+> | 例外 | `jrt::throw_obj(e)`（パニック）と `jrt::try_block(|| ...)`。`return` / `break` / `continue` は `jrt::Flow` で try の外へ運ぶ |
+> | ラムダ・メソッド参照 | `jrt::lambda(&["インタフェース名"], move |args| ...)`。呼び出しは `invoke("メソッド名", &[..])` |
+> | 可変長引数 | 呼び出し側で配列にまとめる |
+
 ## 1. プリミティブ型と演算
 
 | Java | Rust | 備考 |
@@ -152,9 +170,11 @@ impl AnimalApi for Dog {
 
 ## 5. 例外
 
-> **実装状況（M1）**: 例外の捕捉は未実装。`throw new X(msg)` と実行時例外（ゼロ除算・配列の範囲外・数値の解析失敗など）は
-> `jrt` でパニックとして送出し、`jrt::run_main` が Java と同じ `Exception in thread "main" X: msg` を標準エラーに出して
-> 終了コード 1 で終わる。以下の `Result` 方式は M3 で実装する。
+> **実装状況**: 例外は `jrt` のパニック（`resume_unwind`）で送出し、`jrt::try_block` で捕捉する。catch は
+> `instance_of` で型を調べ、合わなければ送出し直す。finally は正常終了・`return`・`break`・`continue`・例外のすべての経路で実行する。
+> try-with-resources は JLS 14.20.3 のとおり try/catch/finally に展開し、`close()` の例外は suppressed に加える。
+> 未捕捉の例外は `jrt::run_main` が Java と同じ `Exception in thread "main" X: msg` を標準エラーに出し、終了コード 1 で終わる。
+> 以下の `Result` 方式（例外フロー解析によるパニックの除去）は未実装。
 
 ### 5.1 基本方式
 - 例外は `jrt::Throwable`（`Ref<dyn ThrowableApi>`）値。ユーザ定義例外クラスも通常のクラス規則で生成し、

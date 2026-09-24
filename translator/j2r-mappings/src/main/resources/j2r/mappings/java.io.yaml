@@ -23,6 +23,8 @@ classes:
       - { sig: "print(char[])", rust: "{this}.print_chars({&0}, false)" }
       - { sig: "print(java.lang.Object)", rust: "{this}.print({s0})" }
       - { sig: "flush()", rust: "{this}.flush()" }
+      - { sig: "printf(java.lang.String,java.lang.Object[])", rust: "{this}.print(&jrt::lang::format::format({&0}, {&1}))" }
+      - { sig: "format(java.lang.String,java.lang.Object[])", rust: "{this}.print(&jrt::lang::format::format({&0}, {&1}))" }
 
   - class: java.io.InputStream
     rustType: jrt::io::InputStream

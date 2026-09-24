@@ -74,9 +74,8 @@ public final class JavacFrontend {
             Set<String> programTypes = new TreeSet<>();
             for (CompilationUnitTree cu : parsed) {
                 for (var t : cu.getTypeDecls()) {
-                    var el = trees.getElement(trees.getPath(cu, t));
-                    if (el instanceof TypeElement te) {
-                        programTypes.add(te.getQualifiedName().toString());
+                    if (trees.getElement(trees.getPath(cu, t)) instanceof TypeElement te) {
+                        collectTypes(te, programTypes);
                     }
                 }
             }
@@ -87,6 +86,16 @@ public final class JavacFrontend {
             return new Decl.Program(out);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /** 型とその入れ子の型（メンバー型）の完全修飾名を集める。 */
+    private static void collectTypes(TypeElement te, Set<String> out) {
+        out.add(te.getQualifiedName().toString());
+        for (var e : te.getEnclosedElements()) {
+            if (e instanceof TypeElement nested) {
+                collectTypes(nested, out);
+            }
         }
     }
 

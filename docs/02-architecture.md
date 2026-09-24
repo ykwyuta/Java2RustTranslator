@@ -165,6 +165,16 @@ Java と Rust のギャップ（GC・null・継承・例外・共有可変参照
 | S3 単一所有 | `Box<T>` / 所有値 / `&mut T` 引数 | エスケープ解析で共有されないことを証明 |
 | S4 スレッド共有 | `jrt::SyncRef<T>`（= `Arc<T>` + フィールド単位の `Mutex`/Atomic） | スレッド解析で共有を検出 |
 
+> **現在の実装（S0）**: 参照型の値は、String と配列を除いてすべて `jrt::JObject`（= `Option<Rc<dyn jrt::Object>>`、
+> null は `None`）で表す。各クラスは構造体になり、スーパークラスの構造体を `__super` として埋め込む（ルートのクラスは
+> `__base: jrt::ObjectBase` に自身への弱参照と識別ハッシュを持つ）。メソッドは `this: &JObject` を受け取る関連関数で、
+> `C::of(this)` がダウンキャストの連鎖（CHA で求めた具象サブクラスを順に試す）で `&C` を取り出す。
+> 仮想呼び出しは、オーバーライドがある場合だけ `this.is::<S>()` で実行時の型を調べて実装を選ぶディスパッチ関数を生成する
+> （trait オブジェクトの多重継承を避けるため、トレイトの vtable ではなく CHA による静的な分岐にしている）。
+> `impl jrt::Object for C` は `class_name` / `instance_of` / `toString`・`equals`・`hashCode`・`compareTo` のオーバーライドを提供し、
+> JDK 側（コレクション・`String.valueOf` など）からもユーザ定義のメソッドが呼ばれる。フィールドは `Cell` / `RefCell` に入れる。
+> S1〜S4 は未実装。
+
 **S0 で `Rc<RefCell<T>>`（オブジェクト単位のロック）を採らない理由**: Java では「メソッド実行中に
 自分自身が別経路から呼び戻される」（リスナ、コールバック、再帰的データ構造の走査）が日常的で、
 オブジェクト全体を `borrow_mut()` すると実行時の `BorrowMutError` パニックになる。
@@ -186,14 +196,14 @@ Java と Rust のギャップ（GC・null・継承・例外・共有可変参照
 
 | モジュール | 内容 |
 |---|---|
-| `jrt::object` | `Ref<T>`（`Rc<T>` エイリアス）, `SyncRef<T>`, 自己参照ヘルパ, `JObject` トレイト（`equals`/`hash_code`/`to_string`/`as_any` によるダウンキャスト） |
-| `jrt::lang` | `JString`（不変、Java の UTF-16 意味論の `charAt`/`length` を提供）、`StringBuilder`、`Math`、ボックス型、`Integer.parseInt` 等 |
+| `jrt::object` | `JObject`（null になれる共有参照）、`Object` トレイト（`class_name` / `instance_of` / `to_jstring` / `equals` / `hash_code` / `compare_to` / `invoke`）、`ObjectBase`（自己参照と識別ハッシュ）、ダウンキャスト・`checkcast` |
+| `jrt::lang` | `JString`（UTF-16 意味論・null あり）、`StringBuilder`、`Math`、ボックス型（Java と同じキャッシュ）、`Throwable` と JDK の例外クラス、`Enum` の共通部分、`String.format` の書式化、`split` 用の簡易正規表現 |
 | `jrt::num` | Java 意味論の整数演算（ラップアラウンド、シフト量マスク、`/`・`%` の丸めとゼロ除算例外、`Integer.MIN_VALUE / -1`） |
-| `jrt::array` | `JArray<T>`（固定長・共有・添字境界例外） |
-| `jrt::exception` | `Throwable` 階層（`JException` enum + trait）、スタックトレース相当、`catch` 用ダウンキャスト |
-| `jrt::util` | `ArrayList`, `HashMap`, `HashSet`, `LinkedList`, `Iterator` 等（Java の `equals`/`hashCode` 契約で動作） |
-| `jrt::io` | `System.out` / `System.err`、`PrintStream`、簡易ファイル I/O |
-| `jrt::init` | クラス初期化（`static` 初期化の遅延実行・一度きり）用ヘルパ |
+| `jrt::array` | `JArray<T>`（固定長・共有・null あり・添字境界例外） |
+| `jrt::rt` | 例外の送出（パニック）と捕捉（`try_block`・`Flow`）、`run_main`（未捕捉例外の表示と終了コード） |
+| `jrt::lambda` | ラムダ・メソッド参照のオブジェクト（実装するインタフェース名とクロージャ） |
+| `jrt::util` | `ArrayList` / `LinkedList` / `ArrayDeque` / `HashMap` / `LinkedHashMap` / `TreeMap` / `HashSet` / `TreeSet` / `PriorityQueue` / `Iterator`（反復順序も Java と同じ）、`Collections` / `Arrays` / `Objects` / `Comparator`、`Random`（Java と同じ乱数列） |
+| `jrt::io` | `System.out` / `System.err`、`PrintStream`、`Scanner` |
 
 方針:
 - `jrt` は安全な Rust のみで書く（`#![forbid(unsafe_code)]`）。

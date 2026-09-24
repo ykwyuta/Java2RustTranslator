@@ -1,5 +1,6 @@
 package io.github.ykwyuta.j2r.driver;
 
+import io.github.ykwyuta.j2r.analysis.ClassHierarchy;
 import io.github.ykwyuta.j2r.analysis.ProgramIndex;
 import io.github.ykwyuta.j2r.backend.CargoProjectWriter;
 import io.github.ykwyuta.j2r.backend.CargoRunner;
@@ -45,7 +46,8 @@ public final class Translator {
         program = PassManager.standard().run(program);
         ProgramIndex index = new ProgramIndex(program);
         ApiMappings mappings = ApiMappings.load(options.mappingDirs());
-        LoweredCrate crate = new Lowerer(index, mappings, diags).lower(program, options.mainClass());
+        ClassHierarchy hierarchy = new ClassHierarchy(index, program);
+        LoweredCrate crate = new Lowerer(index, hierarchy, mappings, diags).lower(program, options.mainClass());
 
         String crateName = Naming.crateName(options.crateName());
         Path runtime = options.runtime() == TranslatorOptions.RuntimeDependency.PATH ? options.runtimePath() : null;

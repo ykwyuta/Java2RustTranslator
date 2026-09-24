@@ -33,7 +33,7 @@ public sealed interface Stmt {
         }
     }
 
-    /** 拡張 for（DesugarEnhancedFor で For に展開される）。 */
+    /** 拡張 for（DesugarEnhancedFor で、配列は添字ループ、Iterable は Iterator のループに展開される）。 */
     record ForEach(String varName, JType varType, Expr iterable, Stmt body, SourcePos pos) implements Stmt {}
 
     /** switch 文。 */
@@ -43,20 +43,29 @@ public sealed interface Stmt {
         }
     }
 
+    /** enum 定数の case ラベル。 */
+    record EnumLabel(String name, int ordinal) {}
+
+    /** 型パターンの case ラベル {@code case T name}。 */
+    record TypePattern(JType type, String binding) {}
+
+    /** {@code case null}。 */
+    record NullLabel() {}
+
     /**
-     * switch の case。labels は定数値（Integer / Character / String）で、空なら default。
+     * switch の case。labels は定数値（Integer / Character / String）、{@link EnumLabel}、{@link TypePattern}、
+     * {@link NullLabel}。isDefault は default を含むか。guard は {@code when} 条件（なければ null）。
      * arrow は {@code case X ->} 形式（fall-through しない）。
      */
-    record SwitchCase(List<Object> labels, List<Stmt> body, boolean arrow, SourcePos pos) {
+    record SwitchCase(List<Object> labels, boolean isDefault, Expr guard, List<Stmt> body, boolean arrow, SourcePos pos) {
         public SwitchCase {
             labels = List.copyOf(labels);
             body = List.copyOf(body);
         }
-
-        public boolean isDefault() {
-            return labels.isEmpty();
-        }
     }
+
+    /** switch 式の {@code yield value}。 */
+    record Yield(Expr value, SourcePos pos) implements Stmt {}
 
     record Return(Expr value, SourcePos pos) implements Stmt {}
 
@@ -67,8 +76,22 @@ public sealed interface Stmt {
 
     record Labeled(String label, Stmt body, SourcePos pos) implements Stmt {}
 
-    /** {@code throw new X(msg)}。例外処理は未実装のため、未捕捉例外としてプログラムを終了させる。 */
-    record ThrowNew(String exceptionClass, Expr message, SourcePos pos) implements Stmt {}
+    /** {@code throw expr}。 */
+    record Throw(Expr exception, SourcePos pos) implements Stmt {}
+
+    /** catch 節（types は捕捉する例外クラスの完全修飾名。マルチキャッチなら複数）。 */
+    record Catch(List<String> types, String var, Block body, SourcePos pos) {
+        public Catch {
+            types = List.copyOf(types);
+        }
+    }
+
+    /** try 文（try-with-resources は frontend で try/finally に展開する）。finallyBlock は null 可。 */
+    record Try(Block body, List<Catch> catches, Block finallyBlock, SourcePos pos) implements Stmt {
+        public Try {
+            catches = List.copyOf(catches);
+        }
+    }
 
     record Unsupported(String description, SourcePos pos) implements Stmt {}
 }
