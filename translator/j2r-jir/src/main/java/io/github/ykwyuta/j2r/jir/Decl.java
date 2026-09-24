@@ -31,6 +31,7 @@ public final class Decl {
      * 型の宣言。
      *
      * @param superclass       スーパークラスの完全修飾名（java.lang.Object とインタフェースは null）
+     * @param jdkSuperclass    継承した JDK のクラス（Thread・コレクション。状態は委譲先のオブジェクトが持つ。なければ null）
      * @param interfaces       直接実装・継承するインタフェース
      * @param allSupertypes    推移的なすべての上位型（JDK の型と java.lang.Object を含む。instanceof 用）
      * @param outer            入れ子の型なら外側の型の完全修飾名
@@ -46,7 +47,7 @@ public final class Decl {
                            List<FieldDecl> fields, List<MethodDecl> methods,
                            List<Stmt> instanceInit, List<Stmt> staticInit,
                            List<EnumConstant> enumConstants, List<Param> recordComponents,
-                           String javadoc, SourcePos pos) {
+                           String javadoc, SourcePos pos, String jdkSuperclass) {
         public TypeDecl {
             interfaces = List.copyOf(interfaces);
             allSupertypes = List.copyOf(allSupertypes);
@@ -58,16 +59,28 @@ public final class Decl {
             recordComponents = List.copyOf(recordComponents);
         }
 
+        /** JDK のクラスを継承しない型。 */
+        public TypeDecl(String simpleName, String qualifiedName, String packageName, TypeKind kind, boolean isAbstract,
+                        String superclass, List<String> interfaces, List<String> allSupertypes,
+                        String outer, boolean hasOuterInstance,
+                        List<FieldDecl> fields, List<MethodDecl> methods,
+                        List<Stmt> instanceInit, List<Stmt> staticInit,
+                        List<EnumConstant> enumConstants, List<Param> recordComponents,
+                        String javadoc, SourcePos pos) {
+            this(simpleName, qualifiedName, packageName, kind, isAbstract, superclass, interfaces, allSupertypes, outer, hasOuterInstance,
+                    fields, methods, instanceInit, staticInit, enumConstants, recordComponents, javadoc, pos, null);
+        }
+
         public TypeDecl withMethods(List<MethodDecl> newMethods) {
             return new TypeDecl(simpleName, qualifiedName, packageName, kind, isAbstract, superclass, interfaces, allSupertypes,
-                    outer, hasOuterInstance, fields, newMethods, instanceInit, staticInit, enumConstants, recordComponents, javadoc, pos);
+                    outer, hasOuterInstance, fields, newMethods, instanceInit, staticInit, enumConstants, recordComponents, javadoc, pos, jdkSuperclass);
         }
 
         public TypeDecl withBodies(List<FieldDecl> newFields, List<MethodDecl> newMethods, List<Stmt> newInstanceInit,
                                    List<Stmt> newStaticInit, List<EnumConstant> newEnumConstants) {
             return new TypeDecl(simpleName, qualifiedName, packageName, kind, isAbstract, superclass, interfaces, allSupertypes,
                     outer, hasOuterInstance, newFields, newMethods, newInstanceInit, newStaticInit, newEnumConstants, recordComponents,
-                    javadoc, pos);
+                    javadoc, pos, jdkSuperclass);
         }
 
         public boolean isInterface() {
@@ -99,10 +112,28 @@ public final class Decl {
      */
     public record MethodDecl(MethodRef ref, MethodKind kind, List<Param> params, Stmt.Block body, boolean isPublic,
                              boolean isPrivate, boolean isMain, List<String> overrides, String rustName,
-                             String javadoc, SourcePos pos) {
+                             String javadoc, SourcePos pos, List<String> annotations) {
         public MethodDecl {
             params = List.copyOf(params);
             overrides = List.copyOf(overrides);
+            annotations = annotations == null ? List.of() : List.copyOf(annotations);
+        }
+
+        /** 注釈のないメソッド。 */
+        public MethodDecl(MethodRef ref, MethodKind kind, List<Param> params, Stmt.Block body, boolean isPublic,
+                          boolean isPrivate, boolean isMain, List<String> overrides, String rustName,
+                          String javadoc, SourcePos pos) {
+            this(ref, kind, params, body, isPublic, isPrivate, isMain, overrides, rustName, javadoc, pos, List.of());
+        }
+
+        /** 完全修飾名の注釈（{@code org.junit.jupiter.api.Test} など）が付いているか。 */
+        public boolean hasAnnotation(String... qualifiedNames) {
+            for (String n : qualifiedNames) {
+                if (annotations.contains(n)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         public String name() {
@@ -122,11 +153,11 @@ public final class Decl {
         }
 
         public MethodDecl withRustName(String n) {
-            return new MethodDecl(ref, kind, params, body, isPublic, isPrivate, isMain, overrides, n, javadoc, pos);
+            return new MethodDecl(ref, kind, params, body, isPublic, isPrivate, isMain, overrides, n, javadoc, pos, annotations);
         }
 
         public MethodDecl withBody(Stmt.Block b) {
-            return new MethodDecl(ref, kind, params, b, isPublic, isPrivate, isMain, overrides, rustName, javadoc, pos);
+            return new MethodDecl(ref, kind, params, b, isPublic, isPrivate, isMain, overrides, rustName, javadoc, pos, annotations);
         }
     }
 

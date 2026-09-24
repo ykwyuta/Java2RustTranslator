@@ -102,6 +102,61 @@ pub trait Object: Any {
     fn as_enum(&self) -> Option<&crate::lang::enums::EnumBase> {
         None
     }
+
+    /// JDK のクラス（Thread・コレクションなど）を継承したクラスなら、その状態を持つ委譲先のオブジェクト。
+    /// ランタイムの `downcast_ref` は、型が合わなければ委譲先を見る。
+    fn delegate(&self) -> Option<&JObject> {
+        None
+    }
+}
+
+/// JDK クラスを継承したオブジェクトの委譲先（なければ ClassCastException）。
+pub fn delegate_of(o: &JObject) -> JResult<JObject> {
+    match o.obj()?.delegate() {
+        Some(d) => Ok(d.clone()),
+        None => throw(
+            "java.lang.ClassCastException",
+            Some(&format!("class {} does not extend a JDK class", o.obj()?.class_name())),
+        ),
+    }
+}
+
+/// JDK クラスのコンストラクタ `super(...)`: 委譲先を設定する。
+pub fn init_delegate(cell: &std::cell::OnceCell<JObject>, value: JObject) {
+    let _ = cell.set(value);
+}
+
+fn delegate_in(cell: &std::cell::OnceCell<JObject>) -> JResult<&JObject> {
+    match cell.get() {
+        Some(d) => Ok(d),
+        None => throw("java.lang.IllegalStateException", Some("JDK superclass is not initialized yet")),
+    }
+}
+
+/// JDK クラスを継承したクラスの既定の toString（委譲先のもの）。
+pub fn jdk_to_string(cell: &std::cell::OnceCell<JObject>) -> JResult<JString> {
+    delegate_in(cell)?.to_jstring()
+}
+
+/// 既定の equals（Thread は同一性、コレクションは委譲先の equals）。
+pub fn jdk_equals(cell: &std::cell::OnceCell<JObject>, this: &JObject, other: &JObject) -> JResult<bool> {
+    let d = delegate_in(cell)?;
+    if other.same(this) {
+        return Ok(true);
+    }
+    if d.is::<crate::lang::thread::JThread>() {
+        return Ok(false);
+    }
+    d.equals(other)
+}
+
+/// 既定の hashCode（Thread は識別ハッシュ、コレクションは委譲先の hashCode）。
+pub fn jdk_hash_code(cell: &std::cell::OnceCell<JObject>, this: &JObject) -> JResult<i32> {
+    let d = delegate_in(cell)?;
+    if d.is::<crate::lang::thread::JThread>() {
+        return Ok(this.obj()?.base().identity_hash());
+    }
+    d.hash_code()
 }
 
 /// `Object.toString()` の既定の書式（`クラス名@16進ハッシュ`）。
@@ -167,7 +222,11 @@ impl JObject {
     /// 具体型への参照（null や別の型なら None）。
     pub fn downcast_ref<T: Object>(&self) -> Option<&T> {
         let o: &dyn Any = self.0.as_deref()?;
-        o.downcast_ref::<T>()
+        match o.downcast_ref::<T>() {
+            Some(x) => Some(x),
+            // JDK のクラスを継承したユーザーのクラス: 状態は委譲先が持つ。
+            None => self.0.as_deref()?.delegate()?.downcast_ref::<T>(),
+        }
     }
 
     /// 具体型の `Rc`（ランタイム内部用）。
@@ -234,6 +293,7 @@ impl JObject {
     pub fn invoke(&self, method: &str, args: &[JObject]) -> JResult<JObject> {
         match self.obj()?.invoke(method, args)? {
             Some(r) => Ok(r),
+            None if self.obj()?.delegate().is_some() => self.obj()?.delegate().cloned().unwrap_or_default().invoke(method, args),
             // java.lang.Object / Comparable のメソッドは、どのオブジェクトでも呼べる。
             None if method == "compareTo" && args.len() == 1 => Ok(crate::box_i32(self.compare_to(&args[0])?)),
             None if method == "equals" && args.len() == 1 => Ok(crate::box_bool(self.equals(&args[0])?)),
@@ -248,7 +308,13 @@ impl JObject {
 
     /// 関数型インタフェースのメソッドを呼ぶ（ラムダ・メソッドを実装したオブジェクト）。実装していなければ `Ok(None)`。
     pub fn try_invoke(&self, method: &str, args: &[JObject]) -> JResult<Option<JObject>> {
-        self.obj()?.invoke(method, args)
+        match self.obj()?.invoke(method, args)? {
+            Some(r) => Ok(Some(r)),
+            None => match self.obj()?.delegate() {
+                Some(d) => d.clone().try_invoke(method, args),
+                None => Ok(None),
+            },
+        }
     }
 }
 
@@ -434,4 +500,86 @@ impl<T: Clone + 'static> Object for ArrObj<T> {
     fn equals(&self, other: &JObject) -> JResult<bool> {
         Ok(other.downcast_ref::<ArrObj<T>>().is_some_and(|o| crate::JArray::ptr_eq(&o.a, &self.a)))
     }
+}
+
+// ------------------------------------------------------------------ StringBuilder などを Object として扱う
+
+/// Object として扱える、ランタイムの値型（StringBuilder・Scanner・PrintStream）。
+pub trait NativeClass: Clone + 'static {
+    /// Java のクラス名。
+    const CLASS: &'static str;
+    /// 実装しているインタフェース（instanceof 用）。
+    const INTERFACES: &'static [&'static str] = &[];
+    fn native_to_string(&self) -> Option<JString> {
+        None
+    }
+}
+
+/// Object として扱われるランタイムの値（中身は共有されるので、変更は元の値にも反映される）。
+struct Native<T: NativeClass> {
+    base: ObjectBase,
+    v: T,
+}
+
+impl<T: NativeClass> Object for Native<T> {
+    fn base(&self) -> &ObjectBase {
+        &self.base
+    }
+    fn class_name(&self) -> &'static str {
+        T::CLASS
+    }
+    fn instance_of(&self, class: &str) -> bool {
+        class == "java.lang.Object" || class == T::CLASS || T::INTERFACES.contains(&class)
+    }
+    fn to_jstring(&self) -> JResult<JString> {
+        Ok(self.v.native_to_string().unwrap_or_else(|| default_to_string(T::CLASS, self.base.identity_hash())))
+    }
+}
+
+impl JObject {
+    /// ランタイムの値（StringBuilder など）を Object にする。
+    pub fn from_native<T: NativeClass>(v: T) -> JObject {
+        alloc(|base| Native { base, v })
+    }
+
+    /// Object → ランタイムの値（null はそのまま既定値にせず NullPointerException にしない: Java の参照の null を表せないので、
+    /// null は型の既定値になる）。型が違えば ClassCastException。
+    pub fn cast_native<T: NativeClass + Default>(&self) -> JResult<T> {
+        match &self.0 {
+            None => Ok(T::default()),
+            Some(_) => match self.downcast_ref::<Native<T>>() {
+                Some(n) => Ok(n.v.clone()),
+                None => class_cast(self, T::CLASS),
+            },
+        }
+    }
+}
+
+impl NativeClass for crate::lang::StringBuilder {
+    const CLASS: &'static str = "java.lang.StringBuilder";
+    const INTERFACES: &'static [&'static str] = &["java.lang.CharSequence", "java.lang.Appendable", "java.lang.Comparable"];
+    fn native_to_string(&self) -> Option<JString> {
+        Some(self.to_jstring())
+    }
+}
+
+impl NativeClass for crate::util::Scanner {
+    const CLASS: &'static str = "java.util.Scanner";
+    const INTERFACES: &'static [&'static str] = &["java.io.Closeable", "java.lang.AutoCloseable", "java.util.Iterator"];
+}
+
+impl NativeClass for crate::io::PrintStream {
+    const CLASS: &'static str = "java.io.PrintStream";
+    const INTERFACES: &'static [&'static str] = &["java.io.Closeable", "java.lang.AutoCloseable", "java.lang.Appendable"];
+}
+
+impl From<crate::lang::StringBuilder> for JObject {
+    fn from(v: crate::lang::StringBuilder) -> JObject {
+        JObject::from_native(v)
+    }
+}
+
+/// ユーザーのクラスが上書きした JDK のメソッドを名前で呼ぶ（上書きしていなければ `Ok(None)`。委譲先は見ない）。
+pub fn user_override(o: &JObject, method: &str, args: &[JObject]) -> JResult<Option<JObject>> {
+    o.obj()?.invoke(method, args)
 }

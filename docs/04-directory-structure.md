@@ -47,15 +47,19 @@ Java2RustTranslator/
 │       │   ├── lib.rs               # prelude, jstr! / jconcat! マクロ
 │       │   ├── num.rs               # Java の意味の整数除算・剰余
 │       │   ├── array.rs             # JArray<T>（共有・固定長・境界検査）、arraycopy
-│       │   ├── rt.rs                # JResult・例外の送出と try、run_main（未捕捉例外の表示と終了コード）、exit
+│       │   ├── rt.rs                # JResult・例外の送出と try、run_main（未捕捉例外の表示と終了コード）、クラスの初期化、exit
+│       │   ├── object.rs            # JObject と Object トレイト、JDK クラスを継承したクラスの委譲
 │       │   ├── io.rs                # System.out / System.err / System.in
-│       │   ├── lang/                # JString, JChar, JStringify, StringBuilder, Math, Integer/Double 等, Character
-│       │   └── util/                # Arrays, Scanner
+│       │   ├── junit.rs             # JUnit の Assertions / Assumptions、変換したテストの実行
+│       │   ├── lang/                # JString, StringBuilder, Math, ボックス型, Character, enum, 例外, 書式, 正規表現,
+│       │   │                        # スレッドと java.util.concurrent（thread.rs: 決定的なスケジューラ）
+│       │   └── util/                # コレクション, ストリーム, Optional, 関数合成, Arrays / Collections, Scanner
 │       └── tests/semantics.rs       # Java の意味論の単体テスト
 │
 ├── tests/                           # ===== 変換全体のテスト =====
 │   ├── harness/                     # テストハーネス（Gradle サブプロジェクト :j2r-test-harness）
 │   ├── e2e/<カテゴリ>/<ケース>/     # 差分実行テスト: src/**/*.java（+ 任意の stdin.txt）
+│   ├── junit/<カテゴリ>/<ケース>/   # JUnit テストの変換: src/**/*.java（JUnit と cargo test の結果を比べる）
 │   ├── golden/<カテゴリ>/<ケース>/  # ゴールデンテスト: src/**/*.java + expected/（生成される src/ の中身）
 │   └── corpus/                      # 実プロジェクトの回帰コーパス（予定）
 │
@@ -133,6 +137,14 @@ tests/e2e/io/scanner_sum/
 ```
 ハーネスは `javac && java` の結果と、変換 → `cargo build` → 実行した結果の **標準出力と終了コード** を比べる。
 期待値ファイルは置かない（JVM の結果を正とする）。生成コードで `cargo build` が警告を出した場合も失敗にする。
+
+### JUnit テストの変換（`tests/junit/<カテゴリ>/<ケース>/`）
+```
+tests/junit/basics/calculator/
+└── src/calc/{Calculator.java, CalculatorTest.java}
+```
+ハーネスはテストクラスを JUnit Platform（JVM）で実行した結果と、変換 → `cargo test` した結果を、
+テストごとの **成功 / 失敗 / 無効（ignored）** で比べる。意図的に失敗するテストも置いてよい。
 
 ### ゴールデンテスト（`tests/golden/<カテゴリ>/<ケース>/`）
 ```

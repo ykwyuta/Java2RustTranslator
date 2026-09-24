@@ -17,6 +17,7 @@ import io.github.ykwyuta.j2r.rir.RItem;
 import io.github.ykwyuta.j2r.rir.RStmt;
 import io.github.ykwyuta.j2r.rir.RType;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -102,6 +103,56 @@ public final class Lowerer {
         return new LoweredCrate(files, modules, mainPath);
     }
 
+    /** 型 ti（またはスーパークラス）が JDK のクラスを継承しているなら、委譲先（OnceCell）までのフィールドのパス。 */
+    static String jdkPath(ProgramIndex index, ProgramIndex.TypeInfo ti) {
+        StringBuilder sb = new StringBuilder();
+        ProgramIndex.TypeInfo cur = ti;
+        while (cur != null) {
+            if (cur.decl().jdkSuperclass() != null) {
+                return sb + "__jdk";
+            }
+            String sup = cur.decl().superclass();
+            if (sup == null || !index.isProgramType(sup)) {
+                return null;
+            }
+            sb.append("__super.");
+            cur = index.type(sup);
+        }
+        return null;
+    }
+
+    /**
+     * クラスの初期化（{@code __clinit}）が必要か: static 初期化があるか、スーパークラスが初期化を必要とする
+     * （Java はクラスの初期化の前にスーパークラスを初期化する）。
+     */
+    static boolean needsClinit(ProgramIndex index, ProgramIndex.TypeInfo t) {
+        for (ProgramIndex.TypeInfo cur = t; cur != null; cur = cur.decl().superclass() == null ? null : index.type(cur.decl().superclass())) {
+            if (cur.decl().staticInit() != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** クラスの初期化の、例外を送出しうるかの判定（{@link Throwing}）に使うキー。 */
+    static String clinitKey(Decl.TypeDecl t) {
+        return t.qualifiedName() + "#<clinit>()";
+    }
+
+    /** Java の binary name（{@code getClass().getName()} の値。例: {@code pkg.Outer$Inner}）。 */
+    static String binaryName(ProgramIndex index, Decl.TypeDecl t) {
+        if (t.qualifiedName().contains("$")) {
+            return t.qualifiedName();
+        }
+        StringBuilder sb = new StringBuilder(t.simpleName());
+        Decl.TypeDecl cur = t;
+        while (cur.outer() != null && index.type(cur.outer()) != null) {
+            cur = index.type(cur.outer()).decl();
+            sb.insert(0, cur.simpleName() + "$");
+        }
+        return cur.packageName().isEmpty() ? sb.toString() : cur.packageName() + "." + sb;
+    }
+
     private static List<String> docLines(String javadoc) {
         if (javadoc == null) {
             return List.of();
@@ -155,7 +206,11 @@ public final class Lowerer {
         }
 
         private boolean hasClinit() {
-            return t.staticInit() != null;
+            return needsClinit(cx.index(), ti);
+        }
+
+        private boolean clinitThrowing() {
+            return hasClinit() && cx.throwing().isThrowing(clinitKey(t));
         }
 
         /** スーパークラスが JDK の例外クラス（ユーザー定義の例外クラスのルート）か。 */
@@ -165,6 +220,18 @@ public final class Lowerer {
 
         private ProgramIndex.TypeInfo superType() {
             return t.superclass() == null ? null : cx.index().type(t.superclass());
+        }
+
+        /** enum か、enum を継承したクラス（本体付きの enum 定数）か（生成時に名前と序数を受け取る）。 */
+        private boolean enumLike() {
+            ProgramIndex.TypeInfo cur = ti;
+            while (cur != null) {
+                if (cur.decl().kind() == Decl.TypeKind.ENUM) {
+                    return true;
+                }
+                cur = cur.decl().superclass() == null ? null : cx.index().type(cur.decl().superclass());
+            }
+            return false;
         }
 
         RFile file() {
@@ -185,6 +252,10 @@ public final class Lowerer {
             body.add(new RItem.Impl(List.of(), self, implItems()));
             if (t.isConcrete()) {
                 body.add(objectImpl());
+                RItem tests = testModule();
+                if (tests != null) {
+                    body.add(tests);
+                }
             }
             List<RItem> items = new ArrayList<>();
             items.add(new RItem.Use(List.of("allow(unused_imports)"), "jrt::prelude::*"));
@@ -214,7 +285,7 @@ public final class Lowerer {
                     continue;
                 }
                 RExpr init;
-                if (f.init() != null && !hasClinit()) {
+                if (f.init() != null && t.staticInit() == null) {
                     FnLowerer fl = staticLowerer();
                     init = fl.value(f.init());
                     if (fl.fallible()) {
@@ -229,8 +300,9 @@ public final class Lowerer {
                         call(cell + "::new", init)));
             }
             if (hasClinit()) {
-                out.add(new RItem.ThreadLocal(List.of(), false, "__CLINIT", new RType("std::cell::Cell<bool>"),
-                        call("std::cell::Cell::new", lit("false"))));
+                // 初期化の状態（例外を送出しうる初期化では 0: 未初期化、1: 初期化中・済み、2: 失敗）。
+                out.add(new RItem.ThreadLocal(List.of(), false, "__CLINIT", new RType(clinitThrowing() ? "std::cell::Cell<u8>" : "std::cell::Cell<bool>"),
+                        call("std::cell::Cell::new", lit(clinitThrowing() ? "0" : "false"))));
             }
             return out;
         }
@@ -258,6 +330,11 @@ public final class Lowerer {
                 cur = cx.index().type(cur.decl().superclass());
             }
             return sb + "__base";
+        }
+
+        /** JDK のクラス（Thread・コレクション）を継承しているなら、委譲先のオブジェクトまでのパス（なければ null）。 */
+        private String jdkPath() {
+            return Lowerer.jdkPath(cx.index(), ti);
         }
 
         /** 例外クラスなら Throwable の状態までのパス（なければ null）。 */
@@ -294,6 +371,9 @@ public final class Lowerer {
                 }
                 if (t.kind() == Decl.TypeKind.ENUM) {
                     fields.add(new RItem.Field("pub(crate)", "__enum", new RType("jrt::lang::enums::EnumBase")));
+                }
+                if (t.jdkSuperclass() != null) {
+                    fields.add(new RItem.Field("pub(crate)", "__jdk", new RType("std::cell::OnceCell<JObject>")));
                 }
             }
             if (t.hasOuterInstance()) {
@@ -354,6 +434,116 @@ public final class Lowerer {
             return items;
         }
 
+        // ------------------------------------------------------------ JUnit のテスト
+
+        private static final String[] TEST = {"org.junit.jupiter.api.Test", "org.junit.Test"};
+        private static final String[] BEFORE_EACH = {"org.junit.jupiter.api.BeforeEach", "org.junit.Before"};
+        private static final String[] AFTER_EACH = {"org.junit.jupiter.api.AfterEach", "org.junit.After"};
+        private static final String[] BEFORE_ALL = {"org.junit.jupiter.api.BeforeAll", "org.junit.BeforeClass"};
+        private static final String[] AFTER_ALL = {"org.junit.jupiter.api.AfterAll", "org.junit.AfterClass"};
+        private static final String[] DISABLED = {"org.junit.jupiter.api.Disabled", "org.junit.Ignore"};
+
+        /** このクラスとスーパークラスの、注釈の付いたメソッド（スーパークラスのものが先。JUnit の順序）。 */
+        private List<ProgramIndex.MethodInfo> annotated(String... annotations) {
+            List<ProgramIndex.TypeInfo> chain = new ArrayList<>();
+            for (ProgramIndex.TypeInfo cur = ti; cur != null;
+                 cur = cur.decl().superclass() == null ? null : cx.index().type(cur.decl().superclass())) {
+                chain.add(0, cur);
+            }
+            List<ProgramIndex.MethodInfo> out = new ArrayList<>();
+            for (ProgramIndex.TypeInfo c : chain) {
+                for (Decl.MethodDecl m : c.decl().methods()) {
+                    if (m.hasAnnotation(annotations) && m.body() != null) {
+                        out.add(new ProgramIndex.MethodInfo(m, c));
+                    }
+                }
+            }
+            return out;
+        }
+
+        /**
+         * {@code @Test} メソッドを {@code #[test]} 関数にしたテストモジュール。JUnit と同じく、テストごとに新しい
+         * インスタンスを作り、{@code @BeforeEach} / {@code @AfterEach} で囲む（{@code @BeforeAll} / {@code @AfterAll} も
+         * テストごとに実行する。static フィールドはスレッドローカルで、Rust のテストは別々のスレッドで動くため）。
+         */
+        private RItem testModule() {
+            List<ProgramIndex.MethodInfo> tests = annotated(TEST);
+            if (tests.isEmpty()) {
+                return null;
+            }
+            Decl.MethodDecl ctor = t.methods().stream().filter(m -> m.isConstructor() && m.params().isEmpty()).findFirst()
+                    .orElse(null);
+            boolean hasCtor = t.methods().stream().anyMatch(Decl.MethodDecl::isConstructor);
+            if (ctor == null && hasCtor) {
+                cx.diags().report(DiagnosticCode.UNSUPPORTED_API, t.pos(), "test class " + t.qualifiedName() + " needs a no-arg constructor");
+                return null;
+            }
+            List<RItem> fns = new ArrayList<>();
+            Set<String> names = new HashSet<>();
+            for (ProgramIndex.MethodInfo test : tests) {
+                if (!test.decl().params().isEmpty() || test.decl().isStatic()) {
+                    cx.diags().report(DiagnosticCode.UNSUPPORTED_API, test.decl().pos(), "test method with parameters: " + test.decl().name());
+                    continue;
+                }
+                RExpr newThis = path(self + "::" + (ctor == null ? "new" : ctor.rustName()));
+                RExpr alloc = new RExpr.Call(newThis, List.of());
+                if (ctor != null && cx.throwing().isThrowing(ctor)) {
+                    alloc = new RExpr.Try(alloc);
+                }
+                List<RStmt> each = new ArrayList<>();
+                for (ProgramIndex.MethodInfo b : annotated(BEFORE_EACH)) {
+                    each.add(testCall(b));
+                }
+                each.add(testCall(test));
+                List<RStmt> after = new ArrayList<>();
+                for (ProgramIndex.MethodInfo a : annotated(AFTER_EACH)) {
+                    after.add(testCall(a));
+                }
+                List<RStmt> all = new ArrayList<>();
+                for (ProgramIndex.MethodInfo b : annotated(BEFORE_ALL)) {
+                    all.add(testCall(b));
+                }
+                all.add(new RStmt.Let("this", false, null, alloc));
+                all.add(new RStmt.ExprStmt(new RExpr.Try(call("jrt::junit::with_after", resultClosure(each), resultClosure(after))), true));
+                List<RStmt> afterAll = new ArrayList<>();
+                for (ProgramIndex.MethodInfo a : annotated(AFTER_ALL)) {
+                    afterAll.add(testCall(a));
+                }
+                RExpr body = afterAll.isEmpty() ? resultClosure(all)
+                        : call("jrt::junit::with_after", resultClosure(all), resultClosure(afterAll));
+                RExpr run = call("jrt::junit::run_test", new RExpr.Lit("\"" + t.qualifiedName() + "." + test.decl().name() + "\""),
+                        new RExpr.Closure(true, List.of(), null, body));
+                String name = Naming.valueName(test.decl().name());
+                while (!names.add(name)) {
+                    name = name + "_";
+                }
+                List<String> attrs = new ArrayList<>(List.of("test"));
+                if (test.decl().hasAnnotation(DISABLED)) {
+                    attrs.add("ignore");
+                }
+                fns.add(new RItem.Fn(List.of(), attrs, "", name, List.of(), null, block(List.of(new RStmt.ExprStmt(run, true)), null)));
+            }
+            List<RItem> items = new ArrayList<>();
+            items.add(new RItem.Use(List.of(), "super::*"));
+            items.addAll(fns);
+            return new RItem.Mod(List.of("cfg(test)"), "__tests", items);
+        }
+
+        /** {@code (|| -> JResult<()> { stmts; Ok(()) })()}。 */
+        private RExpr resultClosure(List<RStmt> stmts) {
+            return new RExpr.Call(new RExpr.Closure(false, List.of(), new RType("JResult<()>"),
+                    block(stmts, Conversions.ok(path("()")))), List.of());
+        }
+
+        private RStmt testCall(ProgramIndex.MethodInfo m) {
+            List<RExpr> args = m.decl().isStatic() ? List.of() : List.of(new RExpr.Unary("&", path("this")));
+            RExpr c = new RExpr.Call(path(imp.type(m.owner()) + "::" + m.decl().rustName()), args);
+            if (cx.throwing().isThrowing(m.decl())) {
+                c = new RExpr.Try(c);
+            }
+            return new RStmt.ExprStmt(c, true);
+        }
+
         private Decl.MethodDecl defaultConstructor() {
             MethodRef ref = new MethodRef(t.qualifiedName(), "<init>", List.of(), JType.VOID, false);
             return new Decl.MethodDecl(ref, Decl.MethodKind.CONSTRUCTOR, List.of(), new Stmt.Block(List.of(), t.pos()), true, false,
@@ -386,19 +576,24 @@ public final class Lowerer {
             params.add(new RItem.Param("base", false, new RType("jrt::ObjectBase")));
             List<RExpr.FieldInit> inits = new ArrayList<>();
             ProgramIndex.TypeInfo sup = superType();
-            if (t.kind() == Decl.TypeKind.ENUM) {
+            if (enumLike()) {
                 params.add(new RItem.Param("name", false, new RType("JString")));
                 params.add(new RItem.Param("ordinal", false, new RType("i32")));
             }
             if (sup != null) {
-                inits.add(new RExpr.FieldInit("__super", call(imp.type(sup) + "::__alloc", path("base"))));
+                inits.add(new RExpr.FieldInit("__super", enumLike()
+                        ? call(imp.type(sup) + "::__alloc", path("base"), path("name"), path("ordinal"))
+                        : call(imp.type(sup) + "::__alloc", path("base"))));
             } else {
                 inits.add(new RExpr.FieldInit("__base", path("base")));
                 if (jdkThrowableRoot()) {
                     inits.add(new RExpr.FieldInit("__throwable", call("jrt::lang::throwable::Throwable::new_part")));
                 }
                 if (t.kind() == Decl.TypeKind.ENUM) {
-                    inits.add(new RExpr.FieldInit("__enum", call("jrt::lang::enums::EnumBase::new", path("name"), path("ordinal"))));
+                    inits.add(new RExpr.FieldInit("__enum", call("jrt::lang::enums::EnumBase::new", path("name"), path("ordinal"), str(binaryName()), path(self + "::__values"))));
+                }
+                if (t.jdkSuperclass() != null) {
+                    inits.add(new RExpr.FieldInit("__jdk", call("std::cell::OnceCell::new")));
                 }
             }
             if (t.hasOuterInstance()) {
@@ -411,27 +606,71 @@ public final class Lowerer {
                     block(List.of(), new RExpr.StructLit(self, inits)));
         }
 
+        /**
+         * クラスの初期化 {@code __clinit}: スーパークラスの初期化、enum 定数の生成、static フィールドの初期化子と
+         * static 初期化ブロック（テキストの順）を、最初の 1 回だけ実行する。例外を送出しうる初期化は JResult を返し、
+         * 失敗すると ExceptionInInitializerError を送出する（2 回目以降は NoClassDefFoundError）。
+         */
         private RItem clinitFn() {
-            FnLowerer fl = new FnLowerer(cx, ti, imp, JType.VOID, false, List.of(), new Stmt.Block(t.staticInit(), t.pos()), false);
-            List<RStmt> stmts = new ArrayList<>();
-            RExpr done = new RExpr.MethodCall(path("__CLINIT"), "with", List.of(RExpr.Closure.of(List.of("c"),
-                    new RExpr.MethodCall(path("c"), "replace", List.of(lit("true"))))));
-            stmts.add(new RStmt.ExprStmt(new RExpr.If(done, RExpr.Block.of(List.of(new RStmt.ExprStmt(new RExpr.Return(null), true))), null), false));
+            boolean throwing = clinitThrowing();
+            List<Stmt> body = t.staticInit() == null ? List.of() : t.staticInit();
+            FnLowerer fl = new FnLowerer(cx, ti, imp, JType.VOID, false, List.of(), new Stmt.Block(body, t.pos()), false);
+            List<RStmt> init = new ArrayList<>();
+            boolean fallible = false;
+            ProgramIndex.TypeInfo sup = superType();
+            if (sup != null && needsClinit(cx.index(), sup)) {
+                RExpr superInit = call(imp.type(sup) + "::__clinit");
+                if (cx.throwing().isThrowing(clinitKey(sup.decl()))) {
+                    superInit = new RExpr.Try(superInit);
+                    fallible = true;
+                }
+                init.add(new RStmt.ExprStmt(superInit, true));
+            }
             if (t.kind() == Decl.TypeKind.ENUM) {
-                stmts.add(new RStmt.ExprStmt(call(self + "::__values"), true));
+                init.add(new RStmt.ExprStmt(call(self + "::__values"), true));
             }
-            List<RStmt> init = fl.body(t.staticInit(), false).stmts();
-            if (fl.fallible()) {
-                stmts.add(new RStmt.ExprStmt(call("jrt::rt::static_init", new RExpr.Closure(false, List.of(), new RType("JResult<()>"),
-                        block(init, Conversions.ok(lit("()"))))), true));
-            } else {
+            init.addAll(fl.body(body, false).stmts());
+            fallible |= fl.fallible();
+            if (fallible && !throwing) {
+                cx.throwing().require(clinitKey(t));
+            }
+            List<String> docs = List.of("クラスの初期化（static フィールドの初期化子と static 初期化ブロック）。最初の 1 回だけ実行する。");
+            List<RStmt> stmts = new ArrayList<>();
+            if (!throwing) {
+                RExpr done = new RExpr.MethodCall(path("__CLINIT"), "with", List.of(RExpr.Closure.of(List.of("c"),
+                        new RExpr.MethodCall(path("c"), "replace", List.of(lit("true"))))));
+                stmts.add(new RStmt.ExprStmt(new RExpr.If(done, RExpr.Block.of(List.of(new RStmt.ExprStmt(new RExpr.Return(null), true))), null), false));
                 stmts.addAll(init);
+                return new RItem.Fn(docs, List.of(), "pub", "__clinit", List.of(), null, block(stmts, null));
             }
-            return new RItem.Fn(List.of("static 初期化（static フィールドの初期化子と static 初期化ブロック）。最初の 1 回だけ実行する。"),
-                    List.of(), "pub", "__clinit", List.of(), null, block(stmts, null));
+            RExpr state = new RExpr.MethodCall(path("__CLINIT"), "with", List.of(RExpr.Closure.of(List.of("c"),
+                    new RExpr.MethodCall(path("c"), "get", List.of()))));
+            stmts.add(new RStmt.Let("state", false, null, state));
+            stmts.add(new RStmt.ExprStmt(new RExpr.If(new RExpr.Binary("==", path("state"), lit("1")),
+                    RExpr.Block.of(List.of(new RStmt.ExprStmt(new RExpr.Return(Conversions.ok(lit("()"))), true))), null), false));
+            stmts.add(new RStmt.ExprStmt(new RExpr.If(new RExpr.Binary("==", path("state"), lit("2")),
+                    RExpr.Block.of(List.of(new RStmt.ExprStmt(new RExpr.Return(call("jrt::rt::no_class_def_found", str(binaryName()))), true))), null), false));
+            stmts.add(new RStmt.ExprStmt(setState("1"), true));
+            RExpr run = new RExpr.Call(new RExpr.Closure(false, List.of(), new RType("JResult<()>"), block(init, Conversions.ok(lit("()")))), List.of());
+            stmts.add(new RStmt.ExprStmt(new RExpr.IfLet("Err(e)", run, RExpr.Block.of(List.of(
+                    new RStmt.ExprStmt(setState("2"), true),
+                    new RStmt.ExprStmt(new RExpr.Return(new RExpr.Call(path("Err"), List.of(call("jrt::rt::initializer_error", path("e"))))), true))), null), false));
+            return new RItem.Fn(docs, List.of(), "pub", "__clinit", List.of(), new RType("JResult<()>"), block(stmts, Conversions.ok(lit("()"))));
         }
 
-        private RExpr clinitStmt() {
+        private RExpr setState(String v) {
+            return new RExpr.MethodCall(path("__CLINIT"), "with", List.of(RExpr.Closure.of(List.of("c"),
+                    new RExpr.MethodCall(path("c"), "set", List.of(lit(v))))));
+        }
+
+        /** 自分のクラスの初期化の呼び出し（例外を送出しうるなら ?。呼ぶ関数 key も JResult を返す必要がある）。 */
+        private RExpr clinitStmt(String callerKey, boolean callerThrowing) {
+            if (clinitThrowing()) {
+                if (!callerThrowing) {
+                    cx.throwing().require(callerKey);
+                }
+                return new RExpr.Try(call(self + "::__clinit"));
+            }
             return call(self + "::__clinit");
         }
 
@@ -493,7 +732,7 @@ public final class Lowerer {
             RType objType = new RType(throwing ? "JResult<JObject>" : "JObject");
             RExpr result = throwing ? Conversions.ok(path("this")) : path("this");
 
-            if (t.kind() == Decl.TypeKind.ENUM) {
+            if (enumLike() && !t.isAbstract()) {
                 List<RItem.Param> ps = new ArrayList<>();
                 ps.add(new RItem.Param("name", false, new RType("JString")));
                 ps.add(new RItem.Param("ordinal", false, new RType("i32")));
@@ -502,7 +741,7 @@ public final class Lowerer {
                 s.add(new RStmt.Let("this", false, null, call("jrt::alloc", RExpr.Closure.of(List.of("base"),
                         call(self + "::__alloc", path("base"), path("name"), path("ordinal"))))));
                 s.add(new RStmt.ExprStmt(initCall, true));
-                out.add(0, new RItem.Fn(List.of(), List.of(), "", "__create" + m.rustName().substring("new".length()), ps,
+                out.add(0, new RItem.Fn(List.of(), List.of(), "pub(crate)", "__create" + m.rustName().substring("new".length()), ps,
                         objType, block(s, result)));
                 return out;
             }
@@ -511,7 +750,7 @@ public final class Lowerer {
             }
             List<RStmt> s = new ArrayList<>();
             if (hasClinit()) {
-                s.add(new RStmt.ExprStmt(clinitStmt(), true));
+                s.add(new RStmt.ExprStmt(clinitStmt(m.ref().key(), throwing), true));
             }
             s.add(new RStmt.Let("this", false, null, call("jrt::alloc", RExpr.Closure.of(List.of("base"), call(self + "::__alloc", path("base"))))));
             s.add(new RStmt.ExprStmt(initCall, true));
@@ -556,7 +795,7 @@ public final class Lowerer {
             requireIfFallible(fl, throwing, m.ref().key());
             if (hasClinit()) {
                 List<RStmt> stmts = new ArrayList<>();
-                stmts.add(new RStmt.ExprStmt(clinitStmt(), true));
+                stmts.add(new RStmt.ExprStmt(clinitStmt(m.ref().key(), throwing), true));
                 stmts.addAll(b.stmts());
                 b = new RExpr.Block(stmts, b.tail(), null, false);
             }
@@ -685,14 +924,16 @@ public final class Lowerer {
             int ordinal = 0;
             for (Decl.EnumConstant c : t.enumConstants()) {
                 ProgramIndex.MethodInfo ctor = c.constructor() == null ? null : cx.index().method(c.constructor().key());
-                String create = "__create" + (ctor == null ? "" : ctor.decl().rustName().substring("new".length()));
+                // 本体付きの定数は、その匿名クラスの __create で作る。
+                String create = (ctor == null ? self : imp.type(ctor.owner())) + "::__create"
+                        + (ctor == null ? "" : ctor.decl().rustName().substring("new".length()));
                 List<RExpr> args = new ArrayList<>();
                 args.add(new RExpr.Macro("jstr", List.of(str(c.name()))));
                 args.add(lit(Integer.toString(ordinal++)));
                 for (Expr a : c.args()) {
                     args.add(fl.value(a));
                 }
-                RExpr creation = new RExpr.Call(path(self + "::" + create), args);
+                RExpr creation = new RExpr.Call(path(create), args);
                 if (ctor != null ? cx.throwing().isThrowing(ctor.decl()) : cx.throwing().isThrowing(t.qualifiedName() + "#<init>()")) {
                     creation = new RExpr.Try(creation);
                     fallible = true;
@@ -730,16 +971,7 @@ public final class Lowerer {
         // ------------------------------------------------------------ Object トレイト
 
         private String binaryName() {
-            if (t.qualifiedName().contains("$")) {
-                return t.qualifiedName();
-            }
-            StringBuilder sb = new StringBuilder(t.simpleName());
-            Decl.TypeDecl cur = t;
-            while (cur.outer() != null && cx.index().type(cur.outer()) != null) {
-                cur = cx.index().type(cur.outer()).decl();
-                sb.insert(0, cur.simpleName() + "$");
-            }
-            return cur.packageName().isEmpty() ? sb.toString() : cur.packageName() + "." + sb;
+            return Lowerer.binaryName(cx.index(), t);
         }
 
         private RExpr thisObject() {
@@ -770,8 +1002,10 @@ public final class Lowerer {
                         List.of(new RExpr.Unary("&", thisObject()))))));
             } else if (t.kind() == Decl.TypeKind.RECORD) {
                 fns.add(fn("to_jstring", List.of(), jstring, Conversions.ok(recordToString())));
-            } else if (t.kind() == Decl.TypeKind.ENUM) {
+            } else if (enumLike()) {
                 fns.add(fn("to_jstring", List.of(), jstring, call("jrt::lang::enums::name", new RExpr.Unary("&", thisObject()))));
+            } else if (jdkPath() != null) {
+                fns.add(fn("to_jstring", List.of(), jstring, call("jrt::object::jdk_to_string", jdkCell())));
             } else if (throwablePath() != null) {
                 fns.add(fn("to_jstring", List.of(), jstring, Conversions.ok(call("jrt::lang::throwable::throwable_to_string",
                         new RExpr.MethodCall(path("self"), "class_name", List.of()), new RExpr.Unary("&", new RExpr.Field(path("self"), throwablePath()))))));
@@ -783,6 +1017,9 @@ public final class Lowerer {
                         List.of(new RExpr.Unary("&", thisObject()), new RExpr.MethodCall(path("other"), "clone", List.of()))))));
             } else if (t.kind() == Decl.TypeKind.RECORD) {
                 fns.add(fn("equals", List.of(other), new RType("JResult<bool>"), Conversions.ok(recordEquals())));
+            } else if (jdkPath() != null) {
+                fns.add(fn("equals", List.of(other), new RType("JResult<bool>"), call("jrt::object::jdk_equals", jdkCell(),
+                        new RExpr.Unary("&", thisObject()), path("other"))));
             }
             ProgramIndex.MethodInfo hash = cx.hierarchy().implementation(ti, "java.lang.Object#hashCode()");
             if (hash != null) {
@@ -790,13 +1027,16 @@ public final class Lowerer {
                         List.of(new RExpr.Unary("&", thisObject()))))));
             } else if (t.kind() == Decl.TypeKind.RECORD) {
                 fns.add(fn("hash_code", List.of(), new RType("JResult<i32>"), Conversions.ok(recordHash())));
+            } else if (jdkPath() != null) {
+                fns.add(fn("hash_code", List.of(), new RType("JResult<i32>"), call("jrt::object::jdk_hash_code", jdkCell(),
+                        new RExpr.Unary("&", thisObject()))));
             }
             ProgramIndex.MethodInfo cmp = cx.hierarchy().implementation(ti, "java.lang.Comparable#compareTo(java.lang.Object)");
             if (cmp != null) {
                 fns.add(fn("compare_to", List.of(other), new RType("JResult<i32>"), Conversions.ok(conv.callImpl(cmp,
                         new MethodRef("java.lang.Comparable", "compareTo", List.of(JType.OBJECT), JType.INT, false, true),
                         List.of(new RExpr.Unary("&", thisObject()), new RExpr.MethodCall(path("other"), "clone", List.of()))))));
-            } else if (t.kind() == Decl.TypeKind.ENUM) {
+            } else if (enumLike()) {
                 fns.add(fn("compare_to", List.of(other), new RType("JResult<i32>"), call("jrt::lang::enums::compare",
                         new RExpr.Unary("&", thisObject()), path("other"))));
             }
@@ -808,11 +1048,19 @@ public final class Lowerer {
                 fns.add(fn("as_throwable", List.of(), new RType("Option<&jrt::lang::throwable::Throwable>"),
                         call("Some", new RExpr.Unary("&", new RExpr.Field(path("self"), throwablePath())))));
             }
-            if (t.kind() == Decl.TypeKind.ENUM) {
+            if (jdkPath() != null) {
+                fns.add(fn("delegate", List.of(), new RType("Option<&JObject>"), new RExpr.MethodCall(
+                        new RExpr.Field(path("self"), jdkPath()), "get", List.of())));
+            }
+            if (enumLike()) {
                 fns.add(fn("as_enum", List.of(), new RType("Option<&jrt::lang::enums::EnumBase>"),
-                        call("Some", new RExpr.Unary("&", new RExpr.Field(path("self"), "__enum")))));
+                        call("Some", new RExpr.Unary("&", new RExpr.Field(path("self"), basePath().replace("__base", "__enum"))))));
             }
             return new RItem.Impl(List.of(), "jrt::Object for " + self, fns);
+        }
+
+        private RExpr jdkCell() {
+            return new RExpr.Unary("&", new RExpr.Field(path("self"), jdkPath()));
         }
 
         private MethodRef objectRef(String name, List<JType> params, JType ret) {

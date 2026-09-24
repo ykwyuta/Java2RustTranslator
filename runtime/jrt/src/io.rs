@@ -27,6 +27,12 @@ enum Target {
 #[derive(Clone, Copy, Debug)]
 pub struct PrintStream(Target);
 
+impl Default for PrintStream {
+    fn default() -> PrintStream {
+        PrintStream(Target::Out)
+    }
+}
+
 /// `System.out`。
 pub fn system_out() -> PrintStream {
     PrintStream(Target::Out)

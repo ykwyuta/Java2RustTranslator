@@ -210,15 +210,19 @@ pub fn jdk_super(class: &str) -> Option<&'static str> {
         "java.lang.ArrayIndexOutOfBoundsException" | "java.lang.StringIndexOutOfBoundsException" => {
             "java.lang.IndexOutOfBoundsException"
         }
-        "java.lang.NumberFormatException" | "java.util.IllegalFormatException" => "java.lang.IllegalArgumentException",
+        "java.lang.NumberFormatException" | "java.util.IllegalFormatException" | "java.util.regex.PatternSyntaxException" => "java.lang.IllegalArgumentException",
         "java.util.IllegalFormatConversionException"
         | "java.util.MissingFormatArgumentException"
         | "java.util.UnknownFormatConversionException" => "java.util.IllegalFormatException",
         "java.util.InputMismatchException" => "java.util.NoSuchElementException",
         "java.lang.AssertionError" | "java.lang.LinkageError" | "java.lang.VirtualMachineError" => "java.lang.Error",
         "java.lang.StackOverflowError" | "java.lang.OutOfMemoryError" => "java.lang.VirtualMachineError",
-        "java.lang.IncompatibleClassChangeError" => "java.lang.LinkageError",
+        "java.lang.IncompatibleClassChangeError"
+        | "java.lang.ExceptionInInitializerError"
+        | "java.lang.NoClassDefFoundError" => "java.lang.LinkageError",
         "java.lang.AbstractMethodError" => "java.lang.IncompatibleClassChangeError",
+        "org.opentest4j.AssertionFailedError" | "org.opentest4j.MultipleFailuresError" => "java.lang.AssertionError",
+        "org.opentest4j.TestAbortedException" => "java.lang.RuntimeException",
         _ => return None,
     })
 }

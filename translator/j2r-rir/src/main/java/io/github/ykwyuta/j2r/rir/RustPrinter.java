@@ -168,6 +168,26 @@ public final class RustPrinter {
                 out.append("use ").append(u.path()).append(';');
             }
             case RItem.ModDecl m -> out.append(m.pub() ? "pub mod " : "mod ").append(m.name()).append(';');
+            case RItem.Mod m -> {
+                for (String a : m.attrs()) {
+                    out.append("#[").append(a).append(']');
+                    newline();
+                }
+                out.append("mod ").append(m.name()).append(" {");
+                indent++;
+                boolean first = true;
+                for (RItem it : m.items()) {
+                    if (!first) {
+                        out.append('\n');
+                    }
+                    newline();
+                    item(it);
+                    first = false;
+                }
+                indent--;
+                newline();
+                out.append('}');
+            }
             case RItem.Comment c -> comment(c.text());
         }
     }

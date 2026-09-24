@@ -1,0 +1,310 @@
+# java.util.stream（Stream / IntStream / LongStream / DoubleStream / Collectors）と Optional のマッピング。
+# ストリームは jrt::util::stream の遅延評価の実装に対応する。
+classes:
+  - class: java.util.stream.Stream
+    methods:
+      - { sig: "filter(java.util.function.Predicate)", rust: "jrt::util::stream::filter({&this}, {&0})?" }
+      - { sig: "peek(java.util.function.Consumer)", rust: "jrt::util::stream::peek({&this}, {&0})?" }
+      - { sig: "takeWhile(java.util.function.Predicate)", rust: "jrt::util::stream::take_while({&this}, {&0})?" }
+      - { sig: "dropWhile(java.util.function.Predicate)", rust: "jrt::util::stream::drop_while({&this}, {&0})?" }
+      - { sig: "distinct()", rust: "jrt::util::stream::distinct({&this})?" }
+      - { sig: "sorted()", rust: "jrt::util::stream::sorted({&this}, &JObject::null())?" }
+      - { sig: "limit(long)", rust: "jrt::util::stream::limit({&this}, {0})?" }
+      - { sig: "skip(long)", rust: "jrt::util::stream::skip({&this}, {0})?" }
+      - { sig: "forEach(java.util.function.Consumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "forEachOrdered(java.util.function.Consumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "count()", rust: "jrt::util::stream::count({&this})?" }
+      - { sig: "anyMatch(java.util.function.Predicate)", rust: "jrt::util::stream::any_match({&this}, {&0})?" }
+      - { sig: "allMatch(java.util.function.Predicate)", rust: "jrt::util::stream::all_match({&this}, {&0})?" }
+      - { sig: "noneMatch(java.util.function.Predicate)", rust: "jrt::util::stream::none_match({&this}, {&0})?" }
+      - { sig: "findFirst()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "findAny()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "reduce(java.util.function.BinaryOperator)", rust: "jrt::util::stream::reduce_optional({&this}, {&0})?" }
+      - { sig: "reduce(java.lang.Object,java.util.function.BinaryOperator)", rust: "jrt::util::stream::reduce({&this}, {0}, {&1})?" }
+      - { sig: "map(java.util.function.Function)", rust: "jrt::util::stream::map_same({&this}, {&0})?" }
+      - { sig: "sorted(java.util.Comparator)", rust: "jrt::util::stream::sorted({&this}, {&0})?" }
+      - { sig: "mapToInt(java.util.function.ToIntFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Int, \"applyAsInt\")?" }
+      - { sig: "mapToLong(java.util.function.ToLongFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Long, \"applyAsLong\")?" }
+      - { sig: "mapToDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Double, \"applyAsDouble\")?" }
+      - { sig: "flatMap(java.util.function.Function)", rust: "jrt::util::stream::flat_map({&this}, {&0}, jrt::util::stream::Kind::Obj)?" }
+      - { sig: "flatMapToInt(java.util.function.Function)", rust: "jrt::util::stream::flat_map({&this}, {&0}, jrt::util::stream::Kind::Int)?" }
+      - { sig: "toArray()", rust: "jrt::util::stream::to_array({&this})?" }
+      - { sig: "toArray(java.util.function.IntFunction)", rust: "jrt::util::stream::to_array({&this})?" }
+      - { sig: "toList()", rust: "jrt::util::stream::to_list({&this})?" }
+      - { sig: "collect(java.util.stream.Collector)", rust: "jrt::util::stream::collect({&this}, {&0})?" }
+      - { sig: "min(java.util.Comparator)", rust: "jrt::util::stream::min({&this}, {&0})?" }
+      - { sig: "max(java.util.Comparator)", rust: "jrt::util::stream::max({&this}, {&0})?" }
+      - { sig: "empty()", rust: "jrt::util::stream::empty(jrt::util::stream::Kind::Obj)" }
+      - { sig: "iterate(java.lang.Object,java.util.function.UnaryOperator)", rust: "jrt::util::stream::iterate(jrt::util::stream::Kind::Obj, {0}, {&1})?" }
+      - { sig: "iterate(java.lang.Object,java.util.function.Predicate,java.util.function.UnaryOperator)", rust: "jrt::util::stream::iterate_while(jrt::util::stream::Kind::Obj, {0}, {&1}, {&2})?" }
+      - { sig: "generate(java.util.function.Supplier)", rust: "jrt::util::stream::generate(jrt::util::stream::Kind::Obj, {&0})?" }
+      - { sig: "concat(java.util.stream.Stream,java.util.stream.Stream)", rust: "jrt::util::stream::concat({&0}, {&1})?" }
+      - { sig: "of(java.lang.Object)", rust: "jrt::util::stream::of_one({0})" }
+      - { sig: "of(java.lang.Object[])", rust: "jrt::util::stream::of_array({&0})?" }
+      - { sig: "ofNullable(java.lang.Object)", rust: "jrt::util::stream::of_nullable({0})" }
+  - class: java.util.stream.IntStream
+    methods:
+      - { sig: "filter(java.util.function.IntPredicate)", rust: "jrt::util::stream::filter({&this}, {&0})?" }
+      - { sig: "peek(java.util.function.IntConsumer)", rust: "jrt::util::stream::peek({&this}, {&0})?" }
+      - { sig: "takeWhile(java.util.function.IntPredicate)", rust: "jrt::util::stream::take_while({&this}, {&0})?" }
+      - { sig: "dropWhile(java.util.function.IntPredicate)", rust: "jrt::util::stream::drop_while({&this}, {&0})?" }
+      - { sig: "distinct()", rust: "jrt::util::stream::distinct({&this})?" }
+      - { sig: "sorted()", rust: "jrt::util::stream::sorted({&this}, &JObject::null())?" }
+      - { sig: "limit(long)", rust: "jrt::util::stream::limit({&this}, {0})?" }
+      - { sig: "skip(long)", rust: "jrt::util::stream::skip({&this}, {0})?" }
+      - { sig: "forEach(java.util.function.IntConsumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "forEachOrdered(java.util.function.IntConsumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "count()", rust: "jrt::util::stream::count({&this})?" }
+      - { sig: "anyMatch(java.util.function.IntPredicate)", rust: "jrt::util::stream::any_match({&this}, {&0})?" }
+      - { sig: "allMatch(java.util.function.IntPredicate)", rust: "jrt::util::stream::all_match({&this}, {&0})?" }
+      - { sig: "noneMatch(java.util.function.IntPredicate)", rust: "jrt::util::stream::none_match({&this}, {&0})?" }
+      - { sig: "findFirst()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "findAny()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "reduce(java.util.function.IntBinaryOperator)", rust: "jrt::util::stream::reduce_optional({&this}, {&0})?" }
+      - { sig: "reduce(int,java.util.function.IntBinaryOperator)", rust: "jrt::util::stream::reduce({&this}, jrt::box_i32({0}), {&1})?.unbox_i32()?" }
+      - { sig: "map(java.util.function.IntUnaryOperator)", rust: "jrt::util::stream::map_same({&this}, {&0})?" }
+      - { sig: "min()", rust: "jrt::util::stream::min({&this}, &JObject::null())?" }
+      - { sig: "max()", rust: "jrt::util::stream::max({&this}, &JObject::null())?" }
+      - { sig: "sum()", rust: "jrt::util::stream::sum_int({&this})?" }
+      - { sig: "average()", rust: "jrt::util::stream::average({&this})?" }
+      - { sig: "summaryStatistics()", rust: "jrt::util::stream::summary_statistics({&this})?" }
+      - { sig: "boxed()", rust: "jrt::util::stream::convert({&this}, jrt::util::stream::Kind::Obj)?" }
+      - { sig: "toArray()", rust: "jrt::util::stream::to_int_array({&this})?" }
+      - { sig: "mapToObj(java.util.function.IntFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Obj, \"apply\")?" }
+      - { sig: "flatMap(java.util.function.IntFunction)", rust: "jrt::util::stream::flat_map({&this}, {&0}, jrt::util::stream::Kind::Int)?" }
+      - { sig: "mapToLong(java.util.function.IntToLongFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Long, \"applyAsLong\")?" }
+      - { sig: "mapToDouble(java.util.function.IntToDoubleFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Double, \"applyAsDouble\")?" }
+      - { sig: "asLongStream()", rust: "jrt::util::stream::convert({&this}, jrt::util::stream::Kind::Long)?" }
+      - { sig: "asDoubleStream()", rust: "jrt::util::stream::convert({&this}, jrt::util::stream::Kind::Double)?" }
+      - { sig: "empty()", rust: "jrt::util::stream::empty(jrt::util::stream::Kind::Int)" }
+      - { sig: "iterate(int,java.util.function.IntUnaryOperator)", rust: "jrt::util::stream::iterate(jrt::util::stream::Kind::Int, jrt::box_i32({0}), {&1})?" }
+      - { sig: "iterate(int,java.util.function.IntPredicate,java.util.function.IntUnaryOperator)", rust: "jrt::util::stream::iterate_while(jrt::util::stream::Kind::Int, jrt::box_i32({0}), {&1}, {&2})?" }
+      - { sig: "generate(java.util.function.IntSupplier)", rust: "jrt::util::stream::generate(jrt::util::stream::Kind::Int, {&0})?" }
+      - { sig: "concat(java.util.stream.IntStream,java.util.stream.IntStream)", rust: "jrt::util::stream::concat({&0}, {&1})?" }
+      - { sig: "range(int,int)", rust: "jrt::util::stream::int_range({0}, {1}, false)" }
+      - { sig: "rangeClosed(int,int)", rust: "jrt::util::stream::int_range({0}, {1}, true)" }
+      - { sig: "of(int)", rust: "jrt::util::stream::of_ints(&JArray::from_vec(vec![{0}]))?" }
+      - { sig: "of(int[])", rust: "jrt::util::stream::of_ints({&0})?" }
+  - class: java.util.stream.LongStream
+    methods:
+      - { sig: "filter(java.util.function.LongPredicate)", rust: "jrt::util::stream::filter({&this}, {&0})?" }
+      - { sig: "peek(java.util.function.LongConsumer)", rust: "jrt::util::stream::peek({&this}, {&0})?" }
+      - { sig: "takeWhile(java.util.function.LongPredicate)", rust: "jrt::util::stream::take_while({&this}, {&0})?" }
+      - { sig: "dropWhile(java.util.function.LongPredicate)", rust: "jrt::util::stream::drop_while({&this}, {&0})?" }
+      - { sig: "distinct()", rust: "jrt::util::stream::distinct({&this})?" }
+      - { sig: "sorted()", rust: "jrt::util::stream::sorted({&this}, &JObject::null())?" }
+      - { sig: "limit(long)", rust: "jrt::util::stream::limit({&this}, {0})?" }
+      - { sig: "skip(long)", rust: "jrt::util::stream::skip({&this}, {0})?" }
+      - { sig: "forEach(java.util.function.LongConsumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "forEachOrdered(java.util.function.LongConsumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "count()", rust: "jrt::util::stream::count({&this})?" }
+      - { sig: "anyMatch(java.util.function.LongPredicate)", rust: "jrt::util::stream::any_match({&this}, {&0})?" }
+      - { sig: "allMatch(java.util.function.LongPredicate)", rust: "jrt::util::stream::all_match({&this}, {&0})?" }
+      - { sig: "noneMatch(java.util.function.LongPredicate)", rust: "jrt::util::stream::none_match({&this}, {&0})?" }
+      - { sig: "findFirst()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "findAny()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "reduce(java.util.function.LongBinaryOperator)", rust: "jrt::util::stream::reduce_optional({&this}, {&0})?" }
+      - { sig: "reduce(long,java.util.function.LongBinaryOperator)", rust: "jrt::util::stream::reduce({&this}, jrt::box_i64({0}), {&1})?.unbox_i64()?" }
+      - { sig: "map(java.util.function.LongUnaryOperator)", rust: "jrt::util::stream::map_same({&this}, {&0})?" }
+      - { sig: "min()", rust: "jrt::util::stream::min({&this}, &JObject::null())?" }
+      - { sig: "max()", rust: "jrt::util::stream::max({&this}, &JObject::null())?" }
+      - { sig: "sum()", rust: "jrt::util::stream::sum_long({&this})?" }
+      - { sig: "average()", rust: "jrt::util::stream::average({&this})?" }
+      - { sig: "summaryStatistics()", rust: "jrt::util::stream::summary_statistics({&this})?" }
+      - { sig: "boxed()", rust: "jrt::util::stream::convert({&this}, jrt::util::stream::Kind::Obj)?" }
+      - { sig: "toArray()", rust: "jrt::util::stream::to_long_array({&this})?" }
+      - { sig: "mapToObj(java.util.function.LongFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Obj, \"apply\")?" }
+      - { sig: "flatMap(java.util.function.LongFunction)", rust: "jrt::util::stream::flat_map({&this}, {&0}, jrt::util::stream::Kind::Long)?" }
+      - { sig: "mapToInt(java.util.function.LongToIntFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Int, \"applyAsInt\")?" }
+      - { sig: "mapToDouble(java.util.function.LongToDoubleFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Double, \"applyAsDouble\")?" }
+      - { sig: "asDoubleStream()", rust: "jrt::util::stream::convert({&this}, jrt::util::stream::Kind::Double)?" }
+      - { sig: "empty()", rust: "jrt::util::stream::empty(jrt::util::stream::Kind::Long)" }
+      - { sig: "iterate(long,java.util.function.LongUnaryOperator)", rust: "jrt::util::stream::iterate(jrt::util::stream::Kind::Long, jrt::box_i64({0}), {&1})?" }
+      - { sig: "iterate(long,java.util.function.LongPredicate,java.util.function.LongUnaryOperator)", rust: "jrt::util::stream::iterate_while(jrt::util::stream::Kind::Long, jrt::box_i64({0}), {&1}, {&2})?" }
+      - { sig: "generate(java.util.function.LongSupplier)", rust: "jrt::util::stream::generate(jrt::util::stream::Kind::Long, {&0})?" }
+      - { sig: "concat(java.util.stream.LongStream,java.util.stream.LongStream)", rust: "jrt::util::stream::concat({&0}, {&1})?" }
+      - { sig: "range(long,long)", rust: "jrt::util::stream::long_range({0}, {1}, false)" }
+      - { sig: "rangeClosed(long,long)", rust: "jrt::util::stream::long_range({0}, {1}, true)" }
+      - { sig: "of(long)", rust: "jrt::util::stream::of_longs(&JArray::from_vec(vec![{0}]))?" }
+      - { sig: "of(long[])", rust: "jrt::util::stream::of_longs({&0})?" }
+  - class: java.util.stream.DoubleStream
+    methods:
+      - { sig: "filter(java.util.function.DoublePredicate)", rust: "jrt::util::stream::filter({&this}, {&0})?" }
+      - { sig: "peek(java.util.function.DoubleConsumer)", rust: "jrt::util::stream::peek({&this}, {&0})?" }
+      - { sig: "takeWhile(java.util.function.DoublePredicate)", rust: "jrt::util::stream::take_while({&this}, {&0})?" }
+      - { sig: "dropWhile(java.util.function.DoublePredicate)", rust: "jrt::util::stream::drop_while({&this}, {&0})?" }
+      - { sig: "distinct()", rust: "jrt::util::stream::distinct({&this})?" }
+      - { sig: "sorted()", rust: "jrt::util::stream::sorted({&this}, &JObject::null())?" }
+      - { sig: "limit(long)", rust: "jrt::util::stream::limit({&this}, {0})?" }
+      - { sig: "skip(long)", rust: "jrt::util::stream::skip({&this}, {0})?" }
+      - { sig: "forEach(java.util.function.DoubleConsumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "forEachOrdered(java.util.function.DoubleConsumer)", rust: "jrt::util::stream::for_each({&this}, {&0})?" }
+      - { sig: "count()", rust: "jrt::util::stream::count({&this})?" }
+      - { sig: "anyMatch(java.util.function.DoublePredicate)", rust: "jrt::util::stream::any_match({&this}, {&0})?" }
+      - { sig: "allMatch(java.util.function.DoublePredicate)", rust: "jrt::util::stream::all_match({&this}, {&0})?" }
+      - { sig: "noneMatch(java.util.function.DoublePredicate)", rust: "jrt::util::stream::none_match({&this}, {&0})?" }
+      - { sig: "findFirst()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "findAny()", rust: "jrt::util::stream::find_first({&this})?" }
+      - { sig: "reduce(java.util.function.DoubleBinaryOperator)", rust: "jrt::util::stream::reduce_optional({&this}, {&0})?" }
+      - { sig: "reduce(double,java.util.function.DoubleBinaryOperator)", rust: "jrt::util::stream::reduce({&this}, jrt::box_f64({0}), {&1})?.unbox_f64()?" }
+      - { sig: "map(java.util.function.DoubleUnaryOperator)", rust: "jrt::util::stream::map_same({&this}, {&0})?" }
+      - { sig: "min()", rust: "jrt::util::stream::min({&this}, &JObject::null())?" }
+      - { sig: "max()", rust: "jrt::util::stream::max({&this}, &JObject::null())?" }
+      - { sig: "sum()", rust: "jrt::util::stream::sum_double({&this})?" }
+      - { sig: "average()", rust: "jrt::util::stream::average({&this})?" }
+      - { sig: "summaryStatistics()", rust: "jrt::util::stream::summary_statistics({&this})?" }
+      - { sig: "boxed()", rust: "jrt::util::stream::convert({&this}, jrt::util::stream::Kind::Obj)?" }
+      - { sig: "toArray()", rust: "jrt::util::stream::to_double_array({&this})?" }
+      - { sig: "mapToObj(java.util.function.DoubleFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Obj, \"apply\")?" }
+      - { sig: "flatMap(java.util.function.DoubleFunction)", rust: "jrt::util::stream::flat_map({&this}, {&0}, jrt::util::stream::Kind::Double)?" }
+      - { sig: "mapToInt(java.util.function.DoubleToIntFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Int, \"applyAsInt\")?" }
+      - { sig: "mapToLong(java.util.function.DoubleToLongFunction)", rust: "jrt::util::stream::map({&this}, {&0}, jrt::util::stream::Kind::Long, \"applyAsLong\")?" }
+      - { sig: "empty()", rust: "jrt::util::stream::empty(jrt::util::stream::Kind::Double)" }
+      - { sig: "iterate(double,java.util.function.DoubleUnaryOperator)", rust: "jrt::util::stream::iterate(jrt::util::stream::Kind::Double, jrt::box_f64({0}), {&1})?" }
+      - { sig: "iterate(double,java.util.function.DoublePredicate,java.util.function.DoubleUnaryOperator)", rust: "jrt::util::stream::iterate_while(jrt::util::stream::Kind::Double, jrt::box_f64({0}), {&1}, {&2})?" }
+      - { sig: "generate(java.util.function.DoubleSupplier)", rust: "jrt::util::stream::generate(jrt::util::stream::Kind::Double, {&0})?" }
+      - { sig: "concat(java.util.stream.DoubleStream,java.util.stream.DoubleStream)", rust: "jrt::util::stream::concat({&0}, {&1})?" }
+      - { sig: "of(double)", rust: "jrt::util::stream::of_doubles(&JArray::from_vec(vec![{0}]))?" }
+      - { sig: "of(double[])", rust: "jrt::util::stream::of_doubles({&0})?" }
+  - class: [java.util.stream.BaseStream, java.util.stream.Stream, java.util.stream.IntStream, java.util.stream.LongStream, java.util.stream.DoubleStream]
+    methods:
+      - { sig: "iterator()", rust: "jrt::util::stream::iterator({&this})?" }
+      - { sig: "parallel()", rust: "jrt::util::stream::same({&this})?" }
+      - { sig: "sequential()", rust: "jrt::util::stream::same({&this})?" }
+      - { sig: "unordered()", rust: "jrt::util::stream::same({&this})?" }
+      - { sig: "onClose(java.lang.Runnable)", rust: "jrt::util::stream::same({&this})?" }
+      - { sig: "close()", rust: "jrt::util::stream::close({&this})?" }
+      - { sig: "isParallel()", rust: "false" }
+  - class: [java.util.Collection, java.util.List, java.util.ArrayList, java.util.LinkedList, java.util.Set, java.util.HashSet, java.util.LinkedHashSet, java.util.TreeSet, java.util.Queue, java.util.Deque, java.util.ArrayDeque, java.util.PriorityQueue, java.util.SortedSet, java.util.NavigableSet, java.util.SequencedCollection]
+    methods:
+      - { sig: "stream()", rust: "jrt::util::stream::of_collection({&this})?" }
+      - { sig: "parallelStream()", rust: "jrt::util::stream::of_collection({&this})?" }
+  - class: java.util.Arrays
+    methods:
+      - { sig: "stream(java.lang.Object[])", rust: "jrt::util::stream::of_array({&0})?" }
+      - { sig: "stream(int[])", rust: "jrt::util::stream::of_ints({&0})?" }
+      - { sig: "stream(long[])", rust: "jrt::util::stream::of_longs({&0})?" }
+      - { sig: "stream(double[])", rust: "jrt::util::stream::of_doubles({&0})?" }
+  - class: java.lang.String
+    methods:
+      - { sig: "chars()", rust: "jrt::util::stream::chars({&this})?" }
+  - class: java.util.stream.Collectors
+    methods:
+      - { sig: "toList()", rust: "jrt::util::stream::to_list_collector()" }
+      - { sig: "toUnmodifiableList()", rust: "jrt::util::stream::to_unmodifiable_list_collector()" }
+      - { sig: "toSet()", rust: "jrt::util::stream::to_set_collector()" }
+      - { sig: "toMap(java.util.function.Function,java.util.function.Function)", rust: "jrt::util::stream::to_map_collector({&0}, {&1}, &JObject::null(), &JObject::null())?" }
+      - { sig: "toMap(java.util.function.Function,java.util.function.Function,java.util.function.BinaryOperator)", rust: "jrt::util::stream::to_map_collector({&0}, {&1}, {&2}, &JObject::null())?" }
+      - { sig: "toMap(java.util.function.Function,java.util.function.Function,java.util.function.BinaryOperator,java.util.function.Supplier)", rust: "jrt::util::stream::to_map_collector({&0}, {&1}, {&2}, {&3})?" }
+      - { sig: "joining()", rust: "jrt::util::stream::joining_collector(&jstr!(\"\"), &jstr!(\"\"), &jstr!(\"\"))?" }
+      - { sig: "joining(java.lang.CharSequence)", rust: "jrt::util::stream::joining_collector({&0}, &jstr!(\"\"), &jstr!(\"\"))?" }
+      - { sig: "joining(java.lang.CharSequence,java.lang.CharSequence,java.lang.CharSequence)", rust: "jrt::util::stream::joining_collector({&0}, {&1}, {&2})?" }
+      - { sig: "groupingBy(java.util.function.Function)", rust: "jrt::util::stream::grouping_collector({&0}, &JObject::null(), &JObject::null())?" }
+      - { sig: "groupingBy(java.util.function.Function,java.util.stream.Collector)", rust: "jrt::util::stream::grouping_collector({&0}, &JObject::null(), {&1})?" }
+      - { sig: "groupingBy(java.util.function.Function,java.util.function.Supplier,java.util.stream.Collector)", rust: "jrt::util::stream::grouping_collector({&0}, {&1}, {&2})?" }
+      - { sig: "partitioningBy(java.util.function.Predicate)", rust: "jrt::util::stream::partitioning_collector({&0}, &JObject::null())?" }
+      - { sig: "partitioningBy(java.util.function.Predicate,java.util.stream.Collector)", rust: "jrt::util::stream::partitioning_collector({&0}, {&1})?" }
+      - { sig: "counting()", rust: "jrt::util::stream::counting_collector()" }
+      - { sig: "summingInt(java.util.function.ToIntFunction)", rust: "jrt::util::stream::summing_collector(jrt::util::stream::Kind::Int, {&0})?" }
+      - { sig: "summingLong(java.util.function.ToLongFunction)", rust: "jrt::util::stream::summing_collector(jrt::util::stream::Kind::Long, {&0})?" }
+      - { sig: "summingDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::stream::summing_collector(jrt::util::stream::Kind::Double, {&0})?" }
+      - { sig: "averagingInt(java.util.function.ToIntFunction)", rust: "jrt::util::stream::averaging_collector(jrt::util::stream::Kind::Int, {&0})?" }
+      - { sig: "averagingLong(java.util.function.ToLongFunction)", rust: "jrt::util::stream::averaging_collector(jrt::util::stream::Kind::Long, {&0})?" }
+      - { sig: "averagingDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::stream::averaging_collector(jrt::util::stream::Kind::Double, {&0})?" }
+      - { sig: "summarizingInt(java.util.function.ToIntFunction)", rust: "jrt::util::stream::summarizing_collector(jrt::util::stream::Kind::Int, {&0})?" }
+      - { sig: "summarizingLong(java.util.function.ToLongFunction)", rust: "jrt::util::stream::summarizing_collector(jrt::util::stream::Kind::Long, {&0})?" }
+      - { sig: "summarizingDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::stream::summarizing_collector(jrt::util::stream::Kind::Double, {&0})?" }
+      - { sig: "mapping(java.util.function.Function,java.util.stream.Collector)", rust: "jrt::util::stream::mapping_collector({&0}, {&1})?" }
+      - { sig: "filtering(java.util.function.Predicate,java.util.stream.Collector)", rust: "jrt::util::stream::filtering_collector({&0}, {&1})?" }
+      - { sig: "flatMapping(java.util.function.Function,java.util.stream.Collector)", rust: "jrt::util::stream::flat_mapping_collector({&0}, {&1})?" }
+      - { sig: "toCollection(java.util.function.Supplier)", rust: "jrt::util::stream::to_collection_collector({&0})?" }
+      - { sig: "minBy(java.util.Comparator)", rust: "jrt::util::stream::min_by_collector({&0})?" }
+      - { sig: "maxBy(java.util.Comparator)", rust: "jrt::util::stream::max_by_collector({&0})?" }
+      - { sig: "reducing(java.lang.Object,java.util.function.BinaryOperator)", rust: "jrt::util::stream::reducing_collector(Some(JObject::from({0})), {&1})?" }
+      - { sig: "reducing(java.util.function.BinaryOperator)", rust: "jrt::util::stream::reducing_collector(None, {&0})?" }
+      - { sig: "collectingAndThen(java.util.stream.Collector,java.util.function.Function)", rust: "jrt::util::stream::collecting_and_then({&0}, {&1})?" }
+  - class: java.util.IntSummaryStatistics
+    methods:
+      - { sig: "getCount()", rust: "jrt::util::stream::statistics_count({&this})?" }
+      - { sig: "getSum()", rust: "jrt::util::stream::statistics_sum({&this})?.unbox_i64()?" }
+      - { sig: "getMin()", rust: "jrt::util::stream::statistics_min({&this})?.unbox_i32()?" }
+      - { sig: "getMax()", rust: "jrt::util::stream::statistics_max({&this})?.unbox_i32()?" }
+      - { sig: "getAverage()", rust: "jrt::util::stream::statistics_average({&this})?" }
+  - class: java.util.LongSummaryStatistics
+    methods:
+      - { sig: "getCount()", rust: "jrt::util::stream::statistics_count({&this})?" }
+      - { sig: "getSum()", rust: "jrt::util::stream::statistics_sum({&this})?.unbox_i64()?" }
+      - { sig: "getMin()", rust: "jrt::util::stream::statistics_min({&this})?.unbox_i64()?" }
+      - { sig: "getMax()", rust: "jrt::util::stream::statistics_max({&this})?.unbox_i64()?" }
+      - { sig: "getAverage()", rust: "jrt::util::stream::statistics_average({&this})?" }
+  - class: java.util.DoubleSummaryStatistics
+    methods:
+      - { sig: "getCount()", rust: "jrt::util::stream::statistics_count({&this})?" }
+      - { sig: "getSum()", rust: "jrt::util::stream::statistics_sum({&this})?.unbox_f64()?" }
+      - { sig: "getMin()", rust: "jrt::util::stream::statistics_min({&this})?.unbox_f64()?" }
+      - { sig: "getMax()", rust: "jrt::util::stream::statistics_max({&this})?.unbox_f64()?" }
+      - { sig: "getAverage()", rust: "jrt::util::stream::statistics_average({&this})?" }
+  - class: java.util.Optional
+    methods:
+      - { sig: "of(java.lang.Object)", rust: "jrt::util::optional::of(jrt::util::optional::OptKind::Obj, {0})?" }
+      - { sig: "ofNullable(java.lang.Object)", rust: "jrt::util::optional::of_nullable({0})" }
+      - { sig: "empty()", rust: "jrt::util::optional::empty(jrt::util::optional::OptKind::Obj)" }
+      - { sig: "isPresent()", rust: "jrt::util::optional::is_present({&this})?" }
+      - { sig: "isEmpty()", rust: "jrt::util::optional::is_empty({&this})?" }
+      - { sig: "get()", rust: "jrt::util::optional::get({&this})?" }
+      - { sig: "orElseThrow()", rust: "jrt::util::optional::get({&this})?" }
+      - { sig: "orElse(java.lang.Object)", rust: "jrt::util::optional::or_else({&this}, {0})?" }
+      - { sig: "orElseGet(java.util.function.Supplier)", rust: "jrt::util::optional::or_else_get({&this}, {&0})?" }
+      - { sig: "orElseThrow(java.util.function.Supplier)", rust: "jrt::util::optional::or_else_throw({&this}, {&0})?" }
+      - { sig: "ifPresent(java.util.function.Consumer)", rust: "jrt::util::optional::if_present({&this}, {&0})?" }
+      - { sig: "ifPresentOrElse(java.util.function.Consumer,java.lang.Runnable)", rust: "jrt::util::optional::if_present_or_else({&this}, {&0}, {&1})?" }
+      - { sig: "map(java.util.function.Function)", rust: "jrt::util::optional::map({&this}, {&0})?" }
+      - { sig: "flatMap(java.util.function.Function)", rust: "jrt::util::optional::flat_map({&this}, {&0})?" }
+      - { sig: "filter(java.util.function.Predicate)", rust: "jrt::util::optional::filter({&this}, {&0})?" }
+      - { sig: "or(java.util.function.Supplier)", rust: "jrt::util::optional::or({&this}, {&0})?" }
+      - { sig: "stream()", rust: "jrt::util::optional::stream({&this})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.equals(&JObject::from({0}))?" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }
+  - class: java.util.OptionalInt
+    methods:
+      - { sig: "of(int)", rust: "jrt::util::optional::of(jrt::util::optional::OptKind::Int, jrt::box_i32({0}))?" }
+      - { sig: "empty()", rust: "jrt::util::optional::empty(jrt::util::optional::OptKind::Int)" }
+      - { sig: "isPresent()", rust: "jrt::util::optional::is_present({&this})?" }
+      - { sig: "isEmpty()", rust: "jrt::util::optional::is_empty({&this})?" }
+      - { sig: "getAsInt()", rust: "jrt::util::optional::get({&this})?.unbox_i32()?" }
+      - { sig: "orElseThrow()", rust: "jrt::util::optional::get({&this})?.unbox_i32()?" }
+      - { sig: "orElse(int)", rust: "jrt::util::optional::or_else({&this}, jrt::box_i32({0}))?.unbox_i32()?" }
+      - { sig: "orElseGet(java.util.function.IntSupplier)", rust: "jrt::util::optional::or_else_get({&this}, {&0})?.unbox_i32()?" }
+      - { sig: "ifPresent(java.util.function.IntConsumer)", rust: "jrt::util::optional::if_present({&this}, {&0})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.equals(&JObject::from({0}))?" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }
+  - class: java.util.OptionalLong
+    methods:
+      - { sig: "of(long)", rust: "jrt::util::optional::of(jrt::util::optional::OptKind::Long, jrt::box_i64({0}))?" }
+      - { sig: "empty()", rust: "jrt::util::optional::empty(jrt::util::optional::OptKind::Long)" }
+      - { sig: "isPresent()", rust: "jrt::util::optional::is_present({&this})?" }
+      - { sig: "isEmpty()", rust: "jrt::util::optional::is_empty({&this})?" }
+      - { sig: "getAsLong()", rust: "jrt::util::optional::get({&this})?.unbox_i64()?" }
+      - { sig: "orElseThrow()", rust: "jrt::util::optional::get({&this})?.unbox_i64()?" }
+      - { sig: "orElse(long)", rust: "jrt::util::optional::or_else({&this}, jrt::box_i64({0}))?.unbox_i64()?" }
+      - { sig: "orElseGet(java.util.function.LongSupplier)", rust: "jrt::util::optional::or_else_get({&this}, {&0})?.unbox_i64()?" }
+      - { sig: "ifPresent(java.util.function.LongConsumer)", rust: "jrt::util::optional::if_present({&this}, {&0})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.equals(&JObject::from({0}))?" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }
+  - class: java.util.OptionalDouble
+    methods:
+      - { sig: "of(double)", rust: "jrt::util::optional::of(jrt::util::optional::OptKind::Double, jrt::box_f64({0}))?" }
+      - { sig: "empty()", rust: "jrt::util::optional::empty(jrt::util::optional::OptKind::Double)" }
+      - { sig: "isPresent()", rust: "jrt::util::optional::is_present({&this})?" }
+      - { sig: "isEmpty()", rust: "jrt::util::optional::is_empty({&this})?" }
+      - { sig: "getAsDouble()", rust: "jrt::util::optional::get({&this})?.unbox_f64()?" }
+      - { sig: "orElseThrow()", rust: "jrt::util::optional::get({&this})?.unbox_f64()?" }
+      - { sig: "orElse(double)", rust: "jrt::util::optional::or_else({&this}, jrt::box_f64({0}))?.unbox_f64()?" }
+      - { sig: "orElseGet(java.util.function.DoubleSupplier)", rust: "jrt::util::optional::or_else_get({&this}, {&0})?.unbox_f64()?" }
+      - { sig: "ifPresent(java.util.function.DoubleConsumer)", rust: "jrt::util::optional::if_present({&this}, {&0})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.equals(&JObject::from({0}))?" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }

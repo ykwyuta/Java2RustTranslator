@@ -67,6 +67,14 @@ public sealed interface RItem {
 
     record ModDecl(boolean pub, String name) implements RItem {}
 
+    /** インラインのモジュール {@code #[attrs] mod name { items }}（テストモジュールなど）。 */
+    record Mod(List<String> attrs, String name, List<RItem> items) implements RItem {
+        public Mod {
+            attrs = List.copyOf(attrs);
+            items = List.copyOf(items);
+        }
+    }
+
     /** 行コメント（複数行可）。 */
     record Comment(String text) implements RItem {}
 }

@@ -205,6 +205,10 @@ classes:
       - { sig: "ordinal()", rust: "jrt::lang::enums::ordinal({&this})?" }
       - { sig: "name()", rust: "jrt::lang::enums::name({&this})?" }
       - { sig: "compareTo(java.lang.Enum)", rust: "jrt::lang::enums::compare({&this}, {&0})?" }
+      - { sig: "getDeclaringClass()", rust: "jrt::lang::enums::declaring_class({&this})?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.same(&JObject::from({0}))" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
 
   - class: [java.lang.Throwable, java.lang.Exception, java.lang.RuntimeException, java.lang.Error]
     methods:

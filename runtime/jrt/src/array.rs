@@ -129,6 +129,22 @@ impl<T: Clone> JArray<T> {
         }
     }
 
+    /// 要素の型が違う配列への変換（`String[]` と `Object[]` の間など。null なら null）。
+    /// Rust では要素の型ごとに配列の型が違うので、要素を変換した新しい配列になる。
+    pub fn convert_elements<U: Clone>(&self, f: impl Fn(&T) -> JResult<U>) -> JResult<JArray<U>> {
+        match &self.0 {
+            None => Ok(JArray::null()),
+            Some(c) => {
+                let src = c.borrow().clone();
+                let mut out = Vec::with_capacity(src.len());
+                for x in &src {
+                    out.push(f(x)?);
+                }
+                Ok(JArray::from_vec(out))
+            }
+        }
+    }
+
     /// `a.clone()`（浅いコピー）。
     pub fn clone_array(&self) -> JResult<JArray<T>> {
         Ok(JArray::from_vec(self.to_vec()?))

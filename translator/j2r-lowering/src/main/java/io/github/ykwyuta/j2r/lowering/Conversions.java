@@ -106,6 +106,17 @@ final class Conversions {
         if (cx.types().text(from).equals(cx.types().text(to))) {
             return e;
         }
+        if (kf == TypeMapper.Kind.ARRAY && kt == TypeMapper.Kind.ARRAY) {
+            // String[] と Object[] の間など: 要素ごとに変換した新しい配列にする（Rust では要素の型ごとに配列の型が違う）。
+            JType fc = ((JType.ArrayType) from).component();
+            JType tc = ((JType.ArrayType) to).component();
+            RExpr x = TypeMapper.isCopy(fc) ? new RExpr.Unary("*", new RExpr.Path("x")) : new RExpr.MethodCall(new RExpr.Path("x"), "clone", List.of());
+            Conversions inner = new Conversions(cx, imp, () -> { });
+            RExpr body = ok(inner.convert(x, fc, tc, explicit));
+            RExpr f = new RExpr.Closure(false, List.of("x: &" + cx.types().text(fc)), new RType("JResult<" + cx.types().text(tc) + ">"),
+                    new RExpr.Block(List.of(), body, null, false));
+            return tryOp(new RExpr.MethodCall(e, "convert_elements", List.of(f)));
+        }
         cx.diags().report(DiagnosticCode.UNSUPPORTED_TYPE, SourcePos.UNKNOWN,
                 "conversion from " + from.javaName() + " to " + to.javaName() + " is not supported yet");
         return FnLowerer.todo("conversion " + from.javaName() + " -> " + to.javaName());
@@ -118,6 +129,7 @@ final class Conversions {
             case PRIMITIVE -> new RExpr.Call(new RExpr.Path("jrt::box_" + TypeMapper.boxSuffix(((JType.Primitive) from).kind())), List.of(e));
             case STRING -> new RExpr.Call(new RExpr.Path("JObject::from"), List.of(e));
             case ARRAY -> new RExpr.Call(new RExpr.Path("JObject::from_array"), List.of(e));
+            case MAPPED -> new RExpr.Call(new RExpr.Path("JObject::from_native"), List.of(e));
             case VOID -> new RExpr.Block(List.of(new io.github.ykwyuta.j2r.rir.RStmt.ExprStmt(e, true)),
                     new RExpr.Call(new RExpr.Path("JObject::null"), List.of()), null, true);
             default -> {
@@ -136,6 +148,7 @@ final class Conversions {
             case PRIMITIVE -> tryOp(new RExpr.MethodCall(e, "unbox_" + TypeMapper.boxSuffix(((JType.Primitive) to).kind()), List.of()));
             case STRING -> tryOp(new RExpr.MethodCall(e, "cast_string", List.of()));
             case ARRAY -> tryOp(new RExpr.MethodCall(e, "cast_array::<" + cx.types().text(((JType.ArrayType) to).component()) + ">", List.of()));
+            case MAPPED -> tryOp(new RExpr.MethodCall(e, "cast_native::<" + cx.types().text(to) + ">", List.of()));
             default -> {
                 cx.diags().report(DiagnosticCode.UNSUPPORTED_TYPE, SourcePos.UNKNOWN,
                         "conversion from Object to " + to.javaName() + " is not supported yet");

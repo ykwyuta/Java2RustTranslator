@@ -1,6 +1,8 @@
 package io.github.ykwyuta.j2r.frontend;
 
 import com.sun.source.tree.ArrayAccessTree;
+import com.sun.source.tree.DeconstructionPatternTree;
+import com.sun.source.tree.PatternTree;
 import com.sun.source.tree.AssignmentTree;
 import com.sun.source.tree.BinaryTree;
 import com.sun.source.tree.BindingPatternTree;
@@ -98,6 +100,14 @@ import javax.lang.model.util.Types;
  * 変換できない構文は {@link Expr.Unsupported} / {@link Stmt.Unsupported} にして診断を出す。
  */
 final class JirBuilder {
+    /** 継承できる JDK のクラス（状態を委譲先のオブジェクトに持たせる）。 */
+    static final Set<String> DELEGATING_SUPERCLASSES = Set.of(
+            "java.lang.Thread",
+            "java.util.ArrayList", "java.util.LinkedList", "java.util.Vector", "java.util.Stack", "java.util.ArrayDeque",
+            "java.util.PriorityQueue", "java.util.HashSet", "java.util.LinkedHashSet", "java.util.TreeSet",
+            "java.util.HashMap", "java.util.LinkedHashMap", "java.util.TreeMap", "java.util.Hashtable",
+            "java.util.concurrent.ConcurrentHashMap");
+
     private static final Set<String> BOXES = Set.of("java.lang.Integer", "java.lang.Long", "java.lang.Short", "java.lang.Byte",
             "java.lang.Character", "java.lang.Boolean", "java.lang.Double", "java.lang.Float");
 
@@ -126,6 +136,10 @@ final class JirBuilder {
     /** 外側のインスタンスを持つローカルクラス・匿名クラス。 */
     private final Set<TypeElement> localWithOuter = new java.util.HashSet<>();
     private int localCounter;
+    /** パターンの束縛変数の名前（同じメソッドで同名・別の型の束縛変数があれば名前を変える）。 */
+    private final java.util.Map<VariableElement, String> bindingNames = new java.util.HashMap<>();
+    private final java.util.Map<String, JType> bindingTypes = new java.util.HashMap<>();
+    private int patternTemps;
     private int resourceCounter;
 
     private record LocalClass(TypeElement type, String qname, java.util.LinkedHashMap<String, VariableElement> captures) {}
@@ -169,6 +183,10 @@ final class JirBuilder {
             case RECORD -> Decl.TypeKind.RECORD;
             default -> null;
         };
+        if (kind == null && te.getKind() == ElementKind.ANNOTATION_TYPE) {
+            // 注釈型の宣言は実行時の意味を持たない（注釈の値の実行時参照は対応しない）ので、何も生成しない。
+            return;
+        }
         if (kind == null) {
             report(DiagnosticCode.UNSUPPORTED_OOP, ct, te.getKind().name().toLowerCase(java.util.Locale.ROOT)
                     + " '" + te.getSimpleName() + "' is not supported yet");
@@ -210,7 +228,8 @@ final class JirBuilder {
             localWithOuter.add(te);
         }
         programTypes.add(binary);
-        Decl.TypeKind kind = switch (te.getKind()) {
+        // 本体付きの enum 定数の匿名クラスは、javac では ENUM と報告されるが、enum を継承するクラスとして扱う。
+        Decl.TypeKind kind = te.getNestingKind() == NestingKind.ANONYMOUS ? Decl.TypeKind.CLASS : switch (te.getKind()) {
             case INTERFACE -> Decl.TypeKind.INTERFACE;
             case ENUM -> Decl.TypeKind.ENUM;
             case RECORD -> Decl.TypeKind.RECORD;
@@ -274,7 +293,7 @@ final class JirBuilder {
             }
             stmts.addAll(m.body().stmts());
             methods.add(new Decl.MethodDecl(m.ref(), m.kind(), params, new Stmt.Block(stmts, m.body().pos()), m.isPublic(), m.isPrivate(),
-                    m.isMain(), m.overrides(), m.rustName(), m.javadoc(), m.pos()));
+                    m.isMain(), m.overrides(), m.rustName(), m.javadoc(), m.pos(), m.annotations()));
         }
         return t.withBodies(fields, methods, t.instanceInit(), t.staticInit(), t.enumConstants());
     }
@@ -308,11 +327,15 @@ final class JirBuilder {
                            TypeNaming naming) {
         String qname = naming.qname();
         String superclass = null;
+        String jdkSuperclass = null;
         if (kind == Decl.TypeKind.CLASS && te.getSuperclass() instanceof DeclaredType st) {
             String sn = qualifiedName(st);
             if (!sn.equals("java.lang.Object")) {
                 if (programTypes.contains(sn) || types.isSubtype(types.erasure(st), types.erasure(throwableType))) {
                     superclass = sn;
+                } else if (DELEGATING_SUPERCLASSES.contains(sn)) {
+                    // JDK のクラスの状態は、委譲先のオブジェクト（super(...) で作る）が持つ。
+                    jdkSuperclass = sn;
                 } else {
                     report(DiagnosticCode.UNSUPPORTED_OOP, ct, "extending the JDK class " + sn + " is not supported yet");
                 }
@@ -324,7 +347,9 @@ final class JirBuilder {
         }
         boolean inner = naming.hasOuter();
         String outer = naming.outer();
-        boolean hasStaticBlock = ct.getMembers().stream().anyMatch(m -> m instanceof BlockTree b && b.isStatic());
+        // Java のクラス初期化: static フィールドの初期化子と static 初期化ブロックを、テキストの順に 1 回だけ実行する。
+        boolean hasStaticBlock = ct.getMembers().stream().anyMatch(m -> m instanceof BlockTree b && b.isStatic()
+                || m instanceof VariableTree v && v.getInitializer() != null && isNonConstantStatic(new TreePath(path, m)));
 
         List<Decl.FieldDecl> fields = new ArrayList<>();
         List<Decl.MethodDecl> methods = new ArrayList<>();
@@ -393,10 +418,16 @@ final class JirBuilder {
         out.add(new Decl.TypeDecl(naming.simpleName(), qname, pkg, kind,
                 te.getModifiers().contains(Modifier.ABSTRACT) || kind == Decl.TypeKind.INTERFACE,
                 superclass, interfaces, allSupertypes(te), outer, inner,
-                fields, methods, instanceInit, staticInit, constants, components, elements.getDocComment(te), pos(ct)));
+                fields, methods, instanceInit, staticInit, constants, components, elements.getDocComment(te), pos(ct), jdkSuperclass));
         for (ClassTree c : nested) {
             typeDecl(new TreePath(path, c), pkg, out);
         }
+    }
+
+    /** 定数でない static フィールド（enum 定数を除く）か。 */
+    private boolean isNonConstantStatic(TreePath p) {
+        return trees.getElement(p) instanceof VariableElement ve && ve.getKind() == ElementKind.FIELD
+                && ve.getModifiers().contains(Modifier.STATIC) && ve.getConstantValue() == null;
     }
 
     /** record の構成要素のフィールドと、明示されていないアクセサを補う。 */
@@ -424,10 +455,12 @@ final class JirBuilder {
         MethodRef ctor = null;
         List<Expr> args = List.of();
         if (vt.getInitializer() instanceof NewClassTree nc) {
-            if (nc.getClassBody() != null) {
-                report(DiagnosticCode.UNSUPPORTED_OOP, vt, "enum constants with a class body are not supported yet");
-            }
             TreePath np = new TreePath(path, nc);
+            if (nc.getClassBody() != null) {
+                // 本体付きの定数は、enum を継承する匿名クラス（javac の Color$1 など）のインスタンスにする。
+                TreePath bodyPath = new TreePath(np, nc.getClassBody());
+                localClass(bodyPath, nc.getClassBody(), (TypeElement) trees.getElement(bodyPath));
+            }
             if (trees.getElement(np) instanceof ExecutableElement ee) {
                 ctor = methodRef(ee);
                 args = args(np, nc.getArguments(), ctor, ee.isVarArgs());
@@ -445,6 +478,7 @@ final class JirBuilder {
         Decl.MethodKind kind = ee.getKind() == ElementKind.CONSTRUCTOR ? Decl.MethodKind.CONSTRUCTOR
                 : ee.getModifiers().contains(Modifier.STATIC) ? Decl.MethodKind.STATIC : Decl.MethodKind.INSTANCE;
         JType ret = type(ee.getReturnType());
+        bindingTypes.clear();
         JType savedReturn = currentReturnType;
         currentReturnType = ret;
         staticContext = kind == Decl.MethodKind.STATIC;
@@ -461,7 +495,8 @@ final class JirBuilder {
                 && params.get(0).type().equals(new JType.ArrayType(JType.STRING));
         List<String> overrides = kind == Decl.MethodKind.INSTANCE ? overriddenMethods(ee, owner) : List.of();
         return new Decl.MethodDecl(ref, kind, params, body, !ee.getModifiers().contains(Modifier.PRIVATE),
-                ee.getModifiers().contains(Modifier.PRIVATE), isMain, overrides, null, elements.getDocComment(ee), pos(mt));
+                ee.getModifiers().contains(Modifier.PRIVATE), isMain, overrides, null, elements.getDocComment(ee), pos(mt),
+                ee.getAnnotationMirrors().stream().map(a -> ((TypeElement) a.getAnnotationType().asElement()).getQualifiedName().toString()).toList());
     }
 
     /**
@@ -804,6 +839,7 @@ final class JirBuilder {
             TreePath cp = new TreePath(path, c);
             List<Object> labels = new ArrayList<>();
             boolean isDefault = false;
+            Expr patternGuard = null;
             for (CaseLabelTree lt : c.getLabels()) {
                 TreePath lp = new TreePath(cp, lt);
                 switch (lt) {
@@ -825,11 +861,19 @@ final class JirBuilder {
                         }
                     }
                     case PatternCaseLabelTree pl -> {
+                        TreePath pp = new TreePath(lp, pl.getPattern());
                         if (pl.getPattern() instanceof BindingPatternTree bp) {
-                            TreePath vp = new TreePath(new TreePath(lp, bp), bp.getVariable());
-                            labels.add(new Stmt.TypePattern(type(types.erasure(trees.getElement(vp).asType())), bp.getVariable().getName().toString()));
+                            VariableElement ve = (VariableElement) trees.getElement(new TreePath(pp, bp.getVariable()));
+                            labels.add(new Stmt.TypePattern(type(types.erasure(ve.asType())), bindingName(ve)));
+                        } else if (pl.getPattern() instanceof DeconstructionPatternTree dp) {
+                            // record パターン: 型の一致を case のラベルに、構成要素の一致をガードの前半にする。
+                            Deconstruction d = deconstruct(pp, dp);
+                            labels.add(new Stmt.TypePattern(d.type(), d.temp()));
+                            if (d.nested() != null) {
+                                patternGuard = patternGuard == null ? d.nested() : and(patternGuard, d.nested());
+                            }
                         } else {
-                            report(DiagnosticCode.UNSUPPORTED_SYNTAX, lt, "record patterns are not supported yet");
+                            report(DiagnosticCode.UNSUPPORTED_SYNTAX, lt, "unsupported pattern " + pl.getPattern().getKind());
                             return null;
                         }
                     }
@@ -840,6 +884,9 @@ final class JirBuilder {
                 }
             }
             Expr guard = c.getGuard() == null ? null : condition(cp, c.getGuard());
+            if (patternGuard != null) {
+                guard = guard == null ? patternGuard : and(patternGuard, guard);
+            }
             List<Stmt> body = new ArrayList<>();
             boolean arrow = c.getCaseKind() == CaseTree.CaseKind.RULE;
             if (arrow) {
@@ -981,7 +1028,8 @@ final class JirBuilder {
             return unsupportedExpr(DiagnosticCode.INTERNAL, id, "unresolved identifier " + id.getName(), typeOf(path));
         }
         return switch (el.getKind()) {
-            case LOCAL_VARIABLE, PARAMETER, EXCEPTION_PARAMETER, RESOURCE_VARIABLE, BINDING_VARIABLE ->
+            case BINDING_VARIABLE -> new Expr.Local(bindingName((VariableElement) el), type(el.asType()), pos(id));
+            case LOCAL_VARIABLE, PARAMETER, EXCEPTION_PARAMETER, RESOURCE_VARIABLE ->
                     localRef((VariableElement) el, pos(id));
             case FIELD, ENUM_CONSTANT -> {
                 VariableElement ve = (VariableElement) el;
@@ -1262,14 +1310,90 @@ final class JirBuilder {
         SourcePos pos = pos(io);
         if (io.getPattern() instanceof BindingPatternTree bp) {
             TreePath vp = new TreePath(new TreePath(new TreePath(path, io.getPattern()), bp), bp.getVariable());
-            JType t = type(types.erasure(trees.getElement(vp).asType()));
-            return new Expr.InstanceOf(e, t, bp.getVariable().getName().toString(), JType.BOOLEAN, pos);
+            VariableElement ve = (VariableElement) trees.getElement(vp);
+            return new Expr.InstanceOf(e, type(types.erasure(ve.asType())), bindingName(ve), JType.BOOLEAN, pos);
+        }
+        if (io.getPattern() instanceof DeconstructionPatternTree dp) {
+            Deconstruction d = deconstruct(new TreePath(path, dp), dp);
+            Expr test = new Expr.InstanceOf(e, d.type(), d.temp(), JType.BOOLEAN, pos);
+            return d.nested() == null ? test : and(test, d.nested());
         }
         if (io.getPattern() != null) {
-            return unsupportedExpr(DiagnosticCode.UNSUPPORTED_SYNTAX, io, "record patterns are not supported yet", JType.BOOLEAN);
+            return unsupportedExpr(DiagnosticCode.UNSUPPORTED_SYNTAX, io, "unsupported pattern " + io.getPattern().getKind(), JType.BOOLEAN);
         }
         JType t = type(types.erasure(trees.getTypeMirror(new TreePath(path, io.getType()))));
         return new Expr.InstanceOf(e, t, null, JType.BOOLEAN, pos);
+    }
+
+    // ---------------------------------------------------------------- パターン
+
+    /** パターンの束縛変数の名前。同じメソッドの中で同名・別の型の束縛変数があれば、名前に番号を付ける。 */
+    private String bindingName(VariableElement ve) {
+        String known = bindingNames.get(ve);
+        if (known != null) {
+            return known;
+        }
+        JType t = type(types.erasure(ve.asType()));
+        String name = ve.getSimpleName().toString();
+        String candidate = name;
+        for (int i = 2; bindingTypes.containsKey(candidate) && !bindingTypes.get(candidate).equals(t); i++) {
+            candidate = name + "_p" + i;
+        }
+        bindingTypes.put(candidate, t);
+        bindingNames.put(ve, candidate);
+        return candidate;
+    }
+
+    private static Expr and(Expr a, Expr b) {
+        return new Expr.Binary(BinaryOp.AND, a, b, JType.BOOLEAN, JType.BOOLEAN, a.pos());
+    }
+
+    /** record パターン: 型の一致を調べる一時変数 temp（record の型）と、構成要素のパターンの条件（なければ null）。 */
+    private record Deconstruction(String temp, JType type, Expr nested) {}
+
+    private Deconstruction deconstruct(TreePath pp, DeconstructionPatternTree dp) {
+        TypeMirror rt = trees.getTypeMirror(pp);
+        TypeElement re = (TypeElement) types.asElement(rt);
+        String temp = "__jrp" + ++patternTemps;
+        JType rjt = type(types.erasure(rt));
+        SourcePos pos = pos(dp);
+        Expr nested = null;
+        List<? extends PatternTree> patterns = dp.getNestedPatterns();
+        List<? extends RecordComponentElement> comps = re.getRecordComponents();
+        for (int i = 0; i < patterns.size() && i < comps.size(); i++) {
+            ExecutableElement acc = comps.get(i).getAccessor();
+            TypeMirror ct = rt instanceof DeclaredType dt
+                    ? ((javax.lang.model.type.ExecutableType) types.asMemberOf(dt, acc)).getReturnType() : acc.getReturnType();
+            Expr value = new Expr.Call(methodRef(acc), new Expr.Local(temp, rjt, pos), List.of(), false, type(types.erasure(acc.getReturnType())), pos);
+            Expr cond = componentCondition(new TreePath(pp, patterns.get(i)), patterns.get(i), value, ct);
+            if (cond != null) {
+                nested = nested == null ? cond : and(nested, cond);
+            }
+        }
+        return new Deconstruction(temp, rjt, nested);
+    }
+
+    /** record の構成要素 value（型 ct）がパターン p に一致する条件（常に一致して束縛もなければ null）。 */
+    private Expr componentCondition(TreePath pp, PatternTree p, Expr value, TypeMirror ct) {
+        SourcePos pos = pos(p);
+        if (p instanceof BindingPatternTree bp) {
+            VariableElement ve = (VariableElement) trees.getElement(new TreePath(pp, bp.getVariable()));
+            TypeMirror pt = ve.asType();
+            String name = bindingName(ve);
+            JType jt = type(types.erasure(pt));
+            if (types.isSubtype(types.erasure(ct), types.erasure(pt))) {
+                // 常に一致する（null も含む）パターン: 束縛するだけ。
+                return new Expr.Bind(name, coerce(value, jt), JType.BOOLEAN, pos);
+            }
+            return new Expr.InstanceOf(value, jt, name, JType.BOOLEAN, pos);
+        }
+        if (p instanceof DeconstructionPatternTree dp) {
+            Deconstruction d = deconstruct(pp, dp);
+            Expr test = new Expr.InstanceOf(value, d.type(), d.temp(), JType.BOOLEAN, pos);
+            return d.nested() == null ? test : and(test, d.nested());
+        }
+        // Java 21 のプレビューの無名パターン（_）などは、常に一致するとみなす。
+        return null;
     }
 
     // ---------------------------------------------------------------- ラムダ・メソッド参照
@@ -1610,12 +1734,20 @@ final class JirBuilder {
             Expr unboxed = new Expr.Cast(e, prim, true, e.pos());
             return prim.equals(target) ? unboxed : new Expr.Cast(unboxed, target, true, e.pos());
         }
-        boolean fromSpecial = JType.isString(from) || from instanceof JType.ArrayType;
-        boolean toSpecial = JType.isString(target) || target instanceof JType.ArrayType;
+        boolean fromSpecial = JType.isString(from) || from instanceof JType.ArrayType || isNativeValue(from);
+        boolean toSpecial = JType.isString(target) || target instanceof JType.ArrayType || isNativeValue(target);
         if (fromSpecial != toSpecial || (from instanceof JType.ArrayType && target instanceof JType.ArrayType && !from.equals(target))) {
             return new Expr.Cast(e, target, true, e.pos());
         }
         return e;
+    }
+
+    /** Rust では参照型（JObject）ではなく値の型で表す JDK のクラス（Object との間で変換が必要）。 */
+    private static boolean isNativeValue(JType t) {
+        return t instanceof JType.ClassType c && switch (c.qualifiedName()) {
+            case "java.lang.StringBuilder", "java.util.Scanner", "java.io.PrintStream", "java.io.InputStream" -> true;
+            default -> false;
+        };
     }
 
     private static JType boxedType(JType.Primitive p) {

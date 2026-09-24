@@ -18,13 +18,16 @@ import io.github.ykwyuta.j2r.rir.RType;
 import io.github.ykwyuta.j2r.rir.RustPrinter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 /**
  * 1 つの関数本体（メソッド・コンストラクタ・ラムダ・static 初期化）の JIR → RIR 変換。
@@ -159,6 +162,9 @@ final class FnLowerer {
             protected Expr rewriteExpr(Expr e) {
                 if (e instanceof Expr.InstanceOf io && io.binding() != null) {
                     out.putIfAbsent(io.binding(), io.target());
+                }
+                if (e instanceof Expr.Bind b) {
+                    out.putIfAbsent(b.name(), b.value().type());
                 }
                 if (e instanceof Expr.SwitchExpr se) {
                     se.cases().forEach(c -> patternBindings(c, out));
@@ -1087,10 +1093,11 @@ final class FnLowerer {
 
     /** static 初期化ブロックを持つ別のクラスの static 変数を参照する前に呼ぶ __clinit()（なければ null）。 */
     private RExpr clinitCall(ProgramIndex.TypeInfo t) {
-        if (t.decl().staticInit() == null || t == owner) {
+        if (!Lowerer.needsClinit(cx.index(), t) || t == owner) {
             return null;
         }
-        return new RExpr.Call(new RExpr.Path(imp.type(t) + "::__clinit"), List.of());
+        RExpr call = new RExpr.Call(new RExpr.Path(imp.type(t) + "::__clinit"), List.of());
+        return cx.throwing().isThrowing(Lowerer.clinitKey(t.decl())) ? tryOp(call) : call;
     }
 
     private static RExpr withClinit(RExpr clinit, RExpr e) {
@@ -1205,6 +1212,8 @@ final class FnLowerer {
             case Expr.New n -> newObject(n);
             case Expr.CtorCall c -> ctorCall(c);
             case Expr.InstanceOf io -> instanceOf(io);
+            case Expr.Bind b -> new RExpr.Block(List.of(new RStmt.ExprStmt(
+                    new RExpr.Assign(new RExpr.Path(Naming.valueName(b.name())), "=", value(b.value())), true)), new RExpr.Lit("true"), null, false);
             case Expr.Lambda l -> lambda(l);
             case Expr.SwitchExpr se -> switchExpr(se);
             case Expr.NewArray na -> newArray(na);
@@ -1300,6 +1309,16 @@ final class FnLowerer {
     }
 
     private RExpr staticField(Expr.StaticField f) {
+        if (f.name().equals("class")) {
+            // クラスリテラル X.class（同じクラスなら同じ Class オブジェクト）。
+            ProgramIndex.TypeInfo ti = cx.index().type(f.owner());
+            String name = ti != null ? Lowerer.binaryName(cx.index(), ti.decl()) : f.owner();
+            if (ti != null && ti.decl().kind() == Decl.TypeKind.ENUM) {
+                return new RExpr.Call(new RExpr.Path("jrt::util::misc::enum_class_for"), List.of(new RExpr.Lit(quoted(name)),
+                        new RExpr.Path(imp.type(ti) + "::__values")));
+            }
+            return new RExpr.Call(new RExpr.Path("jrt::util::misc::class_for"), List.of(new RExpr.Lit(quoted(name))));
+        }
         ProgramIndex.FieldInfo fi = cx.index().field(f.owner(), f.name());
         if (fi != null) {
             return switch (fi.storage()) {
@@ -1509,7 +1528,18 @@ final class FnLowerer {
         if (template == null) {
             template = cx.mappings().method(r.owner(), sig);
         }
+        if (template == null && !r.isStatic() && (r.owner().endsWith("Exception") || r.owner().endsWith("Error"))) {
+            // JDK の例外クラスが上書きしたメソッド（PatternSyntaxException.getMessage など）は Throwable の規則を使う。
+            template = cx.mappings().method("java.lang.Throwable", sig);
+        }
+        if (template == null && !r.isStatic()) {
+            template = cx.mappings().method("java.lang.Object", sig);
+        }
         if (template != null) {
+            if (!r.isStatic() && recv != null && cx.types().kind(recv.type()) == TypeMapper.Kind.OBJECT
+                    && overriddenByJdkSubclass(cx.index()).contains(r.name() + "/" + r.paramTypes().size())) {
+                return overrideDispatch(c, template);
+            }
             return expandTemplate(template, recv, c.args());
         }
         if (!r.isStatic() && recv != null && (r.ownerInterface() || cx.types().kind(recv.type()) == TypeMapper.Kind.OBJECT)) {
@@ -1526,6 +1556,54 @@ final class FnLowerer {
         return typedTodo(r.returnType(), "call " + r.owner() + "." + sig);
     }
 
+    private static final Map<ProgramIndex, Set<String>> JDK_OVERRIDES = Collections.synchronizedMap(new WeakHashMap<>());
+
+    /** JDK のクラスを継承したクラスが上書きした JDK のメソッド（名前/引数の数）。 */
+    static Set<String> overriddenByJdkSubclass(ProgramIndex index) {
+        return JDK_OVERRIDES.computeIfAbsent(index, ix -> {
+            Set<String> out = new HashSet<>();
+            for (ProgramIndex.TypeInfo t : ix.types()) {
+                if (Lowerer.jdkPath(ix, t) == null) {
+                    continue;
+                }
+                for (Decl.MethodDecl m : t.decl().methods()) {
+                    if (!m.isStatic() && m.overrides().stream().anyMatch(k -> !ix.isProgramType(k.substring(0, k.indexOf('#'))))) {
+                        out.add(m.name() + "/" + m.params().size());
+                    }
+                }
+            }
+            return out;
+        });
+    }
+
+    /**
+     * JDK の型の変数を通した呼び出しで、実体が JDK のクラスを継承したユーザーのクラスかもしれないもの:
+     * 上書きしたメソッドがあればそれを（invoke で）呼び、なければ JDK の実装（委譲先）を呼ぶ。
+     */
+    private RExpr overrideDispatch(Expr.Call c, String template) {
+        MethodRef r = c.method();
+        List<RStmt> pre = new ArrayList<>();
+        String rt = temp();
+        pre.add(new RStmt.Let(rt, false, null, value(c.receiver())));
+        Expr recvLocal = new Expr.Local(rt, c.receiver().type(), c.pos());
+        List<Expr> argLocals = new ArrayList<>();
+        List<RExpr> boxed = new ArrayList<>();
+        for (Expr a : c.args()) {
+            String at = temp();
+            pre.add(new RStmt.Let(at, false, null, value(a)));
+            Expr.Local al = new Expr.Local(at, a.type(), c.pos());
+            argLocals.add(al);
+            boxed.add(conv.toObject(value(al), a.type()));
+        }
+        RExpr scrutinee = tryOp(new RExpr.Call(new RExpr.Path("jrt::object::user_override"), List.of(
+                new RExpr.Unary("&", new RExpr.Path(rt)), new RExpr.Lit("\"" + r.name() + "\""), new RExpr.Unary("&", new RExpr.Array(boxed)))));
+        RExpr overridden = r.returnType() instanceof JType.Void ? new RExpr.Path("()") : conv.fromObject(new RExpr.Path("__v"), r.returnType());
+        List<RExpr.Arm> arms = List.of(
+                new RExpr.Arm(r.returnType() instanceof JType.Void ? "Some(_)" : "Some(__v)", overridden),
+                new RExpr.Arm("None", expandTemplate(template, recvLocal, argLocals)));
+        return new RExpr.Block(pre, new RExpr.Match(scrutinee, arms), null, true);
+    }
+
     /** 型が決まる todo（ジェネリックな引数の位置でも型検査を通るように）。 */
     private RExpr typedTodo(JType t, String description) {
         if (t instanceof JType.Void) {
@@ -1538,6 +1616,15 @@ final class FnLowerer {
     private RExpr superObjectCall(Expr.Call c) {
         MethodRef r = c.method();
         RExpr self = new RExpr.Path("this");
+        if (owner != null && Lowerer.jdkPath(cx.index(), owner) != null
+                && (isObjectMethod(r, "toString", 0) || isObjectMethod(r, "hashCode", 0) || isObjectMethod(r, "equals", 1))) {
+            // JDK のスーパークラス（コレクションなど）の toString / hashCode / equals は委譲先のもの。
+            RExpr d = tryOp(new RExpr.Call(new RExpr.Path("jrt::object::delegate_of"), List.of(self)));
+            if (r.name().equals("equals")) {
+                return tryOp(new RExpr.MethodCall(d, "equals", List.of(new RExpr.Unary("&", conv.toObject(value(c.args().get(0)), c.args().get(0).type())))));
+            }
+            return tryOp(new RExpr.MethodCall(d, r.name().equals("toString") ? "to_jstring" : "hash_code", List.of()));
+        }
         if (isObjectMethod(r, "toString", 0)) {
             return new RExpr.Call(new RExpr.Path("jrt::object::default_to_string_of"), List.of(self));
         }
@@ -1678,6 +1765,14 @@ final class FnLowerer {
             }
             return maybeTry(new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + initName(mi.decl().rustName())), args), mi.decl());
         }
+        if (c.isSuper() && owner != null && owner.decl().jdkSuperclass() != null) {
+            // JDK のクラス（Thread・コレクション）のコンストラクタ: 委譲先のオブジェクトを作る。
+            String template = cx.mappings().constructor(ctor.owner(), ctor.signature());
+            if (template != null) {
+                RExpr cell = new RExpr.Unary("&", new RExpr.Field(new RExpr.Call(new RExpr.Path(imp.type(owner) + "::of"), List.of(self)), "__jdk"));
+                return new RExpr.Call(new RExpr.Path("jrt::object::init_delegate"), List.of(cell, expandTemplate(template, null, c.args())));
+            }
+        }
         if (c.isSuper()) {
             // JDK の例外クラスのコンストラクタ（Throwable の状態を初期化する）。
             List<JType> ps = ctor.paramTypes();
@@ -1768,6 +1863,7 @@ final class FnLowerer {
                 case Expr.This t -> usesThis[0] = true;
                 case Expr.Lambda inner -> inner.params().forEach(p -> declared.add(p.name()));
                 case Expr.InstanceOf io when io.binding() != null -> declared.add(io.binding());
+                case Expr.Bind b -> declared.add(b.name());
                 default -> { }
             }
         });

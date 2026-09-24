@@ -1,0 +1,272 @@
+# JUnit 5（Jupiter）の Assertions / Assumptions。jrt::junit に対応する。
+classes:
+  - class: org.junit.jupiter.api.Assertions
+    methods:
+      - { sig: "fail()", rust: "jrt::junit::fail(JObject::null(), JObject::null())?" }
+      - { sig: "fail(java.lang.String)", rust: "jrt::junit::fail({0}, JObject::null())?" }
+      - { sig: "fail(java.lang.String,java.lang.Throwable)", rust: "jrt::junit::fail({0}, {1})?" }
+      - { sig: "fail(java.lang.Throwable)", rust: "jrt::junit::fail(JObject::null(), {0})?" }
+      - { sig: "fail(java.util.function.Supplier)", rust: "jrt::junit::fail({0}, JObject::null())?" }
+      - { sig: "assertTrue(boolean)", rust: "jrt::junit::assert_bool(true, {0}, JObject::null())?" }
+      - { sig: "assertTrue(boolean,java.util.function.Supplier)", rust: "jrt::junit::assert_bool(true, {0}, {1})?" }
+      - { sig: "assertTrue(java.util.function.BooleanSupplier)", rust: "jrt::junit::assert_bool(true, jrt::junit::boolean_supplier({&0})?, JObject::null())?" }
+      - { sig: "assertTrue(java.util.function.BooleanSupplier,java.lang.String)", rust: "jrt::junit::assert_bool(true, jrt::junit::boolean_supplier({&0})?, {1})?" }
+      - { sig: "assertTrue(boolean,java.lang.String)", rust: "jrt::junit::assert_bool(true, {0}, {1})?" }
+      - { sig: "assertTrue(java.util.function.BooleanSupplier,java.util.function.Supplier)", rust: "jrt::junit::assert_bool(true, jrt::junit::boolean_supplier({&0})?, {1})?" }
+      - { sig: "assertFalse(boolean)", rust: "jrt::junit::assert_bool(false, {0}, JObject::null())?" }
+      - { sig: "assertFalse(boolean,java.lang.String)", rust: "jrt::junit::assert_bool(false, {0}, {1})?" }
+      - { sig: "assertFalse(boolean,java.util.function.Supplier)", rust: "jrt::junit::assert_bool(false, {0}, {1})?" }
+      - { sig: "assertFalse(java.util.function.BooleanSupplier)", rust: "jrt::junit::assert_bool(false, jrt::junit::boolean_supplier({&0})?, JObject::null())?" }
+      - { sig: "assertFalse(java.util.function.BooleanSupplier,java.lang.String)", rust: "jrt::junit::assert_bool(false, jrt::junit::boolean_supplier({&0})?, {1})?" }
+      - { sig: "assertFalse(java.util.function.BooleanSupplier,java.util.function.Supplier)", rust: "jrt::junit::assert_bool(false, jrt::junit::boolean_supplier({&0})?, {1})?" }
+      - { sig: "assertNull(java.lang.Object)", rust: "jrt::junit::assert_null({0}, JObject::null())?" }
+      - { sig: "assertNull(java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_null({0}, {1})?" }
+      - { sig: "assertNull(java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_null({0}, {1})?" }
+      - { sig: "assertNotNull(java.lang.Object)", rust: "jrt::junit::assert_not_null({0}, JObject::null())?" }
+      - { sig: "assertNotNull(java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_not_null({0}, {1})?" }
+      - { sig: "assertNotNull(java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_not_null({0}, {1})?" }
+      - { sig: "assertEquals(short,short)", rust: "jrt::junit::assert_equals(jrt::box_i16({0}), jrt::box_i16({1}), JObject::null())?" }
+      - { sig: "assertEquals(short,java.lang.Short)", rust: "jrt::junit::assert_equals(jrt::box_i16({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Short,short)", rust: "jrt::junit::assert_equals({0}, jrt::box_i16({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Short,java.lang.Short)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(short,short,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i16({0}), jrt::box_i16({1}), {2})?" }
+      - { sig: "assertEquals(short,java.lang.Short,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i16({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Short,short,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_i16({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Short,java.lang.Short,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(short,short,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i16({0}), jrt::box_i16({1}), {2})?" }
+      - { sig: "assertEquals(short,java.lang.Short,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i16({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Short,short,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_i16({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Short,java.lang.Short,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(byte,byte)", rust: "jrt::junit::assert_equals(jrt::box_i8({0}), jrt::box_i8({1}), JObject::null())?" }
+      - { sig: "assertEquals(byte,java.lang.Byte)", rust: "jrt::junit::assert_equals(jrt::box_i8({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Byte,byte)", rust: "jrt::junit::assert_equals({0}, jrt::box_i8({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Byte,java.lang.Byte)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(byte,byte,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i8({0}), jrt::box_i8({1}), {2})?" }
+      - { sig: "assertEquals(byte,java.lang.Byte,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i8({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Byte,byte,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_i8({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Byte,java.lang.Byte,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(byte,byte,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i8({0}), jrt::box_i8({1}), {2})?" }
+      - { sig: "assertEquals(byte,java.lang.Byte,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i8({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Byte,byte,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_i8({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Byte,java.lang.Byte,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(int,int)", rust: "jrt::junit::assert_equals(jrt::box_i32({0}), jrt::box_i32({1}), JObject::null())?" }
+      - { sig: "assertEquals(int,java.lang.Integer)", rust: "jrt::junit::assert_equals(jrt::box_i32({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Integer,int)", rust: "jrt::junit::assert_equals({0}, jrt::box_i32({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Integer,java.lang.Integer)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(int,int,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i32({0}), jrt::box_i32({1}), {2})?" }
+      - { sig: "assertEquals(int,java.lang.Integer,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i32({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Integer,int,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_i32({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Integer,java.lang.Integer,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(int,int,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i32({0}), jrt::box_i32({1}), {2})?" }
+      - { sig: "assertEquals(int,java.lang.Integer,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i32({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Integer,int,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_i32({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Integer,java.lang.Integer,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(long,long)", rust: "jrt::junit::assert_equals(jrt::box_i64({0}), jrt::box_i64({1}), JObject::null())?" }
+      - { sig: "assertEquals(long,java.lang.Long)", rust: "jrt::junit::assert_equals(jrt::box_i64({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Long,long)", rust: "jrt::junit::assert_equals({0}, jrt::box_i64({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Long,java.lang.Long)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(long,long,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i64({0}), jrt::box_i64({1}), {2})?" }
+      - { sig: "assertEquals(long,java.lang.Long,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_i64({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Long,long,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_i64({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Long,java.lang.Long,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(long,long,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i64({0}), jrt::box_i64({1}), {2})?" }
+      - { sig: "assertEquals(long,java.lang.Long,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_i64({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Long,long,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_i64({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Long,java.lang.Long,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(float,float)", rust: "jrt::junit::assert_equals(jrt::box_f32({0}), jrt::box_f32({1}), JObject::null())?" }
+      - { sig: "assertEquals(float,java.lang.Float)", rust: "jrt::junit::assert_equals(jrt::box_f32({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Float,float)", rust: "jrt::junit::assert_equals({0}, jrt::box_f32({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Float,java.lang.Float)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(float,float,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_f32({0}), jrt::box_f32({1}), {2})?" }
+      - { sig: "assertEquals(float,java.lang.Float,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_f32({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Float,float,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_f32({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Float,java.lang.Float,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(float,float,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_f32({0}), jrt::box_f32({1}), {2})?" }
+      - { sig: "assertEquals(float,java.lang.Float,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_f32({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Float,float,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_f32({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Float,java.lang.Float,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(float,float,float)", rust: "jrt::junit::assert_equals_delta(jrt::box_f32({0}), jrt::box_f32({1}), {2} as f64, JObject::null())?" }
+      - { sig: "assertEquals(float,float,float,java.lang.String)", rust: "jrt::junit::assert_equals_delta(jrt::box_f32({0}), jrt::box_f32({1}), {2} as f64, {3})?" }
+      - { sig: "assertEquals(float,float,float,java.util.function.Supplier)", rust: "jrt::junit::assert_equals_delta(jrt::box_f32({0}), jrt::box_f32({1}), {2} as f64, {3})?" }
+      - { sig: "assertEquals(double,double)", rust: "jrt::junit::assert_equals(jrt::box_f64({0}), jrt::box_f64({1}), JObject::null())?" }
+      - { sig: "assertEquals(double,java.lang.Double)", rust: "jrt::junit::assert_equals(jrt::box_f64({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Double,double)", rust: "jrt::junit::assert_equals({0}, jrt::box_f64({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Double,java.lang.Double)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(double,double,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_f64({0}), jrt::box_f64({1}), {2})?" }
+      - { sig: "assertEquals(double,java.lang.Double,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_f64({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Double,double,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_f64({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Double,java.lang.Double,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(double,double,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_f64({0}), jrt::box_f64({1}), {2})?" }
+      - { sig: "assertEquals(double,java.lang.Double,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_f64({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Double,double,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_f64({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Double,java.lang.Double,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(double,double,double)", rust: "jrt::junit::assert_equals_delta(jrt::box_f64({0}), jrt::box_f64({1}), {2} as f64, JObject::null())?" }
+      - { sig: "assertEquals(double,double,double,java.lang.String)", rust: "jrt::junit::assert_equals_delta(jrt::box_f64({0}), jrt::box_f64({1}), {2} as f64, {3})?" }
+      - { sig: "assertEquals(double,double,double,java.util.function.Supplier)", rust: "jrt::junit::assert_equals_delta(jrt::box_f64({0}), jrt::box_f64({1}), {2} as f64, {3})?" }
+      - { sig: "assertEquals(char,char)", rust: "jrt::junit::assert_equals(jrt::box_u16({0}), jrt::box_u16({1}), JObject::null())?" }
+      - { sig: "assertEquals(char,java.lang.Character)", rust: "jrt::junit::assert_equals(jrt::box_u16({0}), {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Character,char)", rust: "jrt::junit::assert_equals({0}, jrt::box_u16({1}), JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Character,java.lang.Character)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(char,char,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_u16({0}), jrt::box_u16({1}), {2})?" }
+      - { sig: "assertEquals(char,java.lang.Character,java.lang.String)", rust: "jrt::junit::assert_equals(jrt::box_u16({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Character,char,java.lang.String)", rust: "jrt::junit::assert_equals({0}, jrt::box_u16({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Character,java.lang.Character,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(char,char,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_u16({0}), jrt::box_u16({1}), {2})?" }
+      - { sig: "assertEquals(char,java.lang.Character,java.util.function.Supplier)", rust: "jrt::junit::assert_equals(jrt::box_u16({0}), {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Character,char,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, jrt::box_u16({1}), {2})?" }
+      - { sig: "assertEquals(java.lang.Character,java.lang.Character,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Object,java.lang.Object)", rust: "jrt::junit::assert_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertEquals(java.lang.Object,java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertEquals(java.lang.Object,java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_equals({0}, {1}, {2})?" }
+      - { sig: "assertArrayEquals(boolean[],boolean[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(boolean[],boolean[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(boolean[],boolean[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(char[],char[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(char[],char[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(char[],char[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(byte[],byte[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(byte[],byte[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(byte[],byte[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(short[],short[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(short[],short[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(short[],short[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(int[],int[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(int[],int[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(int[],int[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(long[],long[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(long[],long[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(long[],long[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(float[],float[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(float[],float[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(float[],float[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(double[],double[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(double[],double[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(double[],double[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(java.lang.Object[],java.lang.Object[])", rust: "jrt::junit::assert_array_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertArrayEquals(java.lang.Object[],java.lang.Object[],java.lang.String)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertArrayEquals(java.lang.Object[],java.lang.Object[],java.util.function.Supplier)", rust: "jrt::junit::assert_array_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertIterableEquals(java.lang.Iterable,java.lang.Iterable)", rust: "jrt::junit::assert_iterable_equals({&0}, {&1}, JObject::null())?" }
+      - { sig: "assertIterableEquals(java.lang.Iterable,java.lang.Iterable,java.lang.String)", rust: "jrt::junit::assert_iterable_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertIterableEquals(java.lang.Iterable,java.lang.Iterable,java.util.function.Supplier)", rust: "jrt::junit::assert_iterable_equals({&0}, {&1}, {2})?" }
+      - { sig: "assertNotEquals(byte,byte)", rust: "jrt::junit::assert_not_equals(jrt::box_i8({0}), jrt::box_i8({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(byte,java.lang.Byte)", rust: "jrt::junit::assert_not_equals(jrt::box_i8({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Byte,byte)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i8({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Byte,java.lang.Byte)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(byte,byte,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i8({0}), jrt::box_i8({1}), {2})?" }
+      - { sig: "assertNotEquals(byte,java.lang.Byte,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i8({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Byte,byte,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i8({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Byte,java.lang.Byte,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(byte,byte,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i8({0}), jrt::box_i8({1}), {2})?" }
+      - { sig: "assertNotEquals(byte,java.lang.Byte,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i8({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Byte,byte,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i8({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Byte,java.lang.Byte,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(short,short)", rust: "jrt::junit::assert_not_equals(jrt::box_i16({0}), jrt::box_i16({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(short,java.lang.Short)", rust: "jrt::junit::assert_not_equals(jrt::box_i16({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Short,short)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i16({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Short,java.lang.Short)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(short,short,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i16({0}), jrt::box_i16({1}), {2})?" }
+      - { sig: "assertNotEquals(short,java.lang.Short,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i16({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Short,short,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i16({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Short,java.lang.Short,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(short,short,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i16({0}), jrt::box_i16({1}), {2})?" }
+      - { sig: "assertNotEquals(short,java.lang.Short,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i16({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Short,short,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i16({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Short,java.lang.Short,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(int,int)", rust: "jrt::junit::assert_not_equals(jrt::box_i32({0}), jrt::box_i32({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(int,java.lang.Integer)", rust: "jrt::junit::assert_not_equals(jrt::box_i32({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Integer,int)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i32({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Integer,java.lang.Integer)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(int,int,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i32({0}), jrt::box_i32({1}), {2})?" }
+      - { sig: "assertNotEquals(int,java.lang.Integer,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i32({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Integer,int,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i32({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Integer,java.lang.Integer,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(int,int,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i32({0}), jrt::box_i32({1}), {2})?" }
+      - { sig: "assertNotEquals(int,java.lang.Integer,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i32({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Integer,int,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i32({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Integer,java.lang.Integer,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(long,long)", rust: "jrt::junit::assert_not_equals(jrt::box_i64({0}), jrt::box_i64({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(long,java.lang.Long)", rust: "jrt::junit::assert_not_equals(jrt::box_i64({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Long,long)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i64({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Long,java.lang.Long)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(long,long,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i64({0}), jrt::box_i64({1}), {2})?" }
+      - { sig: "assertNotEquals(long,java.lang.Long,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_i64({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Long,long,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i64({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Long,java.lang.Long,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(long,long,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i64({0}), jrt::box_i64({1}), {2})?" }
+      - { sig: "assertNotEquals(long,java.lang.Long,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_i64({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Long,long,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_i64({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Long,java.lang.Long,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(float,float)", rust: "jrt::junit::assert_not_equals(jrt::box_f32({0}), jrt::box_f32({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(float,java.lang.Float)", rust: "jrt::junit::assert_not_equals(jrt::box_f32({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Float,float)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_f32({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Float,java.lang.Float)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(float,float,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_f32({0}), jrt::box_f32({1}), {2})?" }
+      - { sig: "assertNotEquals(float,java.lang.Float,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_f32({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Float,float,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_f32({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Float,java.lang.Float,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(float,float,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_f32({0}), jrt::box_f32({1}), {2})?" }
+      - { sig: "assertNotEquals(float,java.lang.Float,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_f32({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Float,float,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_f32({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Float,java.lang.Float,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(double,double)", rust: "jrt::junit::assert_not_equals(jrt::box_f64({0}), jrt::box_f64({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(double,java.lang.Double)", rust: "jrt::junit::assert_not_equals(jrt::box_f64({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Double,double)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_f64({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Double,java.lang.Double)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(double,double,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_f64({0}), jrt::box_f64({1}), {2})?" }
+      - { sig: "assertNotEquals(double,java.lang.Double,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_f64({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Double,double,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_f64({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Double,java.lang.Double,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(double,double,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_f64({0}), jrt::box_f64({1}), {2})?" }
+      - { sig: "assertNotEquals(double,java.lang.Double,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_f64({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Double,double,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_f64({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Double,java.lang.Double,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(char,char)", rust: "jrt::junit::assert_not_equals(jrt::box_u16({0}), jrt::box_u16({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(char,java.lang.Character)", rust: "jrt::junit::assert_not_equals(jrt::box_u16({0}), {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Character,char)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_u16({1}), JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Character,java.lang.Character)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(char,char,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_u16({0}), jrt::box_u16({1}), {2})?" }
+      - { sig: "assertNotEquals(char,java.lang.Character,java.lang.String)", rust: "jrt::junit::assert_not_equals(jrt::box_u16({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Character,char,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_u16({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Character,java.lang.Character,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(char,char,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_u16({0}), jrt::box_u16({1}), {2})?" }
+      - { sig: "assertNotEquals(char,java.lang.Character,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals(jrt::box_u16({0}), {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Character,char,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, jrt::box_u16({1}), {2})?" }
+      - { sig: "assertNotEquals(java.lang.Character,java.lang.Character,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Object,java.lang.Object)", rust: "jrt::junit::assert_not_equals({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotEquals(java.lang.Object,java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertNotEquals(java.lang.Object,java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_not_equals({0}, {1}, {2})?" }
+      - { sig: "assertSame(java.lang.Object,java.lang.Object)", rust: "jrt::junit::assert_same({0}, {1}, JObject::null())?" }
+      - { sig: "assertSame(java.lang.Object,java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_same({0}, {1}, {2})?" }
+      - { sig: "assertSame(java.lang.Object,java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_same({0}, {1}, {2})?" }
+      - { sig: "assertNotSame(java.lang.Object,java.lang.Object)", rust: "jrt::junit::assert_not_same({0}, {1}, JObject::null())?" }
+      - { sig: "assertNotSame(java.lang.Object,java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_not_same({0}, {1}, {2})?" }
+      - { sig: "assertNotSame(java.lang.Object,java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_not_same({0}, {1}, {2})?" }
+      - { sig: "assertAll(org.junit.jupiter.api.function.Executable[])", rust: "jrt::junit::assert_all(JObject::null(), jrt::junit::executables_of_array({&0})?)?" }
+      - { sig: "assertAll(java.lang.String,org.junit.jupiter.api.function.Executable[])", rust: "jrt::junit::assert_all({0}, jrt::junit::executables_of_array({&1})?)?" }
+      - { sig: "assertAll(java.util.Collection)", rust: "jrt::junit::assert_all(JObject::null(), jrt::junit::executables_of_collection({&0})?)?" }
+      - { sig: "assertAll(java.lang.String,java.util.Collection)", rust: "jrt::junit::assert_all({0}, jrt::junit::executables_of_collection({&1})?)?" }
+      - { sig: "assertThrowsExactly(java.lang.Class,org.junit.jupiter.api.function.Executable)", rust: "jrt::junit::assert_throws({&0}, {&1}, JObject::null(), true)?" }
+      - { sig: "assertThrowsExactly(java.lang.Class,org.junit.jupiter.api.function.Executable,java.lang.String)", rust: "jrt::junit::assert_throws({&0}, {&1}, {2}, true)?" }
+      - { sig: "assertThrowsExactly(java.lang.Class,org.junit.jupiter.api.function.Executable,java.util.function.Supplier)", rust: "jrt::junit::assert_throws({&0}, {&1}, {2}, true)?" }
+      - { sig: "assertThrows(java.lang.Class,org.junit.jupiter.api.function.Executable)", rust: "jrt::junit::assert_throws({&0}, {&1}, JObject::null(), false)?" }
+      - { sig: "assertThrows(java.lang.Class,org.junit.jupiter.api.function.Executable,java.lang.String)", rust: "jrt::junit::assert_throws({&0}, {&1}, {2}, false)?" }
+      - { sig: "assertThrows(java.lang.Class,org.junit.jupiter.api.function.Executable,java.util.function.Supplier)", rust: "jrt::junit::assert_throws({&0}, {&1}, {2}, false)?" }
+      - { sig: "assertDoesNotThrow(org.junit.jupiter.api.function.Executable)", rust: "jrt::junit::assert_does_not_throw({&0}, \"execute\", JObject::null())?" }
+      - { sig: "assertDoesNotThrow(org.junit.jupiter.api.function.Executable,java.lang.String)", rust: "jrt::junit::assert_does_not_throw({&0}, \"execute\", {1})?" }
+      - { sig: "assertDoesNotThrow(org.junit.jupiter.api.function.Executable,java.util.function.Supplier)", rust: "jrt::junit::assert_does_not_throw({&0}, \"execute\", {1})?" }
+      - { sig: "assertDoesNotThrow(org.junit.jupiter.api.function.ThrowingSupplier)", rust: "jrt::junit::assert_does_not_throw({&0}, \"get\", JObject::null())?" }
+      - { sig: "assertDoesNotThrow(org.junit.jupiter.api.function.ThrowingSupplier,java.lang.String)", rust: "jrt::junit::assert_does_not_throw({&0}, \"get\", {1})?" }
+      - { sig: "assertDoesNotThrow(org.junit.jupiter.api.function.ThrowingSupplier,java.util.function.Supplier)", rust: "jrt::junit::assert_does_not_throw({&0}, \"get\", {1})?" }
+      - { sig: "assertInstanceOf(java.lang.Class,java.lang.Object)", rust: "jrt::junit::assert_instance_of({&0}, {1}, JObject::null())?" }
+      - { sig: "assertInstanceOf(java.lang.Class,java.lang.Object,java.lang.String)", rust: "jrt::junit::assert_instance_of({&0}, {1}, {2})?" }
+      - { sig: "assertInstanceOf(java.lang.Class,java.lang.Object,java.util.function.Supplier)", rust: "jrt::junit::assert_instance_of({&0}, {1}, {2})?" }
+  - class: org.junit.jupiter.api.Assumptions
+    methods:
+      - { sig: "assumeTrue(boolean)", rust: "jrt::junit::assume(true, {0}, JObject::null())?" }
+      - { sig: "assumeTrue(boolean,java.lang.String)", rust: "jrt::junit::assume(true, {0}, {1})?" }
+      - { sig: "assumeTrue(boolean,java.util.function.Supplier)", rust: "jrt::junit::assume(true, {0}, {1})?" }
+      - { sig: "assumeTrue(java.util.function.BooleanSupplier)", rust: "jrt::junit::assume(true, jrt::junit::boolean_supplier({&0})?, JObject::null())?" }
+      - { sig: "assumeFalse(boolean)", rust: "jrt::junit::assume(false, {0}, JObject::null())?" }
+      - { sig: "assumeFalse(boolean,java.lang.String)", rust: "jrt::junit::assume(false, {0}, {1})?" }
+      - { sig: "assumeFalse(boolean,java.util.function.Supplier)", rust: "jrt::junit::assume(false, {0}, {1})?" }
+      - { sig: "assumeFalse(java.util.function.BooleanSupplier)", rust: "jrt::junit::assume(false, jrt::junit::boolean_supplier({&0})?, JObject::null())?" }

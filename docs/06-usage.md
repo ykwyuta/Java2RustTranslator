@@ -16,7 +16,7 @@
 cargo test --workspace          # ランタイム crate jrt の単体テスト
 ```
 
-- E2E テスト（`tests/e2e`）は `cargo` が PATH に無ければスキップされる。
+- E2E テスト（`tests/e2e`）と JUnit 変換のテスト（`tests/junit`）は `cargo` が PATH に無ければスキップされる。
 - 変換規則を変えたら `./gradlew :j2r-test-harness:test -PupdateGolden=true` でゴールデンファイルを更新する。
 
 ## 3. Gradle プラグインで変換する（推奨）
@@ -102,26 +102,60 @@ cd out && cargo run
 
 | 分類 | 対応している | 未対応（診断を出して `todo!()` を生成する） |
 |---|---|---|
-| クラス | インスタンスフィールド・コンストラクタ（オーバーロード、`this(...)` / `super(...)`）・インスタンスメソッド・static メンバ・static 初期化ブロック・インスタンス初期化子、継承・抽象クラス・`super.m()`、インタフェース（default / static メソッド）、`enum`（フィールド・コンストラクタ・メソッド・`values()` / `valueOf` / `ordinal` / `name`・`switch`）、`record`（アクセサ・`equals` / `hashCode` / `toString`・コンパクトコンストラクタ）、static 入れ子クラス・内部クラス（`outer.new Inner()`、`Outer.this`）・匿名クラス・ローカルクラス（外側のローカル変数の捕捉を含む） | 本体付きの enum 定数、JDK のクラス（例外以外）の継承、`sealed` による網羅性の利用 |
-| 型 | プリミティブ型、`String`、配列（多次元を含む）、`null`、ボクシング（`Integer` 等。`Integer.valueOf` のキャッシュも Java と同じ）、ジェネリクス（消去して変換）、`List` / `ArrayList` / `LinkedList` / `ArrayDeque` / `Map` / `HashMap` / `LinkedHashMap` / `TreeMap` / `Set` / `HashSet` / `LinkedHashSet` / `TreeSet` / `PriorityQueue` / `Iterator` / `Map.Entry`、`Random`、`StringBuilder`、`Scanner` | 上記以外のコレクション、ストリーム API |
-| 演算 | Java と同じ意味の四則演算・剰余・シフト・ビット演算・比較・キャスト（オーバーフロー、ゼロ除算の例外、`MIN / -1` など）、`instanceof`（型パターンを含む）、参照の `==` | — |
-| 文 | if / while / do-while / for / 拡張 for（配列・`Iterable`）/ ラベル付き break・continue / switch 文（`->` 形式、fall-through する `:` 形式、int・char・String・enum）/ switch 式（`yield`）/ 型パターン・`case null`・ガード（`when`） | record パターン |
-| 例外 | Rust の `Result` で伝える（パニックは使わない）。`throw`、try / catch（複数の型・マルチキャッチ）/ finally、try-with-resources（suppressed を含む）、ユーザ定義例外クラス、`getMessage` / `getCause` / `getSuppressed` / `printStackTrace`（スタックトレースの行は出ない）、実行時例外（NPE・配列の範囲外・ゼロ除算・`ClassCastException`・数値の解析失敗など）の catch、ラムダ・比較関数・`toString` などから JDK の処理を通って伝わる例外。未捕捉なら Java と同じ表示で終了コード 1 | `ExceptionInInitializerError` の catch、`StackOverflowError` |
-| ラムダ | ラムダ式・メソッド参照（static・インスタンス・`this::`・`Type::instanceMethod`・`new`）、ユーザ定義の関数型インタフェース、`Runnable` / `Supplier` / `Consumer` / `Function` / `BiFunction` / `Predicate` / `UnaryOperator` / `BinaryOperator` / `Comparator`（`comparing` / `thenComparing` / `reversed` など） | — |
-| 文字列 | 連結、`String` の主なメソッド、`String.format` / `printf`（`%d` `%s` `%f` `%x` `%c` `%b` `%e` `%n` `%%`、幅・精度・フラグ）、`String.join` / `split`（単純な正規表現）、可変長引数 | 完全な正規表現 |
+| クラス | インスタンスフィールド・コンストラクタ（オーバーロード、`this(...)` / `super(...)`）・インスタンスメソッド・static メンバ・static 初期化ブロック・インスタンス初期化子、継承・抽象クラス・`super.m()`、インタフェース（default / static メソッド）、`enum`（フィールド・コンストラクタ・メソッド・本体付きの定数・`values()` / `valueOf` / `ordinal` / `name` / `getDeclaringClass`・`switch`）、`record`（アクセサ・`equals` / `hashCode` / `toString`・コンパクトコンストラクタ）、`sealed` / `permits`、static 入れ子クラス・内部クラス（`outer.new Inner()`、`Outer.this`）・匿名クラス・ローカルクラス（外側のローカル変数の捕捉を含む）、注釈型の宣言（読み飛ばす）、JDK のクラスの継承: 例外クラス・`Thread`・コレクション（`ArrayList` `LinkedList` `Vector` `Stack` `ArrayDeque` `PriorityQueue` `HashSet` `LinkedHashSet` `TreeSet` `HashMap` `LinkedHashMap` `TreeMap` `Hashtable` `ConcurrentHashMap`） | 上記以外の JDK のクラスの継承（`AbstractList`・`InputStream` など）、リフレクション |
+| 型 | プリミティブ型、`String`、配列（多次元・共変な代入を含む）、`null`、ボクシング（`Integer` 等。`Integer.valueOf` のキャッシュも Java と同じ）、ジェネリクス（消去して変換）、`List` / `ArrayList` / `LinkedList` / `Vector` / `Stack` / `ArrayDeque` / `PriorityQueue` / `Map` / `HashMap` / `LinkedHashMap` / `TreeMap` / `Hashtable` / `EnumMap` / `WeakHashMap` / `Set` / `HashSet` / `LinkedHashSet` / `TreeSet` / `EnumSet` / `BitSet`、`java.util.concurrent` のコレクション（`ConcurrentHashMap`・`CopyOnWriteArrayList`・`ConcurrentSkipListMap/Set`・`BlockingQueue` など）、`Iterator` / `ListIterator` / `Map.Entry` / `Enumeration`、`Optional`（`OptionalInt` 等を含む）、`Random`、`StringBuilder`、`Scanner`、`Class`（`X.class`・`getClass()` の名前） | — |
+| ストリーム | `Stream` / `IntStream` / `LongStream` / `DoubleStream`（生成・中間操作・終端操作を遅延評価で）、`Collectors`（`toList` / `toSet` / `toMap` / `groupingBy` / `partitioningBy` / `joining` / `counting` / `summingInt` / `averagingDouble` など）、`summaryStatistics` | 並列ストリーム（逐次に実行する） |
+| 演算 | Java と同じ意味の四則演算・剰余・シフト・ビット演算・比較・キャスト（オーバーフロー、ゼロ除算の例外、`MIN / -1` など）、`instanceof`（型パターン・record パターンを含む）、参照の `==` | — |
+| 文 | if / while / do-while / for / 拡張 for（配列・`Iterable`）/ ラベル付き break・continue / switch 文（`->` 形式、fall-through する `:` 形式、int・char・String・enum）/ switch 式（`yield`）/ 型パターン・record パターン（入れ子を含む）・`case null`・ガード（`when`）/ `synchronized` | — |
+| 例外 | Rust の `Result` で伝える（パニックは使わない）。`throw`、try / catch（複数の型・マルチキャッチ）/ finally、try-with-resources（suppressed を含む）、ユーザ定義例外クラス、`getMessage` / `getCause` / `getSuppressed` / `printStackTrace`（スタックトレースの行は出ない）、実行時例外（NPE・配列の範囲外・ゼロ除算・`ClassCastException`・数値の解析失敗など）の catch、ラムダ・比較関数・`toString` などから JDK の処理を通って伝わる例外、クラスの初期化の失敗（`ExceptionInInitializerError`、2 回目以降は `NoClassDefFoundError`）。未捕捉なら Java と同じ表示で終了コード 1 | `StackOverflowError`（Rust ではスタックあふれでプロセスが終わる） |
+| クラスの初期化 | Java と同じ: 最初の `new`・static メソッドの呼び出し・static フィールドへのアクセスで、スーパークラスから順に static フィールドの初期化子と static 初期化ブロックをテキストの順に 1 回だけ実行する | — |
+| ラムダ | ラムダ式・メソッド参照（static・インスタンス・`this::`・`Type::instanceMethod`・`new`）、ユーザ定義の関数型インタフェース、`java.util.function` の各インタフェース、`Comparator`（`comparing` / `thenComparing` / `reversed` / `nullsFirst` など） | — |
+| 文字列 | 連結、`String` の主なメソッド、`String.format` / `printf`（`%d` `%s` `%f` `%x` `%c` `%b` `%e` `%n` `%%`、幅・精度・フラグ）、`String.join`、可変長引数、正規表現（`Pattern` / `Matcher`、`String.matches` / `split` / `replaceAll` / `replaceFirst`。Java の構文: 文字クラス・`\p{..}`・量指定子（最短・強欲を含む）・捕捉 / 名前付き / 非捕捉 / アトミックグループ・後方参照・先読み / 後読み・フラグ。`split` の空文字列の扱いも Java と同じ） | — |
+| スレッド | `Thread`（`Runnable` を渡す・継承する・匿名クラス）、`ExecutorService` / `Executors` / `Future` / `Callable`、`CompletableFuture`、`CountDownLatch`、`Semaphore`、`AtomicInteger` / `AtomicLong` / `AtomicBoolean` / `AtomicReference` / `LongAdder`、`ThreadLocal`、`ReentrantLock` / `Condition`、`Object.wait` / `notify`、`TimeUnit`。下記の決定的なスケジューラで実行する | 実際に並列に動くことを前提とするプログラム（下記） |
+| テスト | JUnit 5（Jupiter）のテストクラスを `cargo test` のテストに変換する（§6） | `@ParameterizedTest` / `@Nested` / `@RepeatedTest`、`assertTimeout`、JUnit 4 の `Assert` |
 | JDK API | `System.out` / `System.err` / `System.in`、`Math`、`Objects`、`Collections`、`Arrays`、ボックス型の static メソッド、`Object` のメソッド（一覧は `translator/j2r-mappings/src/main/resources/j2r/mappings/*.yaml`） | 上記以外（YAML にマッピングを追加すれば使える） |
 
-意味の違い（診断で知らせる）:
+意味の違い（診断で知らせるものを含む）:
 - `String` どうしの `==` は値の比較に変換する（`J2R-LOSSY-STRING-IDENTITY`）。
-- static フィールドの初期化は Java のクラス初期化（まとめて一度）ではなく、フィールドごとに最初のアクセス時に行う
-  （static 初期化ブロックは最初のアクセスの前に一度だけ実行する）。
-- マルチスレッドは未対応（static フィールドはスレッドごとに持つ）。
-- `Object.hashCode()` の既定値（識別ハッシュ）とそれを使う `toString()` の値は JVM と異なる。
-- NullPointerException の詳細メッセージ（JDK 14 以降の `Cannot invoke "..." because "..." is null`）は再現しない（メッセージは null）。
-- static 初期化で起きた例外は、未捕捉の `ExceptionInInitializerError` と同じ表示をして終了する（catch できない）。
-- 出力は常に UTF-8（Java はプラットフォームの文字コードに従う）。
+- スレッドは 1 つの OS スレッドの上で決まった順に実行する（生成コードのオブジェクトは `Rc` で共有し、static
+  フィールドはスレッドローカルに持つため）。`start()` / `submit()` はキューに入れるだけで、`join()` / `sleep()` /
+  `Future.get()` / `CountDownLatch.await()` などで待つときと main の終わりに、入れた順に最後まで実行する。
+  結果は JVM で起こりうる実行順の 1 つと一致し、毎回同じになる。ほかのスレッドが書き換えるフラグを待つ busy wait や、
+  タイムアウト・実時間に依存するプログラムは Java と違う動きになる（`Thread.sleep` は実際には待たない）。
+- JDK のクラスを継承したクラスでは、JDK の状態を委譲先のオブジェクトが持つ。上書きしたメソッドは、そのクラスの型の
+  変数からも、JDK の型（`List` など）の変数からも呼ばれるが、JDK の実装の内部から呼ばれる上書き
+  （`LinkedHashMap.removeEldestEntry` など）は呼ばれない。
+- 生成コードで再現できないもの:
+  - `Object.hashCode()` の既定値（識別ハッシュ）と、それを使う `toString()` の値（`Foo@1b6d3586` の数字）。
+  - NullPointerException の詳細メッセージ（JDK 14 以降の `Cannot invoke "..." because "..." is null`）。
+    javac の `-g` のデバッグ情報とバイトコードに基づく JVM の機能なので、メッセージは null にする。
+  - `StackOverflowError`: Rust ではスタックあふれを捕捉できない（main は 1 GiB のスタックで実行する）。
+  - 出力の文字コード: 常に UTF-8（Java はプラットフォームの文字コードに従う）。
 
-## 6. 独自の API マッピングを追加する
+## 6. JUnit のテストを変換する
+
+`@Test` を付けたメソッドを持つクラスには、`#[cfg(test)] mod __tests` の中に `#[test]` 関数を生成する。
+変換には JUnit の jar をクラスパスに渡す（javac がテストクラスをコンパイルするため）。
+
+```sh
+translator/j2r-cli/build/install/j2r/bin/j2r -o out -n mylib \
+    -cp junit-jupiter-api-5.11.4.jar:opentest4j-1.3.0.jar src/main/java src/test/java
+cd out && cargo test
+```
+
+- JUnit と同じく、テストごとに新しいインスタンスを作り、`@BeforeEach` / `@AfterEach` で囲む（スーパークラスのものを含む）。
+  `@AfterEach` はテストが失敗しても実行する。`@Disabled` は `#[ignore]` にする。
+- `@BeforeAll` / `@AfterAll` はテストごとに実行する（static フィールドはスレッドローカルで、Rust のテストは
+  別々のスレッドで動くため、テストごとにクラスの状態が新しくなる）。
+- `Assertions` のメソッド（`assertEquals`（delta を含む）/ `assertNotEquals` / `assertTrue` / `assertFalse` /
+  `assertNull` / `assertNotNull` / `assertSame` / `assertNotSame` / `assertArrayEquals` / `assertIterableEquals` /
+  `assertThrows` / `assertThrowsExactly` / `assertDoesNotThrow` / `assertInstanceOf` / `assertAll` / `fail`）は
+  `jrt::junit` に変換する。失敗は JUnit と同じメッセージ（`message ==> expected: <1> but was: <2>`）の
+  `AssertionFailedError` で、テストは失敗（パニック）になる。
+- `Assumptions.assumeTrue` / `assumeFalse` が成り立たないテストは中断し、`cargo test` では成功として数える
+  （JUnit では skipped）。
+
+## 7. 独自の API マッピングを追加する
 
 未対応の JDK API やライブラリの呼び出しは、YAML でマッピングを追加すると変換できる。
 
@@ -139,7 +173,7 @@ classes:
 呼ぶ関数が例外を送出しうる（`jrt::JResult<T>` を返す）なら、テンプレートに `?` を付ける
 （例: `"my_crate::parse({&0})?"`）。`?` を含むテンプレートを使ったメソッドは、例外を送出しうるメソッドとして変換される。
 
-## 7. Maven について
+## 8. Maven について
 
 最初は Maven での利用を検討したが、ビルドは Gradle に統一した。Maven から使いたい場合は、同じ `Translator` API を
 呼ぶ Maven プラグイン（`j2r-maven-plugin`）を追加するか、`exec-maven-plugin` で j2r-cli を実行すればよい

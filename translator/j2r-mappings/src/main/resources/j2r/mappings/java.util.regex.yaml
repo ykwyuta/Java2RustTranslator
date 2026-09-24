@@ -1,0 +1,63 @@
+# java.util.regex（Pattern / Matcher）と String の正規表現のメソッド。jrt::lang::regex に対応する。
+classes:
+  - class: java.lang.String
+    methods:
+      - { sig: "matches(java.lang.String)", rust: "jrt::lang::regex::string_matches({&this}, {&0})?" }
+      - { sig: "replaceAll(java.lang.String,java.lang.String)", rust: "jrt::lang::regex::replace_all({&this}, {&0}, {&1})?" }
+      - { sig: "replaceFirst(java.lang.String,java.lang.String)", rust: "jrt::lang::regex::replace_first({&this}, {&0}, {&1})?" }
+      - { sig: "split(java.lang.String)", rust: "jrt::lang::regex::split({&this}, {&0}, 0)?" }
+      - { sig: "split(java.lang.String,int)", rust: "jrt::lang::regex::split({&this}, {&0}, {1})?" }
+  - class: java.util.regex.Pattern
+    fields:
+      - { name: UNIX_LINES, rust: "jrt::lang::regex::UNIX_LINES" }
+      - { name: CASE_INSENSITIVE, rust: "jrt::lang::regex::CASE_INSENSITIVE" }
+      - { name: COMMENTS, rust: "jrt::lang::regex::COMMENTS" }
+      - { name: MULTILINE, rust: "jrt::lang::regex::MULTILINE" }
+      - { name: LITERAL, rust: "jrt::lang::regex::LITERAL" }
+      - { name: DOTALL, rust: "jrt::lang::regex::DOTALL" }
+      - { name: UNICODE_CASE, rust: "jrt::lang::regex::UNICODE_CASE" }
+    methods:
+      - { sig: "compile(java.lang.String)", rust: "jrt::lang::regex::compile({&0}, 0)?" }
+      - { sig: "compile(java.lang.String,int)", rust: "jrt::lang::regex::compile({&0}, {1})?" }
+      - { sig: "matcher(java.lang.CharSequence)", rust: "jrt::lang::regex::matcher({&this}, &jrt::lang::string::char_sequence({&0})?)?" }
+      - { sig: "matches(java.lang.String,java.lang.CharSequence)", rust: "jrt::lang::regex::pattern_matches({&0}, &jrt::lang::string::char_sequence({&1})?)?" }
+      - { sig: "pattern()", rust: "jrt::lang::regex::pattern_source({&this})?" }
+      - { sig: "toString()", rust: "jrt::lang::regex::pattern_source({&this})?" }
+      - { sig: "flags()", rust: "jrt::lang::regex::pattern_flags({&this})?" }
+      - { sig: "quote(java.lang.String)", rust: "jrt::lang::regex::quote({&0})?" }
+      - { sig: "split(java.lang.CharSequence)", rust: "jrt::lang::regex::pattern_split({&this}, &jrt::lang::string::char_sequence({&0})?, 0)?" }
+      - { sig: "split(java.lang.CharSequence,int)", rust: "jrt::lang::regex::pattern_split({&this}, &jrt::lang::string::char_sequence({&0})?, {1})?" }
+      - { sig: "asPredicate()", rust: "jrt::lang::regex::as_predicate({&this}, false)?" }
+      - { sig: "asMatchPredicate()", rust: "jrt::lang::regex::as_predicate({&this}, true)?" }
+  - class: java.util.regex.Matcher
+    methods:
+      - { sig: "matches()", rust: "jrt::lang::regex::matches({&this})?" }
+      - { sig: "lookingAt()", rust: "jrt::lang::regex::looking_at({&this})?" }
+      - { sig: "find()", rust: "jrt::lang::regex::find({&this})?" }
+      - { sig: "find(int)", rust: "jrt::lang::regex::find_from({&this}, {0})?" }
+      - { sig: "group()", rust: "jrt::lang::regex::group({&this}, 0)?" }
+      - { sig: "group(int)", rust: "jrt::lang::regex::group({&this}, {0})?" }
+      - { sig: "group(java.lang.String)", rust: "jrt::lang::regex::group_named({&this}, {&0})?" }
+      - { sig: "groupCount()", rust: "jrt::lang::regex::group_count({&this})?" }
+      - { sig: "start()", rust: "jrt::lang::regex::start({&this}, 0)?" }
+      - { sig: "start(int)", rust: "jrt::lang::regex::start({&this}, {0})?" }
+      - { sig: "end()", rust: "jrt::lang::regex::end({&this}, 0)?" }
+      - { sig: "end(int)", rust: "jrt::lang::regex::end({&this}, {0})?" }
+      - { sig: "reset()", rust: "jrt::lang::regex::reset({&this})?" }
+      - { sig: "reset(java.lang.CharSequence)", rust: "jrt::lang::regex::reset_input({&this}, &jrt::lang::string::char_sequence({&0})?)?" }
+      - { sig: "replaceAll(java.lang.String)", rust: "jrt::lang::regex::matcher_replace_all({&this}, {&0})?" }
+      - { sig: "replaceFirst(java.lang.String)", rust: "jrt::lang::regex::matcher_replace_first({&this}, {&0})?" }
+      - { sig: "appendReplacement(java.lang.StringBuilder,java.lang.String)", rust: "jrt::lang::regex::append_replacement({&this}, {&0}, {&1})?" }
+      - { sig: "appendTail(java.lang.StringBuilder)", rust: "jrt::lang::regex::append_tail({&this}, {&0})?" }
+      - { sig: "results()", rust: "jrt::lang::regex::results({&this})?" }
+      - { sig: "hitEnd()", rust: "jrt::lang::regex::hit_end({&this})?" }
+      - { sig: "quoteReplacement(java.lang.String)", rust: "jrt::lang::regex::quote_replacement({&0})?" }
+  - class: java.util.regex.MatchResult
+    methods:
+      - { sig: "group()", rust: "jrt::lang::regex::group({&this}, 0)?" }
+      - { sig: "group(int)", rust: "jrt::lang::regex::group({&this}, {0})?" }
+      - { sig: "start()", rust: "jrt::lang::regex::start({&this}, 0)?" }
+      - { sig: "start(int)", rust: "jrt::lang::regex::start({&this}, {0})?" }
+      - { sig: "end()", rust: "jrt::lang::regex::end({&this}, 0)?" }
+      - { sig: "end(int)", rust: "jrt::lang::regex::end({&this}, {0})?" }
+      - { sig: "groupCount()", rust: "jrt::lang::regex::group_count({&this})?" }

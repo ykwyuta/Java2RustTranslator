@@ -7,8 +7,10 @@ javac の Compiler Tree API で型付きの構文木を得てから、独自の�
 - 使い方の詳細・対応範囲: [docs/06-usage.md](docs/06-usage.md)
 
 現在の対応範囲は、手続き的な Java（プリミティブ型・String・配列・制御構文）に加えて、クラス・継承・インタフェース・
-enum・record・内部 / 匿名 / ローカルクラス、null とボクシング、ジェネリクスと主なコレクション、ラムダ・メソッド参照、
-例外（Rust の `Result` で伝える。try/catch/finally・try-with-resources・実行時例外の catch）、switch 式・パターン、`String.format` / `printf` と可変長引数。
+enum・record・sealed・内部 / 匿名 / ローカルクラス、Java と同じクラスの初期化、null とボクシング、ジェネリクスとコレクション、
+ストリーム API・Optional、ラムダ・メソッド参照、例外（Rust の `Result` で伝える。try/catch/finally・try-with-resources・
+実行時例外の catch）、switch 式・型 / record パターン、`String.format` / `printf`、正規表現、スレッドと
+`java.util.concurrent`（決定的なスケジューラで実行）、JDK クラス（Thread・コレクション）の継承、JUnit 5 のテストの変換（`cargo test`）。
 詳しくは [docs/06-usage.md §5](docs/06-usage.md#5-現在変換できる範囲)。
 Java と同じ実行結果になることを、JVM と `cargo run` の出力を比べる E2E テストで確認している。
 
@@ -45,7 +47,7 @@ cd out && cargo run
 ## 開発
 
 ```sh
-./gradlew build          # ビルドと全テスト（単体・ゴールデン・E2E。E2E には cargo が必要）
+./gradlew build          # ビルドと全テスト（単体・ゴールデン・E2E・JUnit 変換。E2E と JUnit 変換には cargo が必要）
 cargo test --workspace   # ランタイム crate（runtime/jrt）のテスト
 ```
 

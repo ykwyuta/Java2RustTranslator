@@ -10,6 +10,7 @@ pub mod regex;
 pub mod string;
 pub mod string_builder;
 pub mod stringify;
+pub mod thread;
 pub mod throwable;
 
 pub use string_builder::StringBuilder;
