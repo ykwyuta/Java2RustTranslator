@@ -122,13 +122,17 @@ pub fn run_main<R: MainResult, F: FnOnce(JArray<JString>) -> R + Send + 'static>
             let args: Vec<JString> = std::env::args().skip(1).map(JString::from).collect();
             let result = main(JArray::from_vec(args)).into_result();
             crate::io::flush_stdout();
-            match result {
+            let code = match result {
                 Ok(()) => 0,
                 Err(e) => {
                     eprintln!("Exception in thread \"main\" {}", describe_chain(&e));
                     1
                 }
-            }
+            };
+            // main が終わっても、デーモンでないスレッドが終わるまでプロセスは終わらない。
+            crate::lang::thread::finish();
+            crate::io::flush_stdout();
+            code
         })
         .expect("failed to start the main thread");
     // Rust のパニックは標準のメッセージを出してから終了コード 101 で終わる。

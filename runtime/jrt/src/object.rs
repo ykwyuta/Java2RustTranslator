@@ -102,6 +102,61 @@ pub trait Object: Any {
     fn as_enum(&self) -> Option<&crate::lang::enums::EnumBase> {
         None
     }
+
+    /// JDK のクラス（Thread・コレクションなど）を継承したクラスなら、その状態を持つ委譲先のオブジェクト。
+    /// ランタイムの `downcast_ref` は、型が合わなければ委譲先を見る。
+    fn delegate(&self) -> Option<&JObject> {
+        None
+    }
+}
+
+/// JDK クラスを継承したオブジェクトの委譲先（なければ ClassCastException）。
+pub fn delegate_of(o: &JObject) -> JResult<JObject> {
+    match o.obj()?.delegate() {
+        Some(d) => Ok(d.clone()),
+        None => throw(
+            "java.lang.ClassCastException",
+            Some(&format!("class {} does not extend a JDK class", o.obj()?.class_name())),
+        ),
+    }
+}
+
+/// JDK クラスのコンストラクタ `super(...)`: 委譲先を設定する。
+pub fn init_delegate(cell: &std::cell::OnceCell<JObject>, value: JObject) {
+    let _ = cell.set(value);
+}
+
+fn delegate_in(cell: &std::cell::OnceCell<JObject>) -> JResult<&JObject> {
+    match cell.get() {
+        Some(d) => Ok(d),
+        None => throw("java.lang.IllegalStateException", Some("JDK superclass is not initialized yet")),
+    }
+}
+
+/// JDK クラスを継承したクラスの既定の toString（委譲先のもの）。
+pub fn jdk_to_string(cell: &std::cell::OnceCell<JObject>) -> JResult<JString> {
+    delegate_in(cell)?.to_jstring()
+}
+
+/// 既定の equals（Thread は同一性、コレクションは委譲先の equals）。
+pub fn jdk_equals(cell: &std::cell::OnceCell<JObject>, this: &JObject, other: &JObject) -> JResult<bool> {
+    let d = delegate_in(cell)?;
+    if other.same(this) {
+        return Ok(true);
+    }
+    if d.is::<crate::lang::thread::JThread>() {
+        return Ok(false);
+    }
+    d.equals(other)
+}
+
+/// 既定の hashCode（Thread は識別ハッシュ、コレクションは委譲先の hashCode）。
+pub fn jdk_hash_code(cell: &std::cell::OnceCell<JObject>, this: &JObject) -> JResult<i32> {
+    let d = delegate_in(cell)?;
+    if d.is::<crate::lang::thread::JThread>() {
+        return Ok(this.obj()?.base().identity_hash());
+    }
+    d.hash_code()
 }
 
 /// `Object.toString()` の既定の書式（`クラス名@16進ハッシュ`）。
@@ -167,7 +222,11 @@ impl JObject {
     /// 具体型への参照（null や別の型なら None）。
     pub fn downcast_ref<T: Object>(&self) -> Option<&T> {
         let o: &dyn Any = self.0.as_deref()?;
-        o.downcast_ref::<T>()
+        match o.downcast_ref::<T>() {
+            Some(x) => Some(x),
+            // JDK のクラスを継承したユーザーのクラス: 状態は委譲先が持つ。
+            None => self.0.as_deref()?.delegate()?.downcast_ref::<T>(),
+        }
     }
 
     /// 具体型の `Rc`（ランタイム内部用）。
@@ -234,6 +293,7 @@ impl JObject {
     pub fn invoke(&self, method: &str, args: &[JObject]) -> JResult<JObject> {
         match self.obj()?.invoke(method, args)? {
             Some(r) => Ok(r),
+            None if self.obj()?.delegate().is_some() => self.obj()?.delegate().cloned().unwrap_or_default().invoke(method, args),
             // java.lang.Object / Comparable のメソッドは、どのオブジェクトでも呼べる。
             None if method == "compareTo" && args.len() == 1 => Ok(crate::box_i32(self.compare_to(&args[0])?)),
             None if method == "equals" && args.len() == 1 => Ok(crate::box_bool(self.equals(&args[0])?)),
@@ -248,7 +308,13 @@ impl JObject {
 
     /// 関数型インタフェースのメソッドを呼ぶ（ラムダ・メソッドを実装したオブジェクト）。実装していなければ `Ok(None)`。
     pub fn try_invoke(&self, method: &str, args: &[JObject]) -> JResult<Option<JObject>> {
-        self.obj()?.invoke(method, args)
+        match self.obj()?.invoke(method, args)? {
+            Some(r) => Ok(Some(r)),
+            None => match self.obj()?.delegate() {
+                Some(d) => d.clone().try_invoke(method, args),
+                None => Ok(None),
+            },
+        }
     }
 }
 
@@ -511,4 +577,9 @@ impl From<crate::lang::StringBuilder> for JObject {
     fn from(v: crate::lang::StringBuilder) -> JObject {
         JObject::from_native(v)
     }
+}
+
+/// ユーザーのクラスが上書きした JDK のメソッドを名前で呼ぶ（上書きしていなければ `Ok(None)`。委譲先は見ない）。
+pub fn user_override(o: &JObject, method: &str, args: &[JObject]) -> JResult<Option<JObject>> {
+    o.obj()?.invoke(method, args)
 }

@@ -1,0 +1,268 @@
+# java.lang.Thread と java.util.concurrent。jrt::lang::thread（決定的な 1 OS スレッドのスケジューラ）に対応する。
+classes:
+  - class: java.lang.Thread
+    fields:
+      - { name: "MIN_PRIORITY", rust: "1" }
+      - { name: "NORM_PRIORITY", rust: "5" }
+      - { name: "MAX_PRIORITY", rust: "10" }
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_thread(JObject::null(), &jrt::JString::null())?" }
+      - { sig: "<init>(java.lang.Runnable)", rust: "jrt::lang::thread::new_thread({0}, &jrt::JString::null())?" }
+      - { sig: "<init>(java.lang.Runnable,java.lang.String)", rust: "jrt::lang::thread::new_thread({0}, {&1})?" }
+      - { sig: "<init>(java.lang.String)", rust: "jrt::lang::thread::new_thread(JObject::null(), {&0})?" }
+    methods:
+      - { sig: "start()", rust: "jrt::lang::thread::start({&this})?" }
+      - { sig: "run()", rust: "jrt::lang::thread::run({&this})?" }
+      - { sig: "join()", rust: "jrt::lang::thread::join({&this})?" }
+      - { sig: "join(long)", rust: "jrt::lang::thread::join({&this})?" }
+      - { sig: "getName()", rust: "jrt::lang::thread::get_name({&this})?" }
+      - { sig: "setName(java.lang.String)", rust: "jrt::lang::thread::set_name({&this}, {&0})?" }
+      - { sig: "getId()", rust: "jrt::lang::thread::get_id({&this})?" }
+      - { sig: "threadId()", rust: "jrt::lang::thread::get_id({&this})?" }
+      - { sig: "isAlive()", rust: "jrt::lang::thread::is_alive({&this})?" }
+      - { sig: "setDaemon(boolean)", rust: "jrt::lang::thread::set_daemon({&this}, {0})?" }
+      - { sig: "isDaemon()", rust: "jrt::lang::thread::is_daemon({&this})?" }
+      - { sig: "setPriority(int)", rust: "jrt::lang::thread::set_priority({&this}, {0})?" }
+      - { sig: "getPriority()", rust: "jrt::lang::thread::get_priority({&this})?" }
+      - { sig: "interrupt()", rust: "jrt::lang::thread::interrupt({&this})?" }
+      - { sig: "isInterrupted()", rust: "jrt::lang::thread::is_interrupted({&this})?" }
+      - { sig: "interrupted()", rust: "jrt::lang::thread::interrupted()?" }
+      - { sig: "currentThread()", rust: "jrt::lang::thread::current_thread()" }
+      - { sig: "sleep(long)", rust: "jrt::lang::thread::sleep({0})?" }
+      - { sig: "sleep(long,int)", rust: "jrt::lang::thread::sleep({0})?" }
+      - { sig: "yield()", rust: "jrt::lang::thread::sleep(0)?" }
+      - { sig: "onSpinWait()", rust: "jrt::lang::thread::sleep(0)?" }
+      - { sig: "startVirtualThread(java.lang.Runnable)", rust: "jrt::lang::thread::start_virtual({&0})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+  - class: java.util.concurrent.Executors
+    methods:
+      - { sig: "newFixedThreadPool(int)", rust: "jrt::lang::thread::new_fixed_thread_pool({0})?" }
+      - { sig: "newSingleThreadExecutor()", rust: "jrt::lang::thread::new_single_thread_executor()?" }
+      - { sig: "newCachedThreadPool()", rust: "jrt::lang::thread::new_cached_thread_pool()?" }
+      - { sig: "newVirtualThreadPerTaskExecutor()", rust: "jrt::lang::thread::new_cached_thread_pool()?" }
+  - class:
+      - java.util.concurrent.ExecutorService
+      - java.util.concurrent.Executor
+      - java.util.concurrent.ThreadPoolExecutor
+    methods:
+      - { sig: "submit(java.util.concurrent.Callable)", rust: "jrt::lang::thread::submit({&this}, {&0}, true)?" }
+      - { sig: "submit(java.lang.Runnable)", rust: "jrt::lang::thread::submit({&this}, {&0}, false)?" }
+      - { sig: "execute(java.lang.Runnable)", rust: "jrt::lang::thread::execute({&this}, {&0})?" }
+      - { sig: "invokeAll(java.util.Collection)", rust: "jrt::lang::thread::invoke_all({&this}, {&0})?" }
+      - { sig: "invokeAny(java.util.Collection)", rust: "jrt::lang::thread::invoke_any({&this}, {&0})?" }
+      - { sig: "shutdown()", rust: "jrt::lang::thread::shutdown({&this})?" }
+      - { sig: "shutdownNow()", rust: "jrt::lang::thread::shutdown_now({&this})?" }
+      - { sig: "awaitTermination(long,java.util.concurrent.TimeUnit)", rust: "jrt::lang::thread::await_termination({&this})?" }
+      - { sig: "close()", rust: "jrt::lang::thread::close({&this})?" }
+      - { sig: "isShutdown()", rust: "jrt::lang::thread::is_shutdown({&this})?" }
+      - { sig: "isTerminated()", rust: "jrt::lang::thread::is_terminated({&this})?" }
+  - class:
+      - java.util.concurrent.Future
+      - java.util.concurrent.FutureTask
+    methods:
+      - { sig: "get()", rust: "jrt::lang::thread::future_get({&this})?" }
+      - { sig: "get(long,java.util.concurrent.TimeUnit)", rust: "jrt::lang::thread::future_get({&this})?" }
+      - { sig: "isDone()", rust: "jrt::lang::thread::future_is_done({&this})?" }
+      - { sig: "isCancelled()", rust: "jrt::lang::thread::future_is_cancelled({&this})?" }
+      - { sig: "cancel(boolean)", rust: "jrt::lang::thread::future_cancel({&this})?" }
+      - { sig: "resultNow()", rust: "jrt::lang::thread::future_result_now({&this})?" }
+  - class:
+      - java.util.concurrent.CompletableFuture
+      - java.util.concurrent.CompletionStage
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_completable()" }
+    methods:
+      - { sig: "supplyAsync(java.util.function.Supplier)", rust: "jrt::lang::thread::supply_async({&0})?" }
+      - { sig: "supplyAsync(java.util.function.Supplier,java.util.concurrent.Executor)", rust: "jrt::lang::thread::supply_async({&0})?" }
+      - { sig: "runAsync(java.lang.Runnable)", rust: "jrt::lang::thread::run_async({&0})?" }
+      - { sig: "runAsync(java.lang.Runnable,java.util.concurrent.Executor)", rust: "jrt::lang::thread::run_async({&0})?" }
+      - { sig: "completedFuture(java.lang.Object)", rust: "jrt::lang::thread::completed_future({0})" }
+      - { sig: "failedFuture(java.lang.Throwable)", rust: "jrt::lang::thread::failed_future({0})" }
+      - { sig: "complete(java.lang.Object)", rust: "jrt::lang::thread::complete({&this}, {0})?" }
+      - { sig: "completeExceptionally(java.lang.Throwable)", rust: "jrt::lang::thread::complete_exceptionally({&this}, {0})?" }
+      - { sig: "join()", rust: "jrt::lang::thread::cf_join({&this})?" }
+      - { sig: "get()", rust: "jrt::lang::thread::cf_get({&this})?" }
+      - { sig: "get(long,java.util.concurrent.TimeUnit)", rust: "jrt::lang::thread::cf_get({&this})?" }
+      - { sig: "getNow(java.lang.Object)", rust: "jrt::lang::thread::cf_get_now({&this}, {0})?" }
+      - { sig: "isDone()", rust: "jrt::lang::thread::cf_is_done({&this})?" }
+      - { sig: "isCompletedExceptionally()", rust: "jrt::lang::thread::cf_is_completed_exceptionally({&this})?" }
+      - { sig: "allOf(java.util.concurrent.CompletableFuture[])", rust: "jrt::lang::thread::all_of({&0})?" }
+      - { sig: "anyOf(java.util.concurrent.CompletableFuture[])", rust: "jrt::lang::thread::any_of({&0})?" }
+      - { sig: "toCompletableFuture()", rust: "{this}.clone()" }
+      - { sig: "thenApply(java.util.function.Function)", rust: "jrt::lang::thread::then_apply({&this}, {&0})?" }
+      - { sig: "thenApplyAsync(java.util.function.Function)", rust: "jrt::lang::thread::then_apply({&this}, {&0})?" }
+      - { sig: "thenAccept(java.util.function.Consumer)", rust: "jrt::lang::thread::then_accept({&this}, {&0})?" }
+      - { sig: "thenAcceptAsync(java.util.function.Consumer)", rust: "jrt::lang::thread::then_accept({&this}, {&0})?" }
+      - { sig: "thenCompose(java.util.function.Function)", rust: "jrt::lang::thread::then_compose({&this}, {&0})?" }
+      - { sig: "thenComposeAsync(java.util.function.Function)", rust: "jrt::lang::thread::then_compose({&this}, {&0})?" }
+      - { sig: "exceptionally(java.util.function.Function)", rust: "jrt::lang::thread::exceptionally({&this}, {&0})?" }
+      - { sig: "handle(java.util.function.BiFunction)", rust: "jrt::lang::thread::handle({&this}, {&0})?" }
+      - { sig: "handleAsync(java.util.function.BiFunction)", rust: "jrt::lang::thread::handle({&this}, {&0})?" }
+      - { sig: "whenComplete(java.util.function.BiConsumer)", rust: "jrt::lang::thread::when_complete({&this}, {&0})?" }
+      - { sig: "whenCompleteAsync(java.util.function.BiConsumer)", rust: "jrt::lang::thread::when_complete({&this}, {&0})?" }
+      - { sig: "thenRun(java.lang.Runnable)", rust: "jrt::lang::thread::then_run({&this}, {&0})?" }
+      - { sig: "thenRunAsync(java.lang.Runnable)", rust: "jrt::lang::thread::then_run({&this}, {&0})?" }
+      - { sig: "thenCombine(java.util.concurrent.CompletionStage,java.util.function.BiFunction)", rust: "jrt::lang::thread::then_combine({&this}, {&0}, {&1})?" }
+  - class: java.util.concurrent.CountDownLatch
+    constructors:
+      - { sig: "<init>(int)", rust: "jrt::lang::thread::new_latch({0})?" }
+    methods:
+      - { sig: "countDown()", rust: "jrt::lang::thread::count_down({&this})?" }
+      - { sig: "getCount()", rust: "jrt::lang::thread::get_count({&this})?" }
+      - { sig: "await()", rust: "jrt::lang::thread::latch_await({&this})?" }
+      - { sig: "await(long,java.util.concurrent.TimeUnit)", rust: "jrt::lang::thread::latch_await({&this})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+  - class: java.util.concurrent.Semaphore
+    constructors:
+      - { sig: "<init>(int)", rust: "jrt::lang::thread::new_semaphore({0})" }
+      - { sig: "<init>(int,boolean)", rust: "jrt::lang::thread::new_semaphore({0})" }
+    methods:
+      - { sig: "acquire()", rust: "jrt::lang::thread::acquire({&this}, 1)?" }
+      - { sig: "acquire(int)", rust: "jrt::lang::thread::acquire({&this}, {0})?" }
+      - { sig: "tryAcquire()", rust: "jrt::lang::thread::try_acquire({&this}, 1)?" }
+      - { sig: "tryAcquire(int)", rust: "jrt::lang::thread::try_acquire({&this}, {0})?" }
+      - { sig: "release()", rust: "jrt::lang::thread::release({&this}, 1)?" }
+      - { sig: "release(int)", rust: "jrt::lang::thread::release({&this}, {0})?" }
+      - { sig: "availablePermits()", rust: "jrt::lang::thread::get_count({&this})? as i32" }
+  - class: java.util.concurrent.atomic.AtomicInteger
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Int, jrt::box_i32(0))" }
+      - { sig: "<init>(int)", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Int, jrt::box_i32({0}))" }
+    methods:
+      - { sig: "get()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i32()?" }
+      - { sig: "getPlain()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i32()?" }
+      - { sig: "intValue()", rust: "jrt::lang::boxed::number_i64(&jrt::lang::thread::atomic_get({&this})?)? as i32" }
+      - { sig: "longValue()", rust: "jrt::lang::boxed::number_i64(&jrt::lang::thread::atomic_get({&this})?)?" }
+      - { sig: "doubleValue()", rust: "jrt::lang::boxed::number_f64(&jrt::lang::thread::atomic_get({&this})?)?" }
+      - { sig: "set(int)", rust: "jrt::lang::thread::atomic_set({&this}, jrt::box_i32({0}))?" }
+      - { sig: "lazySet(int)", rust: "jrt::lang::thread::atomic_set({&this}, jrt::box_i32({0}))?" }
+      - { sig: "getAndSet(int)", rust: "jrt::lang::thread::atomic_get_and_set({&this}, jrt::box_i32({0}))?.unbox_i32()?" }
+      - { sig: "incrementAndGet()", rust: "jrt::lang::thread::atomic_int({&this}, 1, true)?" }
+      - { sig: "getAndIncrement()", rust: "jrt::lang::thread::atomic_int({&this}, 1, false)?" }
+      - { sig: "decrementAndGet()", rust: "jrt::lang::thread::atomic_int({&this}, -1, true)?" }
+      - { sig: "getAndDecrement()", rust: "jrt::lang::thread::atomic_int({&this}, -1, false)?" }
+      - { sig: "addAndGet(int)", rust: "jrt::lang::thread::atomic_int({&this}, {0}, true)?" }
+      - { sig: "getAndAdd(int)", rust: "jrt::lang::thread::atomic_int({&this}, {0}, false)?" }
+      - { sig: "compareAndSet(int,int)", rust: "jrt::lang::thread::compare_and_set({&this}, jrt::box_i32({0}), jrt::box_i32({1}))?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "updateAndGet(java.util.function.IntUnaryOperator)", rust: "jrt::lang::thread::atomic_update({&this}, {&0}, true)?.unbox_i32()?" }
+      - { sig: "getAndUpdate(java.util.function.IntUnaryOperator)", rust: "jrt::lang::thread::atomic_update({&this}, {&0}, false)?.unbox_i32()?" }
+      - { sig: "accumulateAndGet(int,java.util.function.IntBinaryOperator)", rust: "jrt::lang::thread::atomic_accumulate({&this}, jrt::box_i32({0}), {&1}, true)?.unbox_i32()?" }
+      - { sig: "getAndAccumulate(int,java.util.function.IntBinaryOperator)", rust: "jrt::lang::thread::atomic_accumulate({&this}, jrt::box_i32({0}), {&1}, false)?.unbox_i32()?" }
+  - class: java.util.concurrent.atomic.AtomicLong
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Long, jrt::box_i64(0))" }
+      - { sig: "<init>(long)", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Long, jrt::box_i64({0}))" }
+    methods:
+      - { sig: "get()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i64()?" }
+      - { sig: "getPlain()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i64()?" }
+      - { sig: "intValue()", rust: "jrt::lang::boxed::number_i64(&jrt::lang::thread::atomic_get({&this})?)? as i32" }
+      - { sig: "longValue()", rust: "jrt::lang::boxed::number_i64(&jrt::lang::thread::atomic_get({&this})?)?" }
+      - { sig: "doubleValue()", rust: "jrt::lang::boxed::number_f64(&jrt::lang::thread::atomic_get({&this})?)?" }
+      - { sig: "set(long)", rust: "jrt::lang::thread::atomic_set({&this}, jrt::box_i64({0}))?" }
+      - { sig: "lazySet(long)", rust: "jrt::lang::thread::atomic_set({&this}, jrt::box_i64({0}))?" }
+      - { sig: "getAndSet(long)", rust: "jrt::lang::thread::atomic_get_and_set({&this}, jrt::box_i64({0}))?.unbox_i64()?" }
+      - { sig: "incrementAndGet()", rust: "jrt::lang::thread::atomic_long({&this}, 1, true)?" }
+      - { sig: "getAndIncrement()", rust: "jrt::lang::thread::atomic_long({&this}, 1, false)?" }
+      - { sig: "decrementAndGet()", rust: "jrt::lang::thread::atomic_long({&this}, -1, true)?" }
+      - { sig: "getAndDecrement()", rust: "jrt::lang::thread::atomic_long({&this}, -1, false)?" }
+      - { sig: "addAndGet(long)", rust: "jrt::lang::thread::atomic_long({&this}, {0}, true)?" }
+      - { sig: "getAndAdd(long)", rust: "jrt::lang::thread::atomic_long({&this}, {0}, false)?" }
+      - { sig: "compareAndSet(long,long)", rust: "jrt::lang::thread::compare_and_set({&this}, jrt::box_i64({0}), jrt::box_i64({1}))?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "updateAndGet(java.util.function.LongUnaryOperator)", rust: "jrt::lang::thread::atomic_update({&this}, {&0}, true)?.unbox_i64()?" }
+      - { sig: "getAndUpdate(java.util.function.LongUnaryOperator)", rust: "jrt::lang::thread::atomic_update({&this}, {&0}, false)?.unbox_i64()?" }
+      - { sig: "accumulateAndGet(long,java.util.function.LongBinaryOperator)", rust: "jrt::lang::thread::atomic_accumulate({&this}, jrt::box_i64({0}), {&1}, true)?.unbox_i64()?" }
+      - { sig: "getAndAccumulate(long,java.util.function.LongBinaryOperator)", rust: "jrt::lang::thread::atomic_accumulate({&this}, jrt::box_i64({0}), {&1}, false)?.unbox_i64()?" }
+  - class: java.util.concurrent.atomic.LongAdder
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::LongAdder, jrt::box_i64(0))" }
+    methods:
+      - { sig: "increment()", rust: "jrt::lang::thread::atomic_long({&this}, 1, true)?" }
+      - { sig: "decrement()", rust: "jrt::lang::thread::atomic_long({&this}, -1, true)?" }
+      - { sig: "add(long)", rust: "jrt::lang::thread::atomic_long({&this}, {0}, true)?" }
+      - { sig: "sum()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i64()?" }
+      - { sig: "longValue()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i64()?" }
+      - { sig: "intValue()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_i64()? as i32" }
+      - { sig: "sumThenReset()", rust: "jrt::lang::thread::atomic_get_and_set({&this}, jrt::box_i64(0))?.unbox_i64()?" }
+      - { sig: "reset()", rust: "jrt::lang::thread::atomic_set({&this}, jrt::box_i64(0))?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+  - class: java.util.concurrent.atomic.AtomicBoolean
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Boolean, jrt::box_bool(false))" }
+      - { sig: "<init>(boolean)", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Boolean, jrt::box_bool({0}))" }
+    methods:
+      - { sig: "get()", rust: "jrt::lang::thread::atomic_get({&this})?.unbox_bool()?" }
+      - { sig: "set(boolean)", rust: "jrt::lang::thread::atomic_set({&this}, jrt::box_bool({0}))?" }
+      - { sig: "getAndSet(boolean)", rust: "jrt::lang::thread::atomic_get_and_set({&this}, jrt::box_bool({0}))?.unbox_bool()?" }
+      - { sig: "compareAndSet(boolean,boolean)", rust: "jrt::lang::thread::compare_and_set({&this}, jrt::box_bool({0}), jrt::box_bool({1}))?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+  - class: java.util.concurrent.atomic.AtomicReference
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Reference, JObject::null())" }
+      - { sig: "<init>(java.lang.Object)", rust: "jrt::lang::thread::new_atomic(jrt::lang::thread::AtomicKind::Reference, {0})" }
+    methods:
+      - { sig: "get()", rust: "jrt::lang::thread::atomic_get({&this})?" }
+      - { sig: "set(java.lang.Object)", rust: "jrt::lang::thread::atomic_set({&this}, {0})?" }
+      - { sig: "getAndSet(java.lang.Object)", rust: "jrt::lang::thread::atomic_get_and_set({&this}, {0})?" }
+      - { sig: "compareAndSet(java.lang.Object,java.lang.Object)", rust: "jrt::lang::thread::compare_and_set({&this}, {0}, {1})?" }
+      - { sig: "updateAndGet(java.util.function.UnaryOperator)", rust: "jrt::lang::thread::atomic_update({&this}, {&0}, true)?" }
+      - { sig: "getAndUpdate(java.util.function.UnaryOperator)", rust: "jrt::lang::thread::atomic_update({&this}, {&0}, false)?" }
+      - { sig: "accumulateAndGet(java.lang.Object,java.util.function.BinaryOperator)", rust: "jrt::lang::thread::atomic_accumulate({&this}, {0}, {&1}, true)?" }
+      - { sig: "getAndAccumulate(java.lang.Object,java.util.function.BinaryOperator)", rust: "jrt::lang::thread::atomic_accumulate({&this}, {0}, {&1}, false)?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+  - class: java.lang.ThreadLocal
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_thread_local(&JObject::null())" }
+    methods:
+      - { sig: "withInitial(java.util.function.Supplier)", rust: "jrt::lang::thread::new_thread_local({&0})" }
+      - { sig: "get()", rust: "jrt::lang::thread::thread_local_get({&this})?" }
+      - { sig: "set(java.lang.Object)", rust: "jrt::lang::thread::thread_local_set({&this}, {0})?" }
+      - { sig: "remove()", rust: "jrt::lang::thread::thread_local_remove({&this})?" }
+  - class:
+      - java.util.concurrent.locks.ReentrantLock
+      - java.util.concurrent.locks.Lock
+      - java.util.concurrent.locks.ReentrantReadWriteLock
+      - java.util.concurrent.locks.ReadWriteLock
+      - java.util.concurrent.locks.ReentrantReadWriteLock$ReadLock
+      - java.util.concurrent.locks.ReentrantReadWriteLock$WriteLock
+    constructors:
+      - { sig: "<init>()", rust: "jrt::lang::thread::new_lock()" }
+      - { sig: "<init>(boolean)", rust: "jrt::lang::thread::new_lock()" }
+    methods:
+      - { sig: "lock()", rust: "jrt::lang::thread::lock({&this})?" }
+      - { sig: "lockInterruptibly()", rust: "jrt::lang::thread::lock({&this})?" }
+      - { sig: "unlock()", rust: "jrt::lang::thread::unlock({&this})?" }
+      - { sig: "tryLock()", rust: "jrt::lang::thread::try_lock({&this})?" }
+      - { sig: "tryLock(long,java.util.concurrent.TimeUnit)", rust: "jrt::lang::thread::try_lock({&this})?" }
+      - { sig: "isLocked()", rust: "jrt::lang::thread::is_locked({&this})?" }
+      - { sig: "isHeldByCurrentThread()", rust: "jrt::lang::thread::is_locked({&this})?" }
+      - { sig: "newCondition()", rust: "jrt::lang::thread::new_lock()" }
+      - { sig: "readLock()", rust: "{this}.clone()" }
+      - { sig: "writeLock()", rust: "{this}.clone()" }
+  - class: java.util.concurrent.locks.Condition
+    methods:
+      - { sig: "await()", rust: "jrt::lang::thread::wait()?" }
+      - { sig: "await(long,java.util.concurrent.TimeUnit)", rust: "{ jrt::lang::thread::wait()?; true }" }
+      - { sig: "signal()", rust: "jrt::lang::thread::notify({&this})?" }
+      - { sig: "signalAll()", rust: "jrt::lang::thread::notify({&this})?" }
+  - class: java.lang.Object
+    methods:
+      - { sig: "wait()", rust: "jrt::lang::thread::wait()?" }
+      - { sig: "wait(long)", rust: "jrt::lang::thread::wait()?" }
+      - { sig: "notify()", rust: "jrt::lang::thread::notify({&this})?" }
+      - { sig: "notifyAll()", rust: "jrt::lang::thread::notify({&this})?" }
+  - class: java.util.concurrent.TimeUnit
+    fields:
+      - { name: "NANOSECONDS", rust: "jrt::lang::thread::time_unit(\"NANOSECONDS\")" }
+      - { name: "MICROSECONDS", rust: "jrt::lang::thread::time_unit(\"MICROSECONDS\")" }
+      - { name: "MILLISECONDS", rust: "jrt::lang::thread::time_unit(\"MILLISECONDS\")" }
+      - { name: "SECONDS", rust: "jrt::lang::thread::time_unit(\"SECONDS\")" }
+      - { name: "MINUTES", rust: "jrt::lang::thread::time_unit(\"MINUTES\")" }
+      - { name: "HOURS", rust: "jrt::lang::thread::time_unit(\"HOURS\")" }
+      - { name: "DAYS", rust: "jrt::lang::thread::time_unit(\"DAYS\")" }
+    methods:
+      - { sig: "sleep(long)", rust: "jrt::lang::thread::sleep(jrt::lang::thread::to_millis({&this}, {0})?)?" }
+      - { sig: "toMillis(long)", rust: "jrt::lang::thread::to_millis({&this}, {0})?" }
+      - { sig: "toSeconds(long)", rust: "jrt::lang::thread::convert_unit({&this}, {0}, \"SECONDS\")?" }
+      - { sig: "toMinutes(long)", rust: "jrt::lang::thread::convert_unit({&this}, {0}, \"MINUTES\")?" }

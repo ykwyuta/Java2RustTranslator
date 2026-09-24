@@ -100,6 +100,14 @@ import javax.lang.model.util.Types;
  * 変換できない構文は {@link Expr.Unsupported} / {@link Stmt.Unsupported} にして診断を出す。
  */
 final class JirBuilder {
+    /** 継承できる JDK のクラス（状態を委譲先のオブジェクトに持たせる）。 */
+    static final Set<String> DELEGATING_SUPERCLASSES = Set.of(
+            "java.lang.Thread",
+            "java.util.ArrayList", "java.util.LinkedList", "java.util.Vector", "java.util.Stack", "java.util.ArrayDeque",
+            "java.util.PriorityQueue", "java.util.HashSet", "java.util.LinkedHashSet", "java.util.TreeSet",
+            "java.util.HashMap", "java.util.LinkedHashMap", "java.util.TreeMap", "java.util.Hashtable",
+            "java.util.concurrent.ConcurrentHashMap");
+
     private static final Set<String> BOXES = Set.of("java.lang.Integer", "java.lang.Long", "java.lang.Short", "java.lang.Byte",
             "java.lang.Character", "java.lang.Boolean", "java.lang.Double", "java.lang.Float");
 
@@ -319,11 +327,15 @@ final class JirBuilder {
                            TypeNaming naming) {
         String qname = naming.qname();
         String superclass = null;
+        String jdkSuperclass = null;
         if (kind == Decl.TypeKind.CLASS && te.getSuperclass() instanceof DeclaredType st) {
             String sn = qualifiedName(st);
             if (!sn.equals("java.lang.Object")) {
                 if (programTypes.contains(sn) || types.isSubtype(types.erasure(st), types.erasure(throwableType))) {
                     superclass = sn;
+                } else if (DELEGATING_SUPERCLASSES.contains(sn)) {
+                    // JDK のクラスの状態は、委譲先のオブジェクト（super(...) で作る）が持つ。
+                    jdkSuperclass = sn;
                 } else {
                     report(DiagnosticCode.UNSUPPORTED_OOP, ct, "extending the JDK class " + sn + " is not supported yet");
                 }
@@ -406,7 +418,7 @@ final class JirBuilder {
         out.add(new Decl.TypeDecl(naming.simpleName(), qname, pkg, kind,
                 te.getModifiers().contains(Modifier.ABSTRACT) || kind == Decl.TypeKind.INTERFACE,
                 superclass, interfaces, allSupertypes(te), outer, inner,
-                fields, methods, instanceInit, staticInit, constants, components, elements.getDocComment(te), pos(ct)));
+                fields, methods, instanceInit, staticInit, constants, components, elements.getDocComment(te), pos(ct), jdkSuperclass));
         for (ClassTree c : nested) {
             typeDecl(new TreePath(path, c), pkg, out);
         }

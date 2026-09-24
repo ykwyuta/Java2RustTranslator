@@ -102,6 +102,24 @@ public final class Lowerer {
         return new LoweredCrate(files, modules, mainPath);
     }
 
+    /** 型 ti（またはスーパークラス）が JDK のクラスを継承しているなら、委譲先（OnceCell）までのフィールドのパス。 */
+    static String jdkPath(ProgramIndex index, ProgramIndex.TypeInfo ti) {
+        StringBuilder sb = new StringBuilder();
+        ProgramIndex.TypeInfo cur = ti;
+        while (cur != null) {
+            if (cur.decl().jdkSuperclass() != null) {
+                return sb + "__jdk";
+            }
+            String sup = cur.decl().superclass();
+            if (sup == null || !index.isProgramType(sup)) {
+                return null;
+            }
+            sb.append("__super.");
+            cur = index.type(sup);
+        }
+        return null;
+    }
+
     /**
      * クラスの初期化（{@code __clinit}）が必要か: static 初期化があるか、スーパークラスが初期化を必要とする
      * （Java はクラスの初期化の前にスーパークラスを初期化する）。
@@ -309,6 +327,11 @@ public final class Lowerer {
             return sb + "__base";
         }
 
+        /** JDK のクラス（Thread・コレクション）を継承しているなら、委譲先のオブジェクトまでのパス（なければ null）。 */
+        private String jdkPath() {
+            return Lowerer.jdkPath(cx.index(), ti);
+        }
+
         /** 例外クラスなら Throwable の状態までのパス（なければ null）。 */
         private String throwablePath() {
             StringBuilder sb = new StringBuilder();
@@ -343,6 +366,9 @@ public final class Lowerer {
                 }
                 if (t.kind() == Decl.TypeKind.ENUM) {
                     fields.add(new RItem.Field("pub(crate)", "__enum", new RType("jrt::lang::enums::EnumBase")));
+                }
+                if (t.jdkSuperclass() != null) {
+                    fields.add(new RItem.Field("pub(crate)", "__jdk", new RType("std::cell::OnceCell<JObject>")));
                 }
             }
             if (t.hasOuterInstance()) {
@@ -450,6 +476,9 @@ public final class Lowerer {
                 }
                 if (t.kind() == Decl.TypeKind.ENUM) {
                     inits.add(new RExpr.FieldInit("__enum", call("jrt::lang::enums::EnumBase::new", path("name"), path("ordinal"), str(binaryName()), path(self + "::__values"))));
+                }
+                if (t.jdkSuperclass() != null) {
+                    inits.add(new RExpr.FieldInit("__jdk", call("std::cell::OnceCell::new")));
                 }
             }
             if (t.hasOuterInstance()) {
@@ -860,6 +889,8 @@ public final class Lowerer {
                 fns.add(fn("to_jstring", List.of(), jstring, Conversions.ok(recordToString())));
             } else if (enumLike()) {
                 fns.add(fn("to_jstring", List.of(), jstring, call("jrt::lang::enums::name", new RExpr.Unary("&", thisObject()))));
+            } else if (jdkPath() != null) {
+                fns.add(fn("to_jstring", List.of(), jstring, call("jrt::object::jdk_to_string", jdkCell())));
             } else if (throwablePath() != null) {
                 fns.add(fn("to_jstring", List.of(), jstring, Conversions.ok(call("jrt::lang::throwable::throwable_to_string",
                         new RExpr.MethodCall(path("self"), "class_name", List.of()), new RExpr.Unary("&", new RExpr.Field(path("self"), throwablePath()))))));
@@ -871,6 +902,9 @@ public final class Lowerer {
                         List.of(new RExpr.Unary("&", thisObject()), new RExpr.MethodCall(path("other"), "clone", List.of()))))));
             } else if (t.kind() == Decl.TypeKind.RECORD) {
                 fns.add(fn("equals", List.of(other), new RType("JResult<bool>"), Conversions.ok(recordEquals())));
+            } else if (jdkPath() != null) {
+                fns.add(fn("equals", List.of(other), new RType("JResult<bool>"), call("jrt::object::jdk_equals", jdkCell(),
+                        new RExpr.Unary("&", thisObject()), path("other"))));
             }
             ProgramIndex.MethodInfo hash = cx.hierarchy().implementation(ti, "java.lang.Object#hashCode()");
             if (hash != null) {
@@ -878,6 +912,9 @@ public final class Lowerer {
                         List.of(new RExpr.Unary("&", thisObject()))))));
             } else if (t.kind() == Decl.TypeKind.RECORD) {
                 fns.add(fn("hash_code", List.of(), new RType("JResult<i32>"), Conversions.ok(recordHash())));
+            } else if (jdkPath() != null) {
+                fns.add(fn("hash_code", List.of(), new RType("JResult<i32>"), call("jrt::object::jdk_hash_code", jdkCell(),
+                        new RExpr.Unary("&", thisObject()))));
             }
             ProgramIndex.MethodInfo cmp = cx.hierarchy().implementation(ti, "java.lang.Comparable#compareTo(java.lang.Object)");
             if (cmp != null) {
@@ -896,11 +933,19 @@ public final class Lowerer {
                 fns.add(fn("as_throwable", List.of(), new RType("Option<&jrt::lang::throwable::Throwable>"),
                         call("Some", new RExpr.Unary("&", new RExpr.Field(path("self"), throwablePath())))));
             }
+            if (jdkPath() != null) {
+                fns.add(fn("delegate", List.of(), new RType("Option<&JObject>"), new RExpr.MethodCall(
+                        new RExpr.Field(path("self"), jdkPath()), "get", List.of())));
+            }
             if (enumLike()) {
                 fns.add(fn("as_enum", List.of(), new RType("Option<&jrt::lang::enums::EnumBase>"),
                         call("Some", new RExpr.Unary("&", new RExpr.Field(path("self"), basePath().replace("__base", "__enum"))))));
             }
             return new RItem.Impl(List.of(), "jrt::Object for " + self, fns);
+        }
+
+        private RExpr jdkCell() {
+            return new RExpr.Unary("&", new RExpr.Field(path("self"), jdkPath()));
         }
 
         private MethodRef objectRef(String name, List<JType> params, JType ret) {
