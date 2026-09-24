@@ -6,14 +6,15 @@
 |---|---|
 | M0 基盤 | **完了**: Gradle マルチプロジェクト、javac → JIR、RIR とプリンタ、Cargo プロジェクト出力、テストハーネス、CI、Gradle プラグイン |
 | M1 手続き的サブセット | **完了**: fall-through する switch、switch 式、`String.format` / `printf`、可変長引数、ボクシングを含む |
-| M2 オブジェクト指向 | **ほぼ完了**（S0 表現のみ）: クラス・継承・インタフェース・enum・record・内部 / 匿名 / ローカルクラス・null・`instanceof` パターン |
-| M3 例外・ジェネリクス・ラムダ | **ほぼ完了**: 例外は `Result` で伝える（送出しうるメソッドは固定点の例外フロー解析で求める。ランタイム例外も catch できる）、try/catch/finally・try-with-resources、ジェネリクス（消去）、ラムダ・メソッド参照、主なコレクション。JUnit の変換は未着手 |
-| M4 以降 | 未着手 |
+| M2 オブジェクト指向 | **完了**（S0 表現のみ）: クラス・継承・インタフェース・enum（本体付きの定数を含む）・record・sealed・内部 / 匿名 / ローカルクラス・null・`instanceof` / record パターン、Java と同じクラスの初期化、JDK クラス（Thread・コレクション）の継承 |
+| M3 例外・ジェネリクス・ラムダ | **完了**: 例外は `Result` で伝える（送出しうるメソッドは固定点の例外フロー解析で求める。ランタイム例外も catch できる）、try/catch/finally・try-with-resources、ジェネリクス（消去）、ラムダ・メソッド参照、コレクション・ストリーム API・Optional・正規表現、JUnit 5 のテストの変換 |
+| M4 イディオム化 | 未着手 |
+| M5 規模対応・周辺機能 | 一部: スレッドと `java.util.concurrent` を決定的なスケジューラで実行する（実際の並列実行は未着手） |
 
-E2E テスト 17 件（`tests/e2e`）がすべて JVM と一致する。
+E2E テスト 25 件（`tests/e2e`）と JUnit 変換のテスト（`tests/junit`）がすべて JVM と一致する。
 
-M2・M3 の残り: 本体付きの enum 定数、record パターン、JDK クラス（例外以外）の継承、ストリーム API、
-JUnit テストの変換。
+生成コードで原理的に再現しないもの（[06-usage.md §5](06-usage.md#5-現在変換できる範囲)）: 識別ハッシュの値、
+NullPointerException の詳細メッセージ、`StackOverflowError`、プラットフォームの文字コードでの出力。
 
 各マイルストーンの完了条件は「該当カテゴリの **差分実行テスト（tests/e2e）がすべて通り、生成物が
 `cargo check` で警告なし**」とする。
@@ -59,7 +60,7 @@ JUnit テストの変換。
 ## M5: 規模対応・周辺機能
 - 複数モジュール・外部 jar 依存のあるプロジェクト、インクリメンタル変換
 - `cargo check` エラーの Java 位置への逆マッピング
-- スレッド（S4）: `Thread`, `synchronized`, `ExecutorService`, `AtomicInteger`, `ConcurrentHashMap`
+- スレッド（S4）: 実際に並列に実行する（`Arc` / `Mutex`。現在は 1 つの OS スレッドで決まった順に実行する）
 - ユーザ定義 API マッピング、`@Weak` 等の変換ヒント注釈（`j2r-annotations` jar として提供）
 - 実 OSS コーパス回帰（夜間 CI）
 

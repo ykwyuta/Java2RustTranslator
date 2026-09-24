@@ -236,6 +236,8 @@ Java の例外は Rust の `Result` で伝える。パニックは Java の例�
   （`double` の表示形式 `1.0E10` 等も `jrt` で再現）。
 - `StringBuilder` → `jrt::lang::StringBuilder`（格上げ: 非共有なら `String` + `push_str`）。
 - `switch` on String → `match s.as_str()`。
+- 正規表現（`Pattern` / `Matcher` / `String.split` など）→ `jrt::lang::regex`（Java の構文・フラグ・マッチの規則を
+  そのまま実装したバックトラックのエンジン。位置は UTF-16 単位）。
 
 ## 7. 配列
 
@@ -256,7 +258,7 @@ Java の例外は Rust の `Result` で伝える。パニックは Java の例�
 | `switch`（fall-through なし）/ switch 式 | `match` |
 | パターン `switch`（sealed） | `match` + ダウンキャスト、格上げ時は enum の `match` |
 | 三項演算子 | `if c { a } else { b }` |
-| `synchronized` | S4 の型では `jrt::monitor(&obj).lock()` のガード、単一スレッドと判定されれば除去 |
+| `synchronized` | 本体のブロックだけにする（スレッドは 1 つの OS スレッドで順に実行するため。§12） |
 
 ## 9. ラムダ・メソッド参照
 
@@ -279,11 +281,32 @@ Java の例外は Rust の `Result` で伝える。パニックは Java の例�
 
 ## 11. テストコード
 
-- JUnit 5 / 4 の `@Test` メソッド → `#[test] fn`（`tests/` 配下）。`assertEquals` 等は `jrt::junit` の関数へ。
-- `@BeforeEach` / `@AfterEach` → 各テスト関数の前後に呼び出しを生成。
-- `@ParameterizedTest` 等は v1 対象外。
+- JUnit 5 の `@Test` メソッド → テストクラスのファイルの `#[cfg(test)] mod __tests` の中の `#[test] fn`。
+  本体は `jrt::junit::run_test(名前, || ...)` で、テストごとに `X::new()` でインスタンスを作り、
+  `@BeforeAll` → `@BeforeEach` → テスト → `@AfterEach` → `@AfterAll` を呼ぶ（after は `with_after` で失敗時も実行）。
+  例外で終われば、その内容でパニックする（テストの失敗）。`@Disabled` → `#[ignore]`。
+- `Assertions.assertEquals` 等は `jrt::junit` の関数へ（`org.junit.yaml`）。失敗は JUnit と同じメッセージの
+  `org.opentest4j.AssertionFailedError`。`Assumptions` の失敗は中断（成功として数える）。
+- `@ParameterizedTest` / `@Nested` / `@RepeatedTest` は対象外。
 
-## 12. 未対応機能の扱い
+## 12. スレッドと JDK クラスの継承
+
+- スレッド（`jrt::lang::thread`）: 生成コードのオブジェクトは `Rc`、static フィールドはスレッドローカルなので、
+  Java のスレッドを OS のスレッドにはせず、1 つの OS スレッドの上の決定的なスケジューラで実行する。
+  `start()` / `submit()` / `execute()` はキューに入れ、`join()` / `sleep()` / `Future.get()` / `await()` /
+  `acquire()` などで待つときと、main の終わり（JVM が非デーモンスレッドを待つのと同じ）に、入れた順に最後まで実行する。
+  `Thread.currentThread()` は実行中のスレッドのオブジェクト、プールのスレッド名は `pool-N-thread-M`。
+  未捕捉例外は `Exception in thread "..."` を標準エラーに出してプログラムを続ける。`synchronized` は何もしない。
+- JDK のクラスの継承（`Thread`・コレクション）: 最上位のユーザーのクラスが `__jdk: OnceCell<JObject>` を持ち、
+  `super(...)` で JDK のクラスのコンストラクタのマッピングの結果（委譲先）を入れる。`Object::delegate()` が委譲先を
+  返し、ランタイムの `JObject::downcast_ref` は型が合わなければ委譲先を見る（`jrt::lang::thread::start(&worker)` や
+  `list.add(x)` がそのまま委譲先に効く）。`invoke` で名前を呼んで見つからなければ委譲先を呼ぶ。
+  JDK の型の変数を通した呼び出しで、そのメソッドを上書きしたクラスがプログラムにあれば、
+  `jrt::object::user_override` で上書きを先に探す。`toString` / `equals` / `hashCode` は、上書きしていなければ委譲先のもの
+  （`Thread` は同一性）。
+
+## 13. 未対応機能の扱い
+
 
 | 機能 | 扱い |
 |---|---|
@@ -292,4 +315,4 @@ Java の例外は Rust の `Result` で伝える。パニックは Java の例�
 | JNI (`native`) | `extern` 関数宣言の雛形を生成 |
 | `finalize`, `WeakReference`, `SoftReference` | `Drop` / `rc::Weak` に近似、`J2R-LOSSY-GC` |
 | アノテーションプロセッサ生成コード | javac に処理させた後の生成ソースを入力に含める（`-s` ディレクトリ） |
-| スレッド | v1: `Thread`/`Runnable`/`synchronized`/`ExecutorService` の基本のみ（S4）。`java.util.concurrent` の大半は後続 |
+| スレッド | 決定的なスケジューラで実行する（§12）。実際の並列実行（S4: `Arc` / `Mutex`）は後続 |
