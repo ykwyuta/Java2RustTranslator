@@ -2,6 +2,8 @@
 
 use chrono::{NaiveDate, NaiveDateTime};
 
+use crate::domain::Priority;
+
 /// todos テーブルの 1 行。MyBatis が列名（snake_case）をプロパティ（camelCase）に対応付ける。
 #[derive(Debug, Clone, Default, PartialEq, Eq, sqlx::FromRow)]
 pub struct Todo {
@@ -9,6 +11,7 @@ pub struct Todo {
     pub title: String,
     pub description: Option<String>,
     pub done: bool,
+    pub priority: Priority,
     pub due_date: Option<NaiveDate>,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,

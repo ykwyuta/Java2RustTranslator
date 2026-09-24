@@ -23,6 +23,8 @@
         <a class="button primary" th:href="@{/todos/new}">新規作成</a>
     </div>
 
+    <p class="summary" th:text="#{todos.summary(${summary.total}, ${summary.completed})}">全 0 件</p>
+
     <p th:if="${todos.isEmpty()}" class="empty">Todo はありません</p>
 
     <ul th:unless="${todos.isEmpty()}" class="todo-list">
@@ -34,6 +36,8 @@
                         th:title="${todo.done} ? '未完了に戻す' : '完了にする'"></button>
             </form>
             <div class="body">
+                <span class="priority" th:classappend="${'priority-' + todo.priority.name().toLowerCase()}"
+                      th:text="#{${'priority.' + todo.priority}}">中</span>
                 <span class="title" th:text="${todo.title}">タイトル</span>
                 <p class="description" th:if="${todo.description}" th:text="${todo.description}">説明</p>
                 <span class="due" th:if="${todo.dueDate}">
@@ -55,6 +59,13 @@
           onsubmit="return confirm('完了済みの Todo をすべて削除しますか？');">
         <button type="submit" class="danger">完了済みを削除</button>
     </form>
+
+    <section class="activities" th:unless="${activities.isEmpty()}">
+        <h2 th:text="#{activities.title}">最近の操作</h2>
+        <ul>
+            <li th:each="activity : ${activities}" th:text="#{${'activity.' + activity.action}(${activity.title})}">追加: 牛乳を買う</li>
+        </ul>
+    </section>
 </main>
 </body>
 </html>

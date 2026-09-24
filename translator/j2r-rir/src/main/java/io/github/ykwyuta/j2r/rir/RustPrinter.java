@@ -164,7 +164,7 @@ public final class RustPrinter {
                     out.append("#[").append(a).append(']');
                     newline();
                 }
-                out.append("impl ").append(im.header()).append(" {");
+                out.append(im.header().startsWith("<") ? "impl" : "impl ").append(im.header()).append(" {");
                 indent++;
                 boolean first = true;
                 for (RItem it : im.items()) {

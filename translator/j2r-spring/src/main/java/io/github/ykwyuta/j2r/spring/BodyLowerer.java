@@ -95,6 +95,10 @@ final class BodyLowerer {
         final Tail tail;
         /** Tail.COMMIT のときのトランザクションの変数名。 */
         final String tx;
+        /** conn がトランザクション（ほかのサービスの呼び出しを、このトランザクションに参加させる）。 */
+        boolean inTx;
+        /** エラーを返す呼び出しを ? ではなく unwrap にする（テスト。Java の throws Exception に当たる）。 */
+        boolean unwrapErrors;
         private final Deque<Map<String, Local>> scopes = new ArrayDeque<>();
         private final Map<String, Integer> uses = new HashMap<>();
         /** ローカル変数を変更する箇所の数（再代入・setter・&mut で渡す）。0 より大きければ let mut。 */
@@ -173,6 +177,7 @@ final class BodyLowerer {
                 case Expr.IncDec a when a.target() instanceof Expr.Local l -> ctx.mutation(l.name(), 1);
                 case Expr.Call c when c.receiver() instanceof Expr.Local l && plans.setters.containsKey(c.method().key()) ->
                         ctx.mutation(l.name(), 1);
+                case Expr.Call c when c.receiver() instanceof Expr.Local l && LibraryCalls.mutates(c.method()) -> ctx.mutation(l.name(), 1);
                 case Expr.Call c when plans.mapperFns.containsKey(c.method().key()) -> {
                     Plans.MapperFn fn = plans.mapperFns.get(c.method().key());
                     for (int i = 0; i < c.args().size() && i < fn.params().size(); i++) {
@@ -371,19 +376,31 @@ final class BodyLowerer {
     }
 
     private void localVar(Stmt.LocalVar lv, Ctx ctx, List<RStmt> out) {
+        if (lv.type() instanceof JType.ClassType zone && zone.qualifiedName().equals("java.time.ZoneId")) {
+            // タイムゾーン（Rust ではタイムゾーンのない日時を使う。Clock.fixed の引数などは使わない）
+            return;
+        }
         String rust = Naming.valueName(lv.name());
         RT type;
         RExpr init = null;
+        String key = io.github.ykwyuta.j2r.jir.DeclInfo.localKey(lv.pos(), lv.name());
         if (lv.init() != null) {
             RV v = expr(lv.init(), ctx);
-            type = v.type() instanceof RT.Null || v.type() instanceof RT.Unknown ? types.owned(lv.type(), v.type() instanceof RT.Null)
-                    : RT.owned(v.type());
+            type = v.type() instanceof RT.Null || vague(v.type()) ? types.declared(key, lv.type()) : RT.owned(v.type());
+            if (v.type() instanceof RT.Null && !(type instanceof RT.Opt)) {
+                type = new RT.Opt(type);
+            }
             init = coerce(v, type);
         } else {
-            type = types.owned(lv.type(), false);
+            type = types.declared(key, lv.type());
         }
         ctx.declare(lv.name(), rust, type);
         out.add(new RStmt.Let(rust, ctx.isMutable(lv.name()), null, init));
+    }
+
+    /** 型引数がわからない型（{@code new ArrayList<>()} など。宣言の型を使う）。 */
+    private static boolean vague(RT t) {
+        return t instanceof RT.Unknown || t instanceof RT.VecT v && vague(v.elem()) || t instanceof RT.Opt o && vague(o.inner());
     }
 
     private RExpr throwExpr(Expr exception, Ctx ctx) {
@@ -998,10 +1015,43 @@ final class BodyLowerer {
             fmt.append("{}");
             args.add(displayArg(v, part));
         }
+        inlineFormatArgs(fmt, args);
         List<RExpr> macroArgs = new ArrayList<>();
         macroArgs.add(new RExpr.Lit(rustString(fmt.toString())));
         macroArgs.addAll(args);
         return RV.of(new RExpr.Macro("format", macroArgs), RT.STR);
+    }
+
+    /** format! の引数のうち変数だけのものを書式の中に書く（{@code format!("{}", x)} → {@code format!("{x}")}）。 */
+    static void inlineFormatArgs(StringBuilder fmt, List<RExpr> args) {
+        StringBuilder out = new StringBuilder();
+        List<RExpr> rest = new ArrayList<>();
+        int arg = 0;
+        for (int i = 0; i < fmt.length(); i++) {
+            char c = fmt.charAt(i);
+            if (c == '{' && i + 1 < fmt.length() && fmt.charAt(i + 1) == '{') {
+                out.append("{{");
+                i++;
+            } else if (c == '}' && i + 1 < fmt.length() && fmt.charAt(i + 1) == '}') {
+                out.append("}}");
+                i++;
+            } else if (c == '{' && i + 1 < fmt.length() && fmt.charAt(i + 1) == '}') {
+                RExpr a = args.get(arg++);
+                if (a instanceof RExpr.Path p && p.path().matches("[a-z_][a-z0-9_]*") && !p.path().equals("self")) {
+                    out.append('{').append(p.path()).append('}');
+                } else {
+                    out.append("{}");
+                    rest.add(a);
+                }
+                i++;
+            } else {
+                out.append(c);
+            }
+        }
+        fmt.setLength(0);
+        fmt.append(out);
+        args.clear();
+        args.addAll(rest);
     }
 
     /** 文字列連結の値（Java の String.valueOf と同じ表示にする。null は "null"、enum は name()）。 */
@@ -1099,7 +1149,7 @@ final class BodyLowerer {
             args.add(coerce(expr(c.args().get(i), ctx), fn.params().get(i)));
         }
         RExpr call = new RExpr.Call(new RExpr.Path(fn.module() + "::" + fn.rustName()), args);
-        return RV.of(new RExpr.Try(new RExpr.Await(call)), fn.ret());
+        return RV.of(propagate(new RExpr.Await(call), ctx), fn.ret());
     }
 
     private RV programCall(Expr.Call c, Plans.Method plan, Ctx ctx) {
@@ -1111,6 +1161,11 @@ final class BodyLowerer {
             if (ctx.conn == null || plan.helperName() == null) {
                 return RV.of(unsupported(c.pos(), "call to " + m.name() + " needs a database connection"), plan.ret());
             }
+            name = plan.helperName();
+            args.add(new RExpr.Path(ctx.conn));
+        } else if (plan.needsConn() && ctx.inTx && ctx.conn != null && plan.helperName() != null && plans.tx.containsKey(m.key())
+                && plans.tx.get(m.key()).joins()) {
+            // ほかのサービスの @Transactional（propagation = REQUIRED など）は、呼び出し元のトランザクションに参加する。
             name = plan.helperName();
             args.add(new RExpr.Path(ctx.conn));
         }
@@ -1131,9 +1186,14 @@ final class BodyLowerer {
             call = new RExpr.Await(call);
         }
         if (plan.fallible()) {
-            return new RV(new RExpr.Try(call), plan.ret(), Place.NONE, false, true);
+            return new RV(propagate(call, ctx), plan.ret(), Place.NONE, false, !ctx.unwrapErrors);
         }
         return RV.of(call, plan.ret());
+    }
+
+    /** Result を返す呼び出し（{@code call?}、テストでは {@code call.unwrap()}）。 */
+    private static RExpr propagate(RExpr call, Ctx ctx) {
+        return ctx.unwrapErrors ? new RExpr.MethodCall(call, "unwrap", List.of()) : new RExpr.Try(call);
     }
 
     private RV newExpr(Expr.New n, Ctx ctx) {
@@ -1162,6 +1222,11 @@ final class BodyLowerer {
         }
         if (isEntityLike(role) && n.args().isEmpty()) {
             return RV.of(new RExpr.Call(new RExpr.Path(t.text(imports) + "::default"), List.of()), t);
+        }
+        if ((owner.equals("java.util.ArrayList") || owner.equals("java.util.LinkedList")) && n.args().isEmpty()) {
+            RT elem = n.type() instanceof JType.Parameterized p && !p.args().isEmpty() ? types.owned(p.args().get(0), false)
+                    : new RT.Unknown("raw List");
+            return RV.of(new RExpr.Path("Vec::new()"), new RT.VecT(elem));
         }
         return RV.of(unsupported(n.pos(), "new " + owner), t);
     }

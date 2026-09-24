@@ -5,6 +5,7 @@ import io.github.ykwyuta.j2r.jir.Decl;
 import io.github.ykwyuta.j2r.rir.RExpr;
 import io.github.ykwyuta.j2r.rir.RFile;
 import io.github.ykwyuta.j2r.rir.RItem;
+import io.github.ykwyuta.j2r.rir.RStmt;
 import io.github.ykwyuta.j2r.rir.RType;
 import java.util.ArrayList;
 import java.util.List;
@@ -69,9 +70,10 @@ final class DomainGenerator {
         if (record && copy) {
             derives.add("Copy");
         }
-        boolean defaultable = !record && kinds.stream().allMatch(k -> Set.of("VALUE", "Str", "i8", "i16", "u16", "i32", "i64", "f32", "f64",
-                "bool").contains(k));
-        if (defaultable) {
+        boolean defaultable = !record && kinds.stream().allMatch(k -> Set.of("VALUE", "ENUM", "Str", "i8", "i16", "u16", "i32", "i64", "f32",
+                "f64", "bool").contains(k));
+        List<RItem> defaultImpl = defaultable && !t.instanceInit().isEmpty() ? defaultWithInitializers(t, name, imports) : null;
+        if (defaultable && defaultImpl == null) {
             derives.add("Default");
         }
         derives.add("PartialEq");
@@ -82,6 +84,9 @@ final class DomainGenerator {
             derives.add("sqlx::FromRow");
         }
         items.add(new RItem.Struct(SpringTranslator.docs(t.javadoc()), List.of("derive(" + String.join(", ", derives) + ")"), name, fields));
+        if (defaultImpl != null) {
+            items.addAll(defaultImpl);
+        }
         List<RItem> methods = methods(t, imports);
         for (Decl.MethodDecl m : t.methods()) {
             if (m.isConstructor() && !m.params().isEmpty() && !record) {
@@ -96,6 +101,38 @@ final class DomainGenerator {
         }
     }
 
+    /**
+     * フィールドの初期化子（{@code private Priority priority = Priority.MEDIUM;}）→ その値で始まる {@code Default}。
+     * 初期化子が {@code this.f = 式;} の形でなければ null（derive する）。
+     */
+    private List<RItem> defaultWithInitializers(Decl.TypeDecl t, String name, Imports imports) {
+        java.util.Map<String, io.github.ykwyuta.j2r.jir.Expr> inits = new java.util.LinkedHashMap<>();
+        for (io.github.ykwyuta.j2r.jir.Stmt st : t.instanceInit()) {
+            if (st instanceof io.github.ykwyuta.j2r.jir.Stmt.ExprStmt es && es.expr() instanceof io.github.ykwyuta.j2r.jir.Expr.Assign a
+                    && a.target() instanceof io.github.ykwyuta.j2r.jir.Expr.FieldAccess fa
+                    && fa.receiver() instanceof io.github.ykwyuta.j2r.jir.Expr.This) {
+                inits.put(fa.name(), a.value());
+            } else {
+                tr.report(st.pos(), t.simpleName() + ": only field initializers are supported (not instance initializer blocks)");
+                return null;
+            }
+        }
+        BodyLowerer lowerer = new BodyLowerer(tr.model(), tr.types(), tr.plans(), tr.diags(), imports);
+        BodyLowerer.Ctx ctx = new BodyLowerer.Ctx(t, false, new RT.Unknown("default"), false, null, BodyLowerer.Tail.VALUE, null);
+        List<RExpr.FieldInit> fields = new ArrayList<>();
+        for (Decl.FieldDecl f : t.fields()) {
+            if (f.isStatic()) {
+                continue;
+            }
+            RExpr value = inits.containsKey(f.name()) ? lowerer.coerce(lowerer.expr(inits.get(f.name()), ctx), tr.types().field(t, f))
+                    : new RExpr.Call(new RExpr.Path("Default::default"), List.of());
+            fields.add(new RExpr.FieldInit(Naming.valueName(f.name()), value));
+        }
+        return List.of(new RItem.Impl(List.of(), "Default for " + name, List.of(new RItem.Fn(
+                List.of("フィールドの初期化子の値（初期化子のないフィールドは既定値）。"), List.of(), "", "default", List.of(), new RType("Self"),
+                new RExpr.Block(List.of(), new RExpr.StructLit("Self", fields), null, false)))));
+    }
+
     // ------------------------------------------------------------------ enum
 
     private void enumItems(Decl.TypeDecl t, String name, Imports imports, List<RItem> items) {
@@ -103,21 +140,26 @@ final class DomainGenerator {
         List<RExpr> values = new ArrayList<>();
         List<RExpr.Arm> nameArms = new ArrayList<>();
         List<RExpr.Arm> ordinalArms = new ArrayList<>();
+        List<RExpr.Arm> valueOfArms = new ArrayList<>();
         int ordinal = 0;
         for (Decl.EnumConstant c : t.enumConstants()) {
             if (!c.args().isEmpty()) {
                 tr.report(c.pos(), t.simpleName() + "." + c.name() + ": enum constants with arguments are not supported yet");
             }
             String v = BodyLowerer.variantName(c.name());
-            variants.add(new RItem.Variant(List.of(), List.of(), v));
+            // 最初の定数を既定値にする（エンティティ・フォームの Default のため。Java では null）。
+            variants.add(new RItem.Variant(List.of(), ordinal == 0 ? List.of("default") : List.of(), v));
             values.add(new RExpr.Path("Self::" + v));
             nameArms.add(new RExpr.Arm("Self::" + v, new RExpr.Lit(BodyLowerer.rustString(c.name()))));
             ordinalArms.add(new RExpr.Arm("Self::" + v, new RExpr.Lit(Integer.toString(ordinal++))));
+            valueOfArms.add(new RExpr.Arm(BodyLowerer.rustString(c.name()), new RExpr.Path("Some(Self::" + v + ")")));
         }
+        valueOfArms.add(new RExpr.Arm("_", new RExpr.Path("None")));
         if (t.fields().stream().anyMatch(f -> !f.isStatic() && !f.name().startsWith("$"))) {
             tr.report(t.pos(), t.simpleName() + ": enums with fields are not supported yet");
         }
-        items.add(new RItem.Enum(SpringTranslator.docs(t.javadoc()), List.of("derive(Debug, Clone, Copy, PartialEq, Eq, Hash)"), name, variants));
+        items.add(new RItem.Enum(SpringTranslator.docs(t.javadoc()), List.of("derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)"), name,
+                variants));
         List<RItem> methods = new ArrayList<>();
         methods.add(new RItem.Fn(List.of("すべての定数（`values()`）。"), List.of(), "pub", "values", List.of(),
                 new RType("[Self; " + values.size() + "]"), new RExpr.Block(List.of(), new RExpr.Array(values), null, false)));
@@ -125,8 +167,27 @@ final class DomainGenerator {
                 new RType("&'static str"), new RExpr.Block(List.of(), new RExpr.Match(new RExpr.Path("self"), nameArms), null, false)));
         methods.add(new RItem.Fn(List.of("定数の位置（`ordinal()`）。"), List.of(), "pub", "ordinal", List.of(new RItem.Param("self", false, null)),
                 new RType("i32"), new RExpr.Block(List.of(), new RExpr.Match(new RExpr.Path("self"), ordinalArms), null, false)));
+        methods.add(new RItem.Fn(List.of("名前の定数（`valueOf(name)`。なければ None）。"), List.of(), "pub", "value_of",
+                List.of(new RItem.Param("name", false, new RType("&str"))), new RType("Option<Self>"),
+                new RExpr.Block(List.of(), new RExpr.Match(new RExpr.Path("name"), valueOfArms), null, false)));
         methods.addAll(methods(t, imports));
         items.add(new RItem.Impl(List.of(), name, methods));
+        if (tr.dbEnums().contains(t.qualifiedName())) {
+            // MyBatis の EnumTypeHandler と同じく、列の値（文字列）を定数の名前として読む。
+            items.add(new RItem.Impl(List.of(), "sqlx::Type<sqlx::Postgres> for " + name, List.of(
+                    new RItem.Fn(List.of(), List.of(), "", "type_info", List.of(), new RType("sqlx::postgres::PgTypeInfo"),
+                            new RExpr.Block(List.of(), new RExpr.Path("<str as sqlx::Type<sqlx::Postgres>>::type_info()"), null, false)),
+                    new RItem.Fn(List.of(), List.of(), "", "compatible", List.of(new RItem.Param("ty", false, new RType("&sqlx::postgres::PgTypeInfo"))),
+                            new RType("bool"),
+                            new RExpr.Block(List.of(), new RExpr.Path("<str as sqlx::Type<sqlx::Postgres>>::compatible(ty)"), null, false)))));
+            String message = "No enum constant " + t.qualifiedName() + ".{name}";
+            items.add(new RItem.Impl(List.of(), "<'r> sqlx::Decode<'r, sqlx::Postgres> for " + name, List.of(
+                    new RItem.Fn(List.of(), List.of(), "", "decode", List.of(new RItem.Param("value", false, new RType("sqlx::postgres::PgValueRef<'r>"))),
+                            new RType("Result<Self, sqlx::error::BoxDynError>"), new RExpr.Block(List.of(
+                            new RStmt.Let("name", false, null, new RExpr.Path("<&str as sqlx::Decode<sqlx::Postgres>>::decode(value)?"))),
+                            new RExpr.Path("Self::value_of(name).ok_or_else(|| format!(" + BodyLowerer.rustString(message) + ").into())"),
+                            null, false)))));
+        }
     }
 
     // ------------------------------------------------------------------ メソッド

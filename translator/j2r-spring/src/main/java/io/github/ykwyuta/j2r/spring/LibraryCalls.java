@@ -101,6 +101,42 @@ final class LibraryCalls {
                 RT t = a.type() instanceof RT.Opt ? RT.owned(a.type()) : new RT.Opt(RT.owned(a.type()));
                 return rv(l.coerce(a, t), t);
             }
+            case "java.time.LocalDate#of/3" -> {
+                l.imports().add("chrono::NaiveDate");
+                RExpr date = new RExpr.Call(new RExpr.Path("NaiveDate::from_ymd_opt"), List.of(intArg(l, c, ctx, 0, "i32"),
+                        intArg(l, c, ctx, 1, "u32"), intArg(l, c, ctx, 2, "u32")));
+                return rv(new RExpr.MethodCall(date, "unwrap", List.of()), TypeResolver.NAIVE_DATE);
+            }
+            case "java.time.LocalDateTime#of/5", "java.time.LocalDateTime#of/6" -> {
+                if (!(c.method().paramTypes().get(1) instanceof io.github.ykwyuta.j2r.jir.JType.Primitive)) {
+                    return null;
+                }
+                l.imports().add("chrono::NaiveDate");
+                RExpr date = new RExpr.MethodCall(new RExpr.Call(new RExpr.Path("NaiveDate::from_ymd_opt"), List.of(intArg(l, c, ctx, 0, "i32"),
+                        intArg(l, c, ctx, 1, "u32"), intArg(l, c, ctx, 2, "u32"))), "unwrap", List.of());
+                RExpr time = new RExpr.MethodCall(date, "and_hms_opt", List.of(intArg(l, c, ctx, 3, "u32"), intArg(l, c, ctx, 4, "u32"),
+                        argc == 6 ? intArg(l, c, ctx, 5, "u32") : new RExpr.Lit("0")));
+                return rv(new RExpr.MethodCall(time, "unwrap", List.of()), TypeResolver.NAIVE_DATE_TIME);
+            }
+            case "java.time.Clock#fixed/2" -> {
+                // Clock.fixed(ldt.atZone(zone).toInstant(), zone)（Rust ではタイムゾーンのない日時の時計）
+                Expr instant = c.args().get(0);
+                while (instant instanceof Expr.Cast cast) {
+                    instant = cast.expr();
+                }
+                if (instant instanceof Expr.Call toInstant && toInstant.method().name().equals("toInstant")
+                        && toInstant.receiver() instanceof Expr.Call atZone && atZone.method().name().equals("atZone")) {
+                    BodyLowerer.RV ldt = l.expr(atZone.receiver(), ctx);
+                    l.imports().add("std::sync::Arc");
+                    l.imports().add("crate::clock::FixedClock");
+                    return rv(new RExpr.Call(new RExpr.Path("Arc::new"), List.of(new RExpr.Call(new RExpr.Path("FixedClock"),
+                            List.of(l.coerce(ldt, TypeResolver.NAIVE_DATE_TIME))))), TypeResolver.CLOCK);
+                }
+                return null;
+            }
+            case "java.util.List#of/0" -> {
+                return rv(new RExpr.Path("Vec::new()"), new RT.VecT(new RT.Unknown("raw List")));
+            }
             case "java.lang.String#valueOf/1" -> {
                 BodyLowerer.RV a = l.expr(c.args().get(0), ctx);
                 return rv(new RExpr.MethodCall(a.expr(), "to_string", List.of()), RT.STR);
@@ -109,6 +145,15 @@ final class LibraryCalls {
                 return null;
             }
         }
+    }
+
+    /** 整数の引数（リテラルならそのまま、それ以外は as でキャストする）。 */
+    private static RExpr intArg(BodyLowerer l, Expr.Call c, BodyLowerer.Ctx ctx, int i, String type) {
+        BodyLowerer.RV v = l.expr(c.args().get(i), ctx);
+        if (v.expr() instanceof RExpr.Lit lit && lit.text().matches("[0-9_]+")) {
+            return v.expr();
+        }
+        return new RExpr.Cast(v.expr(), new io.github.ykwyuta.j2r.rir.RType(type));
     }
 
     private static BodyLowerer.RV string(BodyLowerer l, Expr.Call c, BodyLowerer.Ctx ctx, String name, int argc) {
@@ -257,8 +302,28 @@ final class LibraryCalls {
         return switch (name + "/" + argc) {
             case "size/0" -> rv(new RExpr.Cast(call(recv.expr(), "len"), new io.github.ykwyuta.j2r.rir.RType("i32")), RT.I32);
             case "isEmpty/0" -> rv(call(recv.expr(), "is_empty"), RT.BOOL);
+            case "add/1" -> {
+                // 戻り値（常に true）は使わない前提。
+                BodyLowerer.RV arg = l.expr(c.args().get(0), ctx);
+                yield rv(new RExpr.MethodCall(recv.expr(), "push", List.of(l.coerce(arg, elem))), RT.UNIT);
+            }
+            case "get/1" -> {
+                BodyLowerer.RV index = l.expr(c.args().get(0), ctx);
+                RExpr at = new RExpr.Template(List.of(recv.expr(), "[", new RExpr.Cast(index.expr(), new io.github.ykwyuta.j2r.rir.RType("usize")), "]"));
+                yield new BodyLowerer.RV(at, elem, BodyLowerer.Place.FIELD, false, false);
+            }
+            case "contains/1" -> {
+                BodyLowerer.RV arg = l.expr(c.args().get(0), ctx);
+                yield rv(new RExpr.MethodCall(recv.expr(), "contains", List.of(new RExpr.Unary("&", l.coerce(arg, elem)))), RT.BOOL);
+            }
             default -> null;
         };
+    }
+
+    /** 受け取ったコレクションを変更するメソッド（変数を let mut にする）。 */
+    static boolean mutates(io.github.ykwyuta.j2r.jir.MethodRef m) {
+        return !m.isStatic() && List.of("java.util.List", "java.util.Collection", "java.util.ArrayList").contains(m.owner())
+                && List.of("add", "addAll", "remove", "removeIf", "clear", "set", "sort").contains(m.name());
     }
 
     private static RExpr call(RExpr recv, String method) {

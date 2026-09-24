@@ -54,9 +54,6 @@ final class FormGenerator {
     private RItem bind(Decl.TypeDecl t, Imports imports) {
         imports.add("crate::spring_web::BindingResult");
         imports.add("crate::spring_web::RequestParams");
-        if (!t.instanceInit().isEmpty()) {
-            tr.report(t.pos(), t.simpleName() + ": field initializers of forms are not supported yet (fields start with their default values)");
-        }
         List<RStmt> stmts = new ArrayList<>();
         stmts.add(new RStmt.Let("form", true, null, new RExpr.Path("Self::default()")));
         stmts.add(new RStmt.Let("result", true, null, new RExpr.Path("BindingResult::default()")));
@@ -84,6 +81,10 @@ final class FormGenerator {
                 } else if (inner instanceof RT.Prim p) {
                     imports.add("crate::spring_web::parse_number");
                     parse = new RExpr.Call(new RExpr.Path("parse_number::<" + p.name() + ">"), List.of(new RExpr.Path("v")));
+                } else if (inner instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM) {
+                    imports.add("crate::spring_web::parse_enum");
+                    parse = new RExpr.Call(new RExpr.Path("parse_enum"), List.of(new RExpr.Path("v"),
+                            new RExpr.Path(n.text(imports) + "::value_of")));
                 } else if (inner instanceof RT.Named n && n.kind() == RT.Named.Kind.VALUE && !n.name().equals("NaiveTime")) {
                     boolean date = n.name().equals("NaiveDate");
                     imports.add(date ? "crate::spring_web::parse_date" : "crate::spring_web::parse_date_time");

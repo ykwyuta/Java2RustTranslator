@@ -69,7 +69,7 @@ final class WebGenerator {
 
     /** ビュー（テンプレート）と、それに渡すモデル。 */
     record View(String name, String struct, LinkedHashMap<String, RT> attrs, List<String> flash, List<String> bindings, String template,
-                boolean truthy, boolean present) {}
+                boolean truthy, boolean present, boolean messageArg) {}
 
     /** AppState のフィールド（サービスと @Bean）。 */
     record Bean(String field, RT type, String javaType, String init) {}
@@ -79,6 +79,15 @@ final class WebGenerator {
     private final Diagnostics diags;
     private final TemplateTranslator templates;
     private final List<Handler> handlers = new ArrayList<>();
+    /** コントローラの {@code @ModelAttribute} のメソッド（そのコントローラのハンドラのモデルに入る）。 */
+    private final Map<String, List<ModelAttr>> modelAttrs = new LinkedHashMap<>();
+
+    /** {@code @ModelAttribute("priorities") Priority[] priorities()}。 */
+    private record ModelAttr(String name, Decl.MethodDecl method, RT type) {
+        String rustName() {
+            return Naming.valueName(method.name());
+        }
+    }
     private final Map<String, List<Map<String, RT>>> sites = new LinkedHashMap<>();
     private final Set<String> flashNames = new LinkedHashSet<>();
     private final Map<String, View> views = new LinkedHashMap<>();
@@ -94,6 +103,21 @@ final class WebGenerator {
         Path dir = tr.resourceDirs().stream().map(d -> d.resolve("templates")).filter(Files::isDirectory).findFirst()
                 .orElse(Path.of("templates"));
         this.templates = new TemplateTranslator(tr, dir);
+    }
+
+    /** 型 javaType の Bean（サービスか @Bean）。なければ null。 */
+    Bean bean(String javaType) {
+        return beansByType.get(javaType);
+    }
+
+    /** Beans のフィールドの数。 */
+    int configBeanCount() {
+        return configBeans.size();
+    }
+
+    /** @Configuration の @Bean（Beans のフィールド）か。 */
+    boolean isConfigBean(Bean b) {
+        return configBeans.contains(b);
     }
 
     boolean enabled() {
@@ -124,6 +148,18 @@ final class WebGenerator {
                     if (http != null && a.type().startsWith(WEB)) {
                         handlers.add(new Handler(t, m, http, join(prefix, mappingPath(a)), false, List.of(), status(info)));
                     }
+                }
+                Annotation ma = info.get(SpringModel.MODEL_ATTRIBUTE);
+                if (ma != null && !m.isStatic() && !m.isConstructor()) {
+                    if (!m.params().isEmpty()) {
+                        tr.report(m.pos(), t.simpleName() + "." + m.name() + ": @ModelAttribute methods with parameters are not supported yet");
+                        continue;
+                    }
+                    String simple = m.ref().returnType().javaName();
+                    simple = simple.substring(simple.lastIndexOf('.') + 1).replace("[]", "List");
+                    String name = annotatedName(ma, Character.toLowerCase(simple.charAt(0)) + simple.substring(1));
+                    modelAttrs.computeIfAbsent(t.qualifiedName(), k -> new ArrayList<>())
+                            .add(new ModelAttr(name, m, tr.types().returnType(m.ref())));
                 }
             }
         }
@@ -402,6 +438,13 @@ final class WebGenerator {
         if (hooks.usesRedirectParams) {
             prelude.add(new RStmt.Let("redirect_params", true, new RType("Vec<(&str, String)>"), new RExpr.Path("Vec::new()")));
         }
+        if (!h.advice() && !hooksRendered(h).isEmpty()) {
+            // @ModelAttribute のメソッドの値（Spring はハンドラの前に呼んでモデルに入れる）
+            for (ModelAttr ma : modelAttrs.getOrDefault(h.owner().qualifiedName(), List.of())) {
+                prelude.add(new RStmt.Let(modelLocal(ma.name()), false, null, new RExpr.Call(new RExpr.Path(ma.rustName()), List.of())));
+                hooks.modelScopes.getLast().put(ma.name(), ma.type());
+            }
+        }
         RExpr.Block body = lowerer.body(h.method(), ctx);
         List<RStmt> stmts = new ArrayList<>(prelude);
         stmts.addAll(body.stmts());
@@ -527,8 +570,8 @@ final class WebGenerator {
                 }
                 if (c.method().name().equals("addFlashAttribute")) {
                     flashNames.add(name);
-                    out.add(new RStmt.ExprStmt(new RExpr.Await(new RExpr.MethodCall(new RExpr.Path("flash"), "set",
-                            List.of(new RExpr.Lit(BodyLowerer.rustString(name)), value))), true));
+                    out.add(new RStmt.ExprStmt(new RExpr.MethodCall(new RExpr.Path("flash"), "set",
+                            List.of(new RExpr.Lit(BodyLowerer.rustString(name)), value)), true));
                     return true;
                 }
                 if (c.method().name().equals("addAttribute")) {
@@ -589,9 +632,7 @@ final class WebGenerator {
                 List<Expr> parts = new ArrayList<>(sc.parts());
                 parts.set(0, new Expr.Literal(s.substring("redirect:".length()), first.type(), first.pos()));
                 BodyLowerer.RV path = lowerer.expr(new Expr.StringConcat(parts, sc.type(), sc.pos()), ctx);
-                imports.add("crate::spring_web::redirect");
-                RExpr response = new RExpr.Call(new RExpr.Path("redirect"), List.of(new RExpr.Unary("&", path.expr()),
-                        new RExpr.Path(usesRedirectParams ? "&redirect_params" : "&[]")));
+                RExpr response = redirect(new RExpr.Unary("&", path.expr()));
                 return handler.advice() ? response : new RExpr.Call(new RExpr.Path("Ok"), List.of(response));
             }
             if (!(SpringTranslator.unwrapCast(value) instanceof Expr.Literal l) || !(l.value() instanceof String view)) {
@@ -599,15 +640,23 @@ final class WebGenerator {
             }
             RExpr response;
             if (view.startsWith("redirect:")) {
-                imports.add("crate::spring_web::redirect");
-                RExpr path = new RExpr.Lit(BodyLowerer.rustString(view.substring("redirect:".length())));
-                response = new RExpr.Call(new RExpr.Path("redirect"), List.of(path, new RExpr.Path(usesRedirectParams ? "&redirect_params" : "&[]")));
+                response = redirect(new RExpr.Lit(BodyLowerer.rustString(view.substring("redirect:".length()))));
             } else if (view.startsWith("forward:")) {
                 return lowerer.unsupported(value.pos(), "forward:");
             } else {
                 response = render(view);
             }
             return handler.advice() ? response : new RExpr.Call(new RExpr.Path("Ok"), List.of(response));
+        }
+
+        /** リダイレクト（フラッシュ属性を入れるハンドラは、リダイレクト先に渡すものとして保存する）。 */
+        private RExpr redirect(RExpr path) {
+            RExpr params = new RExpr.Path(usesRedirectParams ? "&redirect_params" : "&[]");
+            if (setsFlash && !handler.advice()) {
+                return new RExpr.Await(new RExpr.MethodCall(new RExpr.Path("flash"), "redirect", List.of(path, params)));
+            }
+            imports.add("crate::spring_web::redirect");
+            return new RExpr.Call(new RExpr.Path("redirect"), List.of(path, params));
         }
 
         /** ビューの構造体を作ってレスポンスにする。 */
@@ -623,7 +672,6 @@ final class WebGenerator {
                 return lowerer.unsupported(SpringTranslatorPos.of(handler), "view " + view);
             }
             imports.add("crate::views::" + v.struct());
-            imports.add("axum::response::IntoResponse");
             List<RExpr.FieldInit> fields = new ArrayList<>();
             for (Map.Entry<String, RT> a : v.attrs().entrySet()) {
                 String name = a.getKey();
@@ -654,13 +702,16 @@ final class WebGenerator {
                 fields.add(new RExpr.FieldInit(Naming.valueName(form) + "_binding",
                         new RExpr.Path(f != null ? f.binding() : "BindingResult::default()")));
             }
-            RExpr lit = new RExpr.StructLit(v.struct(), fields);
+            RExpr lit = new RExpr.Call(new RExpr.Path("render"), List.of(new RExpr.Lit(BodyLowerer.rustString(view)),
+                    new RExpr.StructLit(v.struct(), fields)));
+            imports.add("crate::spring_web::render");
             if (handler.status() != null) {
                 imports.add("axum::http::StatusCode");
+                imports.add("axum::response::IntoResponse");
                 return new RExpr.MethodCall(new RExpr.Template(List.of("(StatusCode::" + handler.status() + ", ", lit, ")")), "into_response",
                         List.of());
             }
-            return new RExpr.MethodCall(lit, "into_response", List.of());
+            return lit;
         }
 
         private RExpr flashValue(String name) {
@@ -731,7 +782,8 @@ final class WebGenerator {
             String javaName = attrs.keySet().stream().filter(a -> Naming.valueName(a).equals(form)).findFirst().orElse(form);
             bindings.add(javaName);
         }
-        views.put(view, new View(view, viewStruct(view), attrs, flash, bindings, r.text(), r.usesTruthy(), r.usesPresent()));
+        views.put(view, new View(view, viewStruct(view), attrs, flash, bindings, r.text(), r.usesTruthy(), r.usesPresent(),
+                r.usesMessageArg()));
     }
 
     private static boolean templatesUse(String text, String name) {
@@ -761,6 +813,9 @@ final class WebGenerator {
         String module = model.rustModule(t) + "::" + SpringModel.fileModule(t);
         currentImports = new Imports(module);
         List<RItem> items = new ArrayList<>();
+        for (ModelAttr ma : modelAttrs.getOrDefault(t.qualifiedName(), List.of())) {
+            items.add(modelAttrFn(t, ma));
+        }
         for (Handler h : handlers) {
             if (h.owner() == t) {
                 Lowered l = lower(h, false);
@@ -772,6 +827,16 @@ final class WebGenerator {
         all.addAll(items);
         String path = String.join("/", model.modulePath(t.packageName()));
         return new RFile((path.isEmpty() ? "" : path + "/") + SpringModel.fileModule(t) + ".rs", SpringTranslator.header(t), List.of(), all);
+    }
+
+    /** {@code @ModelAttribute} のメソッド → ハンドラが呼ぶ関数。 */
+    private RItem modelAttrFn(Decl.TypeDecl t, ModelAttr ma) {
+        BodyLowerer lowerer = new BodyLowerer(model, tr.types(), tr.plans(), diags, currentImports);
+        BodyLowerer.Ctx ctx = new BodyLowerer.Ctx(t, false, ma.type(), false, null, BodyLowerer.Tail.VALUE, null);
+        List<String> docs = new ArrayList<>(SpringTranslator.docs(ma.method().javadoc()));
+        docs.add((docs.isEmpty() ? "" : "\n") + "`@ModelAttribute(\"" + ma.name() + "\")`");
+        return new RItem.Fn(docs.stream().flatMap(d -> List.of(d.split("\n", -1)).stream()).toList(), List.of(), "", ma.rustName(),
+                List.of(), new RType(ma.type().text(currentImports)), lowerer.body(ma.method(), ctx));
     }
 
     /** @Configuration のクラス（@Bean のメソッドを関連関数にする）。 */
@@ -809,6 +874,7 @@ final class WebGenerator {
         List<RItem> items = new ArrayList<>();
         boolean truthy = false;
         boolean present = false;
+        boolean messageArg = false;
         for (View v : views.values()) {
             List<RItem.Field> fields = new ArrayList<>();
             v.attrs().forEach((name, type) -> fields.add(new RItem.Field("pub", Naming.valueName(name), new RType(type.text(imports)))));
@@ -827,9 +893,13 @@ final class WebGenerator {
             out.add(new SpringTranslator.GeneratedFile("templates/" + v.name() + ".html", v.template()));
             truthy |= v.truthy();
             present |= v.present();
+            messageArg |= v.messageArg();
         }
         if (truthy) {
             imports.add("crate::spring_web::Truthy");
+        }
+        if (messageArg) {
+            imports.add("crate::spring_web::MessageArg");
         }
         if (present) {
             imports.add("crate::spring_web::Present");
@@ -1026,8 +1096,9 @@ final class WebGenerator {
             v.flash().stream().filter(f -> !v.attrs().containsKey(f))
                     .forEach(f -> fields.add(new RExpr.FieldInit(Naming.valueName(f), new RExpr.Path("None"))));
             v.bindings().forEach(b -> fields.add(new RExpr.FieldInit(Naming.valueName(b) + "_binding", new RExpr.Path("Default::default()"))));
-            body = new RExpr.MethodCall(new RExpr.Template(List.of("(StatusCode::NOT_FOUND, ", new RExpr.StructLit(v.struct(), fields), ")")),
-                    "into_response", List.of());
+            imports.add("crate::spring_web::render");
+            body = new RExpr.MethodCall(new RExpr.Template(List.of("(StatusCode::NOT_FOUND, render(\"error/404\", ",
+                    new RExpr.StructLit(v.struct(), fields), "))")), "into_response", List.of());
         } else {
             body = new RExpr.MethodCall(new RExpr.Path("(StatusCode::NOT_FOUND, \"Not Found\")"), "into_response", List.of());
         }

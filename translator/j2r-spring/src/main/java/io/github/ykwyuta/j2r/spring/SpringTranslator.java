@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,6 +55,10 @@ public final class SpringTranslator {
     private final List<Path> resourceDirs;
     /** sqlx::FromRow を derive する型（select の結果になる型）。 */
     final Set<String> rowTypes = new HashSet<>();
+    /** resultMap（@Results）で行を対応付ける型。 */
+    final Set<String> resultMapTypes = new HashSet<>();
+    /** select の結果の列の値になる enum（1 列の値として読むもの）。 */
+    private final Set<String> scalarEnums = new HashSet<>();
     /** 生成したファイルが使う補助モジュール（clock / mybatis）。 */
     final Set<String> supportModules = new TreeSet<>();
     /** messages.properties（Spring Boot の既定と同じく UTF-8）。 */
@@ -61,10 +66,10 @@ public final class SpringTranslator {
     /** application.yml / application.properties を平らにしたもの（spring.datasource.url → 値）。 */
     private final Map<String, String> properties = new java.util.TreeMap<>();
 
-    private SpringTranslator(Decl.Program program, List<Path> resourceDirs, Diagnostics diags) {
+    private SpringTranslator(Decl.Program program, List<Path> resourceDirs, List<Path> testSources, Diagnostics diags) {
         this.diags = diags;
         this.resourceDirs = resourceDirs;
-        this.model = new SpringModel(program, diags);
+        this.model = new SpringModel(program, testSources, diags);
         this.types = new TypeResolver(model);
         try {
             this.xml = MyBatisXml.scan(resourceDirs);
@@ -127,10 +132,12 @@ public final class SpringTranslator {
      *
      * @param program      正規化済みの JIR（DesugarStringConcat を適用したもの）
      * @param resourceDirs Mapper XML と schema.sql を探すディレクトリ
+     * @param testSources  テストのソースのディレクトリ（この下の型はテストとして変換する）
      * @param crateName    生成する crate 名
      */
-    public static List<GeneratedFile> translate(Decl.Program program, List<Path> resourceDirs, String crateName, Diagnostics diags) {
-        return new SpringTranslator(program, resourceDirs, diags).run(crateName);
+    public static List<GeneratedFile> translate(Decl.Program program, List<Path> resourceDirs, List<Path> testSources, String crateName,
+                                                Diagnostics diags) {
+        return new SpringTranslator(program, resourceDirs, testSources, diags).run(crateName);
     }
 
     private List<GeneratedFile> run(String crateName) {
@@ -188,6 +195,8 @@ public final class SpringTranslator {
             registerModule(children, List.of());
             children.get(List.of()).addAll(List.of("app", "config", "views"));
         }
+        List<GeneratedFile> testFiles = new TestGenerator(this, web, crateName, schema != null).generate();
+        out.addAll(testFiles);
         for (GeneratedFile f : List.copyOf(out)) {
             for (String support : List.of("clock", "mybatis", "spring_web")) {
                 if (f.content().contains("crate::" + support + "::")) {
@@ -233,9 +242,33 @@ public final class SpringTranslator {
                 throw new UncheckedIOException(e);
             }
         }
-        out.add(new GeneratedFile("Cargo.toml", cargoToml(crateName, web.enabled())));
+        String cargo = cargoToml(crateName, web.enabled());
+        if (!testFiles.isEmpty()) {
+            cargo += "\n# 結合テスト（tests/。MockMvc に当たる）\n[dev-dependencies]\nhttp-body-util = \"0.1\"\n"
+                    + "tower = { version = \"0.5\", features = [\"util\"] }\n";
+        }
+        out.add(new GeneratedFile("Cargo.toml", cargo));
         out.add(new GeneratedFile(".gitignore", "/target\n/j2r-report.json\n"));
         out.sort(java.util.Comparator.comparing(GeneratedFile::path));
+        return out;
+    }
+
+    /** データベースの列から読む enum（sqlx::Type と sqlx::Decode を実装する）。 */
+    Set<String> dbEnums() {
+        Set<String> out = new TreeSet<>(scalarEnums);
+        Set<String> rows = new TreeSet<>(rowTypes);
+        rows.addAll(resultMapTypes);
+        for (String row : rows) {
+            Decl.TypeDecl d = model.types.get(row);
+            if (d == null) {
+                continue;
+            }
+            for (Decl.FieldDecl f : d.fields()) {
+                if (!f.isStatic() && RT.unwrapOpt(types.field(d, f)) instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM) {
+                    out.add(n.javaName());
+                }
+            }
+        }
         return out;
     }
 
@@ -308,7 +341,7 @@ public final class SpringTranslator {
                 """.formatted(Naming.crateName(crateName));
     }
 
-    private static String resource(String name) {
+    static String resource(String name) {
         try (InputStream in = SpringTranslator.class.getClassLoader().getResourceAsStream(name)) {
             if (in == null) {
                 throw new IllegalStateException("missing resource " + name);
@@ -339,9 +372,7 @@ public final class SpringTranslator {
                 planDomainMethods(t, role);
             }
         }
-        for (Decl.TypeDecl t : model.typesWith(SpringModel.Role.SERVICE)) {
-            planService(t);
-        }
+        planServices();
     }
 
     private void planAccessors(Decl.TypeDecl t) {
@@ -456,7 +487,11 @@ public final class SpringTranslator {
             plans.mapperFns.put(m.ref().key(), new Plans.MapperFn(modulePath, module, Naming.valueName(m.name()), params, ret));
             if (st != null && st.kind() == MyBatisXml.Kind.SELECT && MapperGenerator.rowType(ret) instanceof RT.Named n
                     && n.kind() != RT.Named.Kind.VALUE && n.kind() != RT.Named.Kind.ENUM) {
-                rowTypes.add(n.javaName());
+                (resultMap(t, mapper, m, st) != null ? resultMapTypes : rowTypes).add(n.javaName());
+            }
+            if (st != null && st.kind() == MyBatisXml.Kind.SELECT && MapperGenerator.rowType(ret) instanceof RT.Named n
+                    && n.kind() == RT.Named.Kind.ENUM) {
+                scalarEnums.add(n.javaName());
             }
         }
     }
@@ -467,6 +502,8 @@ public final class SpringTranslator {
             return mapper.statements().get(m.name());
         }
         DeclInfo info = model.info(DeclInfo.methodKey(m.ref()));
+        var resultMapAnnotation = info.get("org.apache.ibatis.annotations.ResultMap");
+        String resultMapId = resultMapAnnotation == null ? null : resultMapAnnotation.stringValue("value");
         for (MyBatisXml.Kind kind : MyBatisXml.Kind.values()) {
             String type = "org.apache.ibatis.annotations." + kind.name().charAt(0) + kind.name().substring(1).toLowerCase(java.util.Locale.ROOT);
             var a = info.get(type);
@@ -476,10 +513,57 @@ public final class SpringTranslator {
                 var options = info.get("org.apache.ibatis.annotations.Options");
                 String keyProperty = options != null && options.booleanValue("useGeneratedKeys", false) ? options.stringValue("keyProperty") : null;
                 String keyColumn = options == null ? null : options.stringValue("keyColumn");
-                return MyBatisXml.annotated(m.name(), kind, sql, keyProperty, keyColumn);
+                return MyBatisXml.annotated(m.name(), kind, sql, keyProperty, keyColumn, resultMapId);
             }
         }
         return null;
+    }
+
+    /** 文の結果の対応（{@code <resultMap>}・{@code @Results}・{@code @ResultMap}）。なければ null。 */
+    MyBatisXml.ResultMap resultMap(Decl.TypeDecl t, MyBatisXml.Mapper mapper, Decl.MethodDecl m, MyBatisXml.Statement st) {
+        MyBatisXml.ResultMap own = resultsAnnotation(m);
+        if (own != null) {
+            return own;
+        }
+        if (st == null || st.resultMap() == null) {
+            return null;
+        }
+        String id = st.resultMap();
+        id = id.substring(id.lastIndexOf('.') + 1);
+        if (mapper != null && mapper.resultMaps().containsKey(id)) {
+            return mapper.resultMaps().get(id);
+        }
+        for (Decl.MethodDecl other : t.methods()) {
+            MyBatisXml.ResultMap r = resultsAnnotation(other);
+            if (r != null && r.id().equals(id)) {
+                return r;
+            }
+        }
+        report(m.pos(), m.name() + ": unknown resultMap '" + st.resultMap() + "' (columns are mapped to fields by name)");
+        return null;
+    }
+
+    /** {@code @Results({@Result(property = "id", column = "todo_id"), ...})}。 */
+    private MyBatisXml.ResultMap resultsAnnotation(Decl.MethodDecl m) {
+        var a = model.info(DeclInfo.methodKey(m.ref())).get("org.apache.ibatis.annotations.Results");
+        if (a == null) {
+            return null;
+        }
+        List<MyBatisXml.ResultMapping> mappings = new ArrayList<>();
+        List<String> unsupported = new ArrayList<>();
+        Object v = a.value("value");
+        List<?> results = v instanceof List<?> l ? l : v == null ? List.of() : List.of(v);
+        for (Object r : results) {
+            if (r instanceof io.github.ykwyuta.j2r.jir.Annotation result) {
+                if (result.value("one") != null || result.value("many") != null) {
+                    unsupported.add("@Result(one / many)");
+                    continue;
+                }
+                mappings.add(new MyBatisXml.ResultMapping(result.stringValue("property"), result.stringValue("column")));
+            }
+        }
+        String id = a.stringValue("id");
+        return new MyBatisXml.ResultMap(id == null || id.isEmpty() ? m.name() + "ResultMap" : id, "", mappings, unsupported, true);
     }
 
     private void planDomainMethods(Decl.TypeDecl t, SpringModel.Role role) {
@@ -516,22 +600,29 @@ public final class SpringTranslator {
         return out;
     }
 
-    /** サービスのメソッドの解析結果。 */
-    record ServiceMethodInfo(boolean usesDb, boolean throwsError, Set<String> selfCalls, boolean earlyReturn) {}
+    /** サービスのメソッドの解析結果。otherCalls はほかのサービスのメソッドの呼び出し。 */
+    record ServiceMethodInfo(boolean usesDb, boolean throwsError, Set<String> selfCalls, Set<String> otherCalls, boolean earlyReturn) {}
 
     final Map<String, ServiceMethodInfo> serviceInfo = new LinkedHashMap<>();
 
-    private void planService(Decl.TypeDecl t) {
+    /** すべてのサービスのメソッドの形を、サービスをまたぐ呼び出し関係に沿って決める。 */
+    private void planServices() {
         Map<String, Decl.MethodDecl> methods = new LinkedHashMap<>();
-        for (Decl.MethodDecl m : t.methods()) {
-            if (!m.isConstructor() && !m.isAbstract()) {
-                methods.put(m.ref().key(), m);
+        Map<String, Decl.TypeDecl> owners = new HashMap<>();
+        for (Decl.TypeDecl t : model.typesWith(SpringModel.Role.SERVICE)) {
+            for (Decl.MethodDecl m : t.methods()) {
+                if (!m.isConstructor() && !m.isAbstract()) {
+                    methods.put(m.ref().key(), m);
+                    owners.put(m.ref().key(), t);
+                }
             }
         }
         for (Decl.MethodDecl m : methods.values()) {
             boolean[] db = {false};
             boolean[] throwsError = {false};
-            Set<String> calls = new TreeSet<>();
+            Set<String> self = new TreeSet<>();
+            Set<String> other = new TreeSet<>();
+            String owner = owners.get(m.ref().key()).qualifiedName();
             JirVisitor.walk(m.body(), s -> {
                 if (s instanceof Stmt.Throw) {
                     throwsError[0] = true;
@@ -541,14 +632,14 @@ public final class SpringTranslator {
                     if (plans.mapperFns.containsKey(c.method().key())) {
                         db[0] = true;
                     } else if (methods.containsKey(c.method().key())) {
-                        calls.add(c.method().key());
+                        (c.method().owner().equals(owner) ? self : other).add(c.method().key());
                     } else if (c.method().owner().equals("java.util.Optional") && c.method().name().equals("orElseThrow")
                             && c.args().size() == 1) {
                         throwsError[0] = true;
                     }
                 }
             });
-            serviceInfo.put(m.ref().key(), new ServiceMethodInfo(db[0], throwsError[0], calls, hasEarlyReturn(m)));
+            serviceInfo.put(m.ref().key(), new ServiceMethodInfo(db[0], throwsError[0], self, other, hasEarlyReturn(m)));
         }
         // データベースを使う・エラーを返すことを、呼び出し関係に沿って伝える。
         Set<String> needsDb = new HashSet<>();
@@ -557,12 +648,11 @@ public final class SpringTranslator {
         while (changed) {
             changed = false;
             for (Map.Entry<String, ServiceMethodInfo> e : serviceInfo.entrySet()) {
-                if (!methods.containsKey(e.getKey())) {
-                    continue;
-                }
                 ServiceMethodInfo info = e.getValue();
-                boolean db = info.usesDb() || info.selfCalls().stream().anyMatch(needsDb::contains);
-                boolean fail = db || info.throwsError() || info.selfCalls().stream().anyMatch(fallible::contains);
+                Set<String> callees = new HashSet<>(info.selfCalls());
+                callees.addAll(info.otherCalls());
+                boolean db = info.usesDb() || callees.stream().anyMatch(needsDb::contains);
+                boolean fail = db || info.throwsError() || callees.stream().anyMatch(fallible::contains);
                 if (db && needsDb.add(e.getKey())) {
                     changed = true;
                 }
@@ -571,19 +661,46 @@ public final class SpringTranslator {
                 }
             }
         }
+        // トランザクションの属性
+        for (Decl.MethodDecl m : methods.values()) {
+            plans.tx.put(m.ref().key(), txAttributes(owners.get(m.ref().key()), m));
+        }
         Set<String> calledInternally = new HashSet<>();
-        for (String key : methods.keySet()) {
-            calledInternally.addAll(serviceInfo.get(key).selfCalls());
+        Set<String> calledExternally = new HashSet<>();
+        for (ServiceMethodInfo info : serviceInfo.values()) {
+            calledInternally.addAll(info.selfCalls());
+            calledExternally.addAll(info.otherCalls());
+        }
+        // 呼び出し元のトランザクションの中で動くか（自己呼び出しはプロキシを通らないので、呼び出し元と同じ）。
+        Map<String, Boolean> inTx = new HashMap<>();
+        methods.keySet().forEach(k -> inTx.put(k, true));
+        changed = true;
+        while (changed) {
+            changed = false;
+            for (Map.Entry<String, Decl.MethodDecl> e : methods.entrySet()) {
+                String key = e.getKey();
+                boolean entry = e.getValue().isPrivate() || plans.tx.get(key).begins();
+                boolean value = entry && serviceInfo.entrySet().stream().filter(x -> x.getValue().selfCalls().contains(key))
+                        .allMatch(x -> inTx.get(x.getKey()));
+                if (value != inTx.get(key)) {
+                    inTx.put(key, value);
+                    changed = true;
+                }
+            }
         }
         for (Decl.MethodDecl m : methods.values()) {
             String key = m.ref().key();
             boolean db = needsDb.contains(key);
             String name = Naming.valueName(m.name());
+            Plans.Tx tx = plans.tx.get(key);
+            plans.tx.put(key, new Plans.Tx(tx.begins(), tx.propagation(), inTx.get(key), calledExternally.contains(key),
+                    tx.commitOnError()));
             String helper = null;
             if (db) {
                 if (m.isPrivate()) {
                     helper = name;
-                } else if (calledInternally.contains(key) || serviceInfo.get(key).earlyReturn()) {
+                } else if (calledInternally.contains(key) || calledExternally.contains(key) || serviceInfo.get(key).earlyReturn()
+                        || !tx.commitOnError().isEmpty()) {
                     helper = name + "_in";
                 }
             }
@@ -591,6 +708,75 @@ public final class SpringTranslator {
                     m.isStatic() ? Plans.SelfKind.NONE : Plans.SelfKind.REF));
         }
     }
+
+    /** {@code @Transactional}（メソッド、なければクラス）の propagation と、ロールバックしない例外。 */
+    private Plans.Tx txAttributes(Decl.TypeDecl owner, Decl.MethodDecl m) {
+        var a = model.info(DeclInfo.methodKey(m.ref())).get(SpringModel.TRANSACTIONAL);
+        if (a == null) {
+            a = model.info(DeclInfo.typeKey(owner.qualifiedName())).get(SpringModel.TRANSACTIONAL);
+        }
+        if (a == null || m.isPrivate()) {
+            return new Plans.Tx(false, a == null ? null : "REQUIRED", false, false, List.of());
+        }
+        String propagation = a.stringValue("propagation") == null ? "REQUIRED" : a.stringValue("propagation");
+        boolean begins = !List.of("SUPPORTS", "NOT_SUPPORTED", "NEVER").contains(propagation);
+        if (propagation.equals("NESTED") || propagation.equals("MANDATORY") || propagation.equals("NEVER")) {
+            report(m.pos(), owner.simpleName() + "." + m.name() + ": propagation = " + propagation + " is translated like "
+                    + (propagation.equals("NEVER") ? "NOT_SUPPORTED" : "REQUIRED"));
+        }
+        Set<String> rollbackFor = classes(a.value("rollbackFor"));
+        Set<String> noRollbackFor = classes(a.value("noRollbackFor"));
+        List<String> commit = new ArrayList<>();
+        for (String ex : new TreeSet<>(plans.errors.keySet())) {
+            if (!rollsBack(ex, rollbackFor, noRollbackFor)) {
+                commit.add(ex);
+            }
+        }
+        return new Plans.Tx(begins, propagation, false, false, commit);
+    }
+
+    private static Set<String> classes(Object v) {
+        Set<String> out = new HashSet<>();
+        if (v instanceof List<?> l) {
+            l.forEach(x -> out.add(x.toString()));
+        } else if (v != null) {
+            out.add(v.toString());
+        }
+        return out;
+    }
+
+    /** Spring の既定（RuntimeException と Error はロールバック、検査例外はコミット）と rollbackFor / noRollbackFor の規則。 */
+    private boolean rollsBack(String exception, Set<String> rollbackFor, Set<String> noRollbackFor) {
+        String c = exception;
+        while (c != null) {
+            if (noRollbackFor.contains(c)) {
+                return false;
+            }
+            if (rollbackFor.contains(c)) {
+                return true;
+            }
+            switch (c) {
+                case "java.lang.RuntimeException", "java.lang.Error" -> {
+                    return true;
+                }
+                case "java.lang.Exception", "java.lang.Throwable" -> {
+                    return false;
+                }
+                default -> { }
+            }
+            Decl.TypeDecl d = model.types.get(c);
+            c = d != null ? d.superclass() : JDK_SUPERCLASSES.get(c);
+        }
+        return true;
+    }
+
+    private static final Map<String, String> JDK_SUPERCLASSES = Map.ofEntries(
+            Map.entry("java.lang.IllegalArgumentException", "java.lang.RuntimeException"),
+            Map.entry("java.lang.IllegalStateException", "java.lang.RuntimeException"),
+            Map.entry("java.lang.UnsupportedOperationException", "java.lang.RuntimeException"),
+            Map.entry("java.util.NoSuchElementException", "java.lang.RuntimeException"),
+            Map.entry("java.io.IOException", "java.lang.Exception"),
+            Map.entry("java.io.UncheckedIOException", "java.lang.RuntimeException"));
 
     /** 最後の文以外に return がある（本体をトランザクションの中にそのまま展開できない）。 */
     private static boolean hasEarlyReturn(Decl.MethodDecl m) {

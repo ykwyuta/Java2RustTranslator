@@ -30,6 +30,14 @@
             <input type="date" id="dueDate" name="dueDate" value="{% if let Some(rejected) = todo_form_binding.rejected_value("dueDate") %}{{ rejected }}{% else %}{% if let Some(value3) = todo_form.due_date %}{{ value3.format("%Y-%m-%d") }}{% endif %}{% endif %}"{% if todo_form_binding.has_field_errors("dueDate") %} class="invalid"{% endif %}>
             {% for err3 in todo_form_binding.field_errors("dueDate") %}<p class="error">{{ err3 }}</p>{% endfor %}
         </div>
+        <div class="field">
+            <label for="priority">優先度</label>
+            <select id="priority" name="priority"{% if todo_form_binding.has_field_errors("priority") %} class="invalid"{% endif %}>
+                <option value="">--</option>
+                {% for p in priorities %}<option value="{{ p.name() }}"{% if let Some(selected) = todo_form.priority %}{% if selected.name() == p.name() %} selected="selected"{% endif %}{% endif %}>{% match p.name() %}{% when "HIGH" %}高{% when "LOW" %}低{% when "MEDIUM" %}中{% else %}??priority.{{ p.name() }}??{% endmatch %}</option>{% endfor %}
+            </select>
+            {% for err4 in todo_form_binding.field_errors("priority") %}<p class="error">{{ err4 }}</p>{% endfor %}
+        </div>
         {% if todo_id.is_some() %}<div class="field checkbox">
             <label><input type="checkbox" id="done1" name="done" value="true"{% if todo_form.done %} checked="checked"{% endif %}><input type="hidden" name="_done" value="on"/> 完了</label>
         </div>{% endif %}

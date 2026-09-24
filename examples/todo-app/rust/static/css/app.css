@@ -114,3 +114,27 @@ button, .button {
 .todo-form .invalid { border-color: var(--danger); }
 .todo-form .error { margin: 0; color: var(--danger); font-size: 0.9em; }
 .todo-form .buttons { display: flex; gap: 8px; }
+
+.summary { color: var(--muted); }
+
+.priority {
+    margin-right: 6px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 0.8em;
+    background: var(--bg);
+    border: 1px solid var(--border);
+}
+
+.priority-high { border-color: var(--danger); color: var(--danger); }
+.priority-low { color: var(--muted); }
+
+select {
+    font: inherit;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.activities { margin-top: 24px; color: var(--muted); }
+.activities h2 { font-size: 1em; }

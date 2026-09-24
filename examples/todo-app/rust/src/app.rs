@@ -17,8 +17,8 @@ use crate::ClockConfig;
 use crate::clock::Clock;
 use crate::config::AppConfig;
 use crate::error::Error;
-use crate::service::TodoService;
-use crate::spring_web::BadRequest;
+use crate::service::{ActivityService, TodoService};
+use crate::spring_web::{BadRequest, render};
 use crate::views::Error404View;
 use crate::web::{global_exception_handler, home_controller, todo_controller};
 
@@ -45,15 +45,18 @@ impl Default for Beans {
 #[derive(Clone)]
 pub struct AppState {
     pub clock: Arc<dyn Clock>,
+    pub activity_service: ActivityService,
     pub todo_service: TodoService,
 }
 
 impl AppState {
     pub fn new(pool: PgPool, beans: Beans) -> Self {
         let clock = beans.clock;
-        let todo_service = TodoService::new(pool.clone(), clock.clone());
+        let activity_service = ActivityService::new(pool.clone(), clock.clone());
+        let todo_service = TodoService::new(pool.clone(), activity_service.clone(), clock.clone());
         Self {
             clock,
+            activity_service,
             todo_service,
         }
     }
@@ -89,9 +92,9 @@ pub fn app(state: AppState) -> Router {
 
 /// どのルートにも当たらないリクエスト（Spring Boot の既定のエラーページ templates/error/404.html）。
 async fn not_found() -> Response {
-    (StatusCode::NOT_FOUND, Error404View {
+    (StatusCode::NOT_FOUND, render("error/404", Error404View {
         message: None,
-    }).into_response()
+    })).into_response()
 }
 
 /// DataSource（HikariCP）の作成と、schema.sql（spring.sql.init.mode=always）の実行。

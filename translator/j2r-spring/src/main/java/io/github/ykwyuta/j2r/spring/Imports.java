@@ -13,8 +13,18 @@ final class Imports {
     /** このファイル自身のモジュールパス（自分の中の型は use しない）。 */
     private final String self;
 
+    /** テストのファイル（crate:: を crate 名にする）なら crate 名。 */
+    private String crateName;
+
     Imports(String selfModule) {
         this.self = selfModule;
+    }
+
+    /** 結合テスト（tests/）のファイルの use。crate:: で始まるパスを crate 名で書く。 */
+    static Imports forTests(String crateName) {
+        Imports i = new Imports("tests");
+        i.crateName = crateName;
+        return i;
     }
 
     /** このファイルで定義する名前（同じ名前を use しない）。 */
@@ -48,13 +58,16 @@ final class Imports {
         for (Map.Entry<String, TreeSet<String>> e : byParent.entrySet()) {
             String parent = e.getKey();
             TreeSet<String> names = e.getValue();
+            if (crateName != null && (parent.equals("crate") || parent.startsWith("crate::"))) {
+                parent = crateName + parent.substring("crate".length());
+            }
             String path = parent.isEmpty() ? names.first()
                     : names.size() == 1 ? parent + "::" + names.first()
                     : parent + "::{" + String.join(", ", names) + "}";
             RItem use = new RItem.Use(List.of(), path);
             if (parent.startsWith("std") || parent.startsWith("core")) {
                 std.add(use);
-            } else if (parent.startsWith("crate")) {
+            } else if (parent.startsWith("crate") || crateName != null && (parent.startsWith(crateName) || parent.startsWith("mock_mvc"))) {
                 crate.add(use);
             } else {
                 external.add(use);

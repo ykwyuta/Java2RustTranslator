@@ -9,6 +9,7 @@ use axum::http::request::Parts;
 use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 
 /// 400 Bad Request（パラメータの型変換・必須パラメータの欠落）。
@@ -68,27 +69,67 @@ impl<S: Send + Sync> FromRequest<S> for RequestParams {
 }
 
 const FLASH_KEY: &str = "j2r.flash";
+/// フラッシュ属性を残しておく時間（Spring の FlashMapManager の既定と同じ 180 秒）。
+const FLASH_TIMEOUT_SECS: u64 = 180;
 
-/// フラッシュ属性（`RedirectAttributes#addFlashAttribute` で入れ、リダイレクト先の次のリクエストで 1 回だけ読む）。
-/// 取り出すときにセッションから消す。
+/// リダイレクト先に渡すフラッシュ属性（Spring の FlashMap）。リダイレクト先のパスとパラメータが一致するリクエストで取り出す。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct FlashMap {
+    path: String,
+    params: Vec<(String, String)>,
+    attrs: HashMap<String, String>,
+    expires: u64,
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// フラッシュ属性（`RedirectAttributes#addFlashAttribute` で入れ、リダイレクト先のリクエストで 1 回だけ読む）。
 pub struct Flash {
     session: Session,
     incoming: HashMap<String, String>,
     outgoing: HashMap<String, String>,
 }
 
+/// テストで確かめるための、リダイレクトのレスポンスに付けたフラッシュ属性（レスポンスの extensions）。
+#[derive(Debug, Clone, Default)]
+pub struct FlashAttributes(pub HashMap<String, String>);
+
 impl Flash {
-    /// 前のリクエストで入れられたフラッシュ属性。
+    /// このリクエストに渡されたフラッシュ属性。
     pub fn get(&self, name: &str) -> Option<String> {
         self.incoming.get(name).cloned()
     }
 
-    /// 次のリクエストに渡すフラッシュ属性を入れる。
-    pub async fn set(&mut self, name: &str, value: String) {
+    /// リダイレクト先に渡すフラッシュ属性を入れる。
+    pub fn set(&mut self, name: &str, value: String) {
         self.outgoing.insert(name.to_string(), value);
-        if let Err(e) = self.session.insert(FLASH_KEY, &self.outgoing).await {
+    }
+
+    /// `"redirect:/path"`。フラッシュ属性があれば、リダイレクト先（パスとパラメータ）に渡すものとしてセッションに入れる。
+    pub async fn redirect(self, path: &str, params: &[(&str, String)]) -> Response {
+        let mut response = redirect(path, params);
+        if self.outgoing.is_empty() {
+            return response;
+        }
+        let (target, query) = path.split_once('?').unwrap_or((path, ""));
+        let mut target_params: Vec<(String, String)> = serde_urlencoded::from_str(query).unwrap_or_default();
+        target_params.extend(params.iter().map(|(k, v)| (k.to_string(), v.clone())));
+        let mut maps: Vec<FlashMap> = self.session.get(FLASH_KEY).await.ok().flatten().unwrap_or_default();
+        maps.push(FlashMap {
+            path: target.to_string(),
+            params: target_params,
+            attrs: self.outgoing.clone(),
+            expires: now_secs() + FLASH_TIMEOUT_SECS,
+        });
+        if let Err(e) = self.session.insert(FLASH_KEY, &maps).await {
             tracing::error!("failed to store flash attributes: {e}");
         }
+        response.extensions_mut().insert(FlashAttributes(self.outgoing));
+        response
     }
 }
 
@@ -97,9 +138,65 @@ impl<S: Send + Sync> FromRequestParts<S> for Flash {
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let session = Session::from_request_parts(parts, state).await?;
-        let incoming = session.remove::<HashMap<String, String>>(FLASH_KEY).await.ok().flatten().unwrap_or_default();
-        Ok(Self { session, incoming, outgoing: HashMap::new() })
+        let mut maps: Vec<FlashMap> = session.get(FLASH_KEY).await.ok().flatten().unwrap_or_default();
+        let count = maps.len();
+        let now = now_secs();
+        maps.retain(|m| m.expires > now);
+        // パスとパラメータが一致するもののうち、パラメータの多いもの（Spring の FlashMap の順序）
+        let path = percent_decode(parts.uri.path());
+        let query: Vec<(String, String)> = parts.uri.query().and_then(|q| serde_urlencoded::from_str(q).ok()).unwrap_or_default();
+        let found = maps
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.path == path && m.params.iter().all(|p| query.contains(p)))
+            .max_by_key(|(i, m)| (m.params.len(), std::cmp::Reverse(*i)))
+            .map(|(i, _)| i);
+        let incoming = found.map(|i| maps.remove(i).attrs).unwrap_or_default();
+        if maps.len() != count {
+            let result = if maps.is_empty() {
+                session.remove::<Vec<FlashMap>>(FLASH_KEY).await.map(|_| ())
+            } else {
+                session.insert(FLASH_KEY, &maps).await
+            };
+            if let Err(e) = result {
+                tracing::error!("failed to update flash attributes: {e}");
+            }
+        }
+        Ok(Self {
+            session,
+            incoming,
+            outgoing: HashMap::new(),
+        })
     }
+}
+
+fn percent_decode(path: &str) -> String {
+    let bytes = path.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%'
+            && let Some(Ok(b)) = path.get(i + 1..i + 3).map(|hex| u8::from_str_radix(hex, 16))
+        {
+            out.push(b);
+            i += 3;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// ビュー名（テンプレートの名前）。テストで確かめるため、レスポンスの extensions に入れる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ViewName(pub &'static str);
+
+/// ビュー（askama のテンプレート）をレスポンスにする。
+pub fn render(view: &'static str, template: impl IntoResponse) -> Response {
+    let mut response = template.into_response();
+    response.extensions_mut().insert(ViewName(view));
+    response
 }
 
 /// `"redirect:/path"`（Spring MVC と同じ 302 Found）。params は `RedirectAttributes#addAttribute` の値。
@@ -192,6 +289,14 @@ pub fn parse_date_time(value: &str, format: &str) -> Result<Option<chrono::Naive
     chrono::NaiveDateTime::parse_from_str(value, format).map(Some).map_err(|_| TypeMismatch)
 }
 
+/// enum への変換（Spring の StringToEnumConverterFactory。空文字列は null、それ以外は前後の空白を除いた名前）。
+pub fn parse_enum<T>(value: &str, value_of: fn(&str) -> Option<T>) -> Result<Option<T>, TypeMismatch> {
+    if value.is_empty() {
+        return Ok(None);
+    }
+    value_of(value.trim()).map(Some).ok_or(TypeMismatch)
+}
+
 /// `@NotBlank`
 pub fn not_blank(value: Option<&str>) -> bool {
     value.is_some_and(|v| !v.trim().is_empty())
@@ -248,6 +353,59 @@ macro_rules! truthy_number {
 }
 
 truthy_number!(i8, i16, i32, i64, u16, u64, usize, f32, f64);
+
+/// メッセージ（`#{key(${n})}`）の引数の表示。java.text.MessageFormat と同じく、数値は 3 桁ごとに `,` で区切る。
+pub trait MessageArg {
+    fn message_arg(&self) -> String;
+}
+
+macro_rules! message_arg_integer {
+    ($($t:ty),*) => {
+        $(impl MessageArg for $t {
+            fn message_arg(&self) -> String {
+                group_digits(&self.to_string())
+            }
+        })*
+    };
+}
+
+message_arg_integer!(i8, i16, i32, i64, u16, u64, usize);
+
+impl MessageArg for f64 {
+    /// 小数は 3 桁まで（NumberFormat の既定）。
+    fn message_arg(&self) -> String {
+        let text = format!("{self:.3}");
+        let text = text.trim_end_matches('0').trim_end_matches('.');
+        match text.split_once('.') {
+            Some((int, frac)) => format!("{}.{frac}", group_digits(int)),
+            None => group_digits(text),
+        }
+    }
+}
+
+impl MessageArg for f32 {
+    fn message_arg(&self) -> String {
+        f64::from(*self).message_arg()
+    }
+}
+
+impl<T: MessageArg + ?Sized> MessageArg for &T {
+    fn message_arg(&self) -> String {
+        (**self).message_arg()
+    }
+}
+
+fn group_digits(digits: &str) -> String {
+    let (sign, digits) = digits.strip_prefix('-').map_or(("", digits), |d| ("-", d));
+    let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+    for (i, c) in digits.chars().enumerate() {
+        if i > 0 && (digits.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(c);
+    }
+    format!("{sign}{out}")
+}
 
 /// SpEL の Elvis 演算子（`a ?: b`）は null と空文字列を「値がない」とみなす。
 pub trait Present {

@@ -40,7 +40,29 @@ final class Plans {
         }
     }
 
+    /**
+     * サービスのメソッドのトランザクション。
+     *
+     * @param begins        公開する版がトランザクションを始める（propagation が SUPPORTS・NOT_SUPPORTED・NEVER でない @Transactional）
+     * @param propagation   {@code @Transactional} の propagation（@Transactional がなければ null）
+     * @param inTx          本体がいつもトランザクションの中で動く（ほかのサービスを呼ぶとき、そのトランザクションに参加させる）
+     * @param calledByOther ほかのサービスから呼ばれる（接続を受け取る版を crate の中に公開する）
+     * @param commitOnError 投げてもロールバックしない例外（検査例外・noRollbackFor）
+     */
+    record Tx(boolean begins, String propagation, boolean inTx, boolean calledByOther, List<String> commitOnError) {
+        Tx {
+            commitOnError = List.copyOf(commitOnError);
+        }
+
+        /** 呼び出し元のトランザクションに参加する（REQUIRES_NEW・NOT_SUPPORTED・NEVER 以外）。 */
+        boolean joins() {
+            return propagation == null || !List.of("REQUIRES_NEW", "NOT_SUPPORTED", "NEVER").contains(propagation);
+        }
+    }
+
     final Map<String, Method> methods = new HashMap<>();
+    /** サービスのメソッドのトランザクション。 */
+    final Map<String, Tx> tx = new HashMap<>();
     final Map<String, MapperFn> mapperFns = new HashMap<>();
     /** 例外クラスの完全修飾名 → バリアント。 */
     final Map<String, ErrorVariant> errors = new HashMap<>();

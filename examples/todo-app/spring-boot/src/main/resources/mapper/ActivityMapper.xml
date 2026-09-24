@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.todo.mapper.ActivityMapper">
+
+    <!-- 列名がプロパティ名と対応しないもの（activity_id・todo_title）を resultMap で対応付ける。
+         ほかの列（created_at など）は map-underscore-to-camel-case の自動マッピング。 -->
+    <resultMap id="activityResultMap" type="Activity">
+        <id property="id" column="activity_id"/>
+        <result property="todoId" column="todo_id"/>
+        <result property="action" column="action"/>
+        <result property="title" column="todo_title"/>
+    </resultMap>
+
+    <select id="findRecent" resultMap="activityResultMap">
+        SELECT id AS activity_id, todo_id, action, title AS todo_title, created_at
+        FROM activities
+        ORDER BY id DESC
+        LIMIT #{limit}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO activities (todo_id, action, title, created_at)
+        VALUES (#{todoId}, #{action}, #{title}, #{createdAt})
+    </insert>
+
+    <insert id="insertAll">
+        INSERT INTO activities (todo_id, action, title, created_at)
+        VALUES
+        <foreach collection="activities" item="a" separator=",">
+            (#{a.todoId}, #{a.action}, #{a.title}, #{a.createdAt})
+        </foreach>
+    </insert>
+</mapper>

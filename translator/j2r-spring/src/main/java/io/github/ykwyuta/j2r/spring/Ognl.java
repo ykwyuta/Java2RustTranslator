@@ -10,7 +10,8 @@ import java.util.List;
  * or   := and (("or" | "||") and)*
  * and  := not (("and" | "&amp;&amp;") not)*
  * not  := ("not" | "!") not | cmp
- * cmp  := primary (("==" | "!=" | "&lt;" | "&gt;" | "&lt;=" | "&gt;=" | "eq" | "neq" | "lt" | "gt" | "lte" | "gte") primary)?
+ * cmp  := add (("==" | "!=" | "&lt;" | "&gt;" | "&lt;=" | "&gt;=" | "eq" | "neq" | "lt" | "gt" | "lte" | "gte") add)?
+ * add  := primary ("+" primary)*
  * primary := "null" | "true" | "false" | 数値 | '文字列' | "文字列" | "(" or ")" | 名前 ("." 名前 ("(" ")")?)*
  * </pre>
  */
@@ -25,6 +26,9 @@ final class Ognl {
 
     /** op は Java / Rust の記法（==, !=, <, >, <=, >=）。 */
     record Compare(String op, Node left, Node right) implements Node {}
+
+    /** {@code a + b}（{@code <bind>} の文字列の連結）。 */
+    record Add(Node left, Node right) implements Node {}
 
     record NullLit() implements Node {}
 
@@ -99,18 +103,26 @@ final class Ognl {
     }
 
     private Node cmp() throws ParseException {
-        Node left = primary();
+        Node left = add();
         String[][] ops = {{"==", "=="}, {"!=", "!="}, {"<=", "<="}, {">=", ">="}, {"<", "<"}, {">", ">"}};
         for (String[] op : ops) {
             if (symbol(op[0])) {
-                return new Compare(op[1], left, primary());
+                return new Compare(op[1], left, add());
             }
         }
         String[][] words = {{"eq", "=="}, {"neq", "!="}, {"lte", "<="}, {"gte", ">="}, {"lt", "<"}, {"gt", ">"}};
         for (String[] op : words) {
             if (word(op[0])) {
-                return new Compare(op[1], left, primary());
+                return new Compare(op[1], left, add());
             }
+        }
+        return left;
+    }
+
+    private Node add() throws ParseException {
+        Node left = primary();
+        while (symbol("+")) {
+            left = new Add(left, primary());
         }
         return left;
     }

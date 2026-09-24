@@ -57,6 +57,7 @@ public class J2rPlugin implements Plugin<Project> {
             t.getMode().set(ext.getMode());
             t.getFramework().set(ext.getFramework());
             t.getResourceDirs().from(ext.getResourceDirs());
+            t.getTestSources().from(ext.getTestSources());
             t.getCargoCheck().set(ext.getCargoCheck());
             t.getOutputDir().set(ext.getOutputDir());
             t.getLauncher().convention(toolchains.launcherFor(spec -> spec.getLanguageVersion().set(JavaLanguageVersion.of(21))));
@@ -66,7 +67,13 @@ public class J2rPlugin implements Plugin<Project> {
             SourceSet main = project.getExtensions().getByType(SourceSetContainer.class).getByName(SourceSet.MAIN_SOURCE_SET_NAME);
             ext.getSources().from(main.getJava().getSourceDirectories());
             ext.getResourceDirs().from(main.getResources().getSourceDirectories());
-            translate.configure(t -> t.getCompileClasspath().from(main.getCompileClasspath()));
+            SourceSet test = project.getExtensions().getByType(SourceSetContainer.class).getByName(SourceSet.TEST_SOURCE_SET_NAME);
+            ext.getTestSources().from(test.getJava().getSourceDirectories());
+            translate.configure(t -> {
+                t.getCompileClasspath().from(main.getCompileClasspath());
+                // テストのソースも一緒に型検査するので、main の出力（クラス）を除いたテストのクラスパス
+                t.getTestCompileClasspath().from(test.getCompileClasspath().minus(main.getOutput()));
+            });
         });
 
         registerCargo(project, ext, translate, "cargoCheck", "Runs 'cargo check' on the translated project.", "check");

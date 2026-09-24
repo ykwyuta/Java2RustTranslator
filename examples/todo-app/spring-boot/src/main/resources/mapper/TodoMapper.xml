@@ -3,7 +3,7 @@
 <mapper namespace="com.example.todo.mapper.TodoMapper">
 
     <sql id="columns">
-        id, title, description, done, due_date, created_at, updated_at
+        id, title, description, done, priority, due_date, created_at, updated_at
     </sql>
 
     <select id="findAll" resultType="Todo">
@@ -34,8 +34,8 @@
     </select>
 
     <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
-        INSERT INTO todos (title, description, done, due_date, created_at, updated_at)
-        VALUES (#{title}, #{description}, #{done}, #{dueDate}, #{createdAt}, #{updatedAt})
+        INSERT INTO todos (title, description, done, priority, due_date, created_at, updated_at)
+        VALUES (#{title}, #{description}, #{done}, #{priority}, #{dueDate}, #{createdAt}, #{updatedAt})
     </insert>
 
     <update id="update">
@@ -43,6 +43,7 @@
         SET title = #{title},
             description = #{description},
             done = #{done},
+            priority = #{priority},
             due_date = #{dueDate},
             updated_at = #{updatedAt}
         WHERE id = #{id}
@@ -52,7 +53,11 @@
         DELETE FROM todos WHERE id = #{id}
     </delete>
 
-    <delete id="deleteCompleted">
-        DELETE FROM todos WHERE done = TRUE
+    <delete id="deleteByIds">
+        DELETE FROM todos
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator=", " close=")">
+            #{id}
+        </foreach>
     </delete>
 </mapper>

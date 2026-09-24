@@ -21,6 +21,7 @@ import java.util.Objects;
  * @param cargoCheck      出力後に cargo check を実行するか
  * @param framework       入力が使うフレームワーク（SPRING なら Spring Boot + MyBatis の変換規則を使う）
  * @param resourceDirs    リソースのディレクトリ（MyBatis の Mapper XML・schema.sql を探す。framework が SPRING のとき）
+ * @param testSources     テストの Java ソース（framework が SPRING のとき、MockMvc の結合テストを Rust のテストにする）
  */
 public record TranslatorOptions(
         List<Path> sources,
@@ -35,7 +36,8 @@ public record TranslatorOptions(
         int javaRelease,
         boolean cargoCheck,
         Framework framework,
-        List<Path> resourceDirs) {
+        List<Path> resourceDirs,
+        List<Path> testSources) {
 
     public enum Mode { FAITHFUL, IDIOMATIC }
 
@@ -52,6 +54,7 @@ public record TranslatorOptions(
         mappingDirs = List.copyOf(mappingDirs);
         framework = framework == null ? Framework.NONE : framework;
         resourceDirs = resourceDirs == null ? List.of() : List.copyOf(resourceDirs);
+        testSources = testSources == null ? List.of() : List.copyOf(testSources);
     }
 
     public static Builder builder() {
@@ -63,6 +66,7 @@ public record TranslatorOptions(
         private final List<Path> classpath = new ArrayList<>();
         private final List<Path> mappingDirs = new ArrayList<>();
         private final List<Path> resourceDirs = new ArrayList<>();
+        private final List<Path> testSources = new ArrayList<>();
         private Framework framework = Framework.NONE;
         private Path outputDir;
         private String crateName = "translated";
@@ -86,10 +90,11 @@ public record TranslatorOptions(
         public Builder cargoCheck(boolean b) { cargoCheck = b; return this; }
         public Builder framework(Framework f) { framework = f; return this; }
         public Builder addResourceDir(Path p) { resourceDirs.add(p); return this; }
+        public Builder addTestSource(Path p) { testSources.add(p); return this; }
 
         public TranslatorOptions build() {
             return new TranslatorOptions(sources, classpath, outputDir, crateName, mainClass, mode,
-                    runtime, runtimePath, mappingDirs, javaRelease, cargoCheck, framework, resourceDirs);
+                    runtime, runtimePath, mappingDirs, javaRelease, cargoCheck, framework, resourceDirs, testSources);
         }
     }
 }

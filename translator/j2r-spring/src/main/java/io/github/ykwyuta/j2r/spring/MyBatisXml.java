@@ -36,17 +36,49 @@ final class MyBatisXml {
     /** {@code #{expr}}（{@code , jdbcType=...} などのオプションは除く）。 */
     record Bind(String expr) implements SqlNode {}
 
+    /** {@code ${expr}}（値を SQL の文字列として埋め込む）。 */
+    record Subst(String expr) implements SqlNode {}
+
     /** {@code <if test="...">}。 */
     record If(String test, List<SqlNode> body) implements SqlNode {}
 
-    /** {@code <where>}・{@code <set>}。 */
-    record Clause(boolean where, List<SqlNode> body) implements SqlNode {}
+    /**
+     * {@code <trim>}・{@code <where>}・{@code <set>}。中身が空でなければ prefix / suffix を付け、
+     * 先頭の prefixOverrides・末尾の suffixOverrides を 1 つ取り除く（大文字と小文字を区別しない）。
+     */
+    record Trim(String prefix, List<String> prefixOverrides, String suffix, List<String> suffixOverrides, List<SqlNode> body,
+                String tag) implements SqlNode {
+        static Trim where(List<SqlNode> body) {
+            return new Trim("WHERE", List.of("AND", "OR"), "", List.of(), body, "where");
+        }
+
+        static Trim set(List<SqlNode> body) {
+            return new Trim("SET", List.of(","), "", List.of(","), body, "set");
+        }
+    }
+
+    /** {@code <foreach>}（index・open・close・separator は省略されていれば空文字列）。 */
+    record Foreach(String collection, String item, String index, String open, String close, String separator, List<SqlNode> body)
+            implements SqlNode {}
+
+    /** {@code <bind name="..." value="..."/>}（OGNL の値に名前を付ける）。 */
+    record BindVar(String name, String value) implements SqlNode {}
 
     /** {@code <choose>}（otherwise は null 可）。 */
     record Choose(List<If> whens, List<SqlNode> otherwise) implements SqlNode {}
 
-    /** 変換できない要素（{@code <foreach>}・{@code ${...}} など）。 */
+    /** 変換できない要素。 */
     record Unsupported(String description) implements SqlNode {}
+
+    /** {@code <resultMap>} の 1 つの対応（{@code <id>}・{@code <result>}）。 */
+    record ResultMapping(String property, String column) {}
+
+    /**
+     * {@code <resultMap>}（{@code @Results}）。unsupported は変換できない子要素（{@code <association>} など）。
+     *
+     * @param autoMapping 対応を書いていない列もプロパティ名で対応付けるか（MyBatis の既定の PARTIAL と同じく true）
+     */
+    record ResultMap(String id, String type, List<ResultMapping> mappings, List<String> unsupported, boolean autoMapping) {}
 
     enum Kind { SELECT, INSERT, UPDATE, DELETE }
 
@@ -59,12 +91,12 @@ final class MyBatisXml {
     record Statement(String id, Kind kind, List<SqlNode> body, String keyProperty, String keyColumn, String resultType,
                      String resultMap, String source) {
         boolean isDynamic() {
-            return body.stream().anyMatch(n -> !(n instanceof Text) && !(n instanceof Bind));
+            return body.stream().anyMatch(n -> !(n instanceof Text) && !(n instanceof Bind) && !(n instanceof Unsupported));
         }
     }
 
     /** 1 つの Mapper XML。 */
-    record Mapper(String namespace, Path file, Map<String, Statement> statements) {}
+    record Mapper(String namespace, Path file, Map<String, Statement> statements, Map<String, ResultMap> resultMaps) {}
 
     /** ディレクトリ配下の *.xml のうち、MyBatis の Mapper XML を namespace → Mapper で返す。 */
     static Map<String, Mapper> scan(List<Path> dirs) throws IOException {
@@ -95,9 +127,13 @@ final class MyBatisXml {
                 return null;
             }
             Map<String, Element> fragments = new HashMap<>();
+            Map<String, ResultMap> resultMaps = new HashMap<>();
             for (Element e : children(root)) {
                 if (e.getTagName().equals("sql")) {
                     fragments.put(e.getAttribute("id"), e);
+                } else if (e.getTagName().equals("resultMap")) {
+                    ResultMap rm = resultMap(e);
+                    resultMaps.put(rm.id(), rm);
                 }
             }
             Map<String, Statement> statements = new HashMap<>();
@@ -119,18 +155,48 @@ final class MyBatisXml {
                         keyProperty, keyColumn, emptyToNull(e.getAttribute("resultType")), emptyToNull(e.getAttribute("resultMap")),
                         "<" + e.getTagName() + " id=\"" + e.getAttribute("id") + "\">"));
             }
-            return new Mapper(root.getAttribute("namespace"), file, statements);
+            return new Mapper(root.getAttribute("namespace"), file, statements, resultMaps);
         } catch (SAXException e) {
             throw new IOException(file + ": " + e.getMessage(), e);
         }
     }
 
-    /** アノテーション（{@code @Select} など）に書いた SQL の文。 */
-    static Statement annotated(String id, Kind kind, String sql, String keyProperty, String keyColumn) {
+    /** アノテーション（{@code @Select} など）に書いた SQL の文。{@code <script>} で囲めば XML と同じ動的 SQL を書ける。 */
+    static Statement annotated(String id, Kind kind, String sql, String keyProperty, String keyColumn, String resultMap) {
         List<SqlNode> nodes = new ArrayList<>();
-        text(sql, nodes);
-        return new Statement(id, kind, nodes, keyProperty, keyColumn == null ? keyProperty : keyColumn, null, null,
+        if (sql.strip().startsWith("<script>")) {
+            try {
+                Document doc = builder().parse(new org.xml.sax.InputSource(new java.io.StringReader(sql.strip())));
+                nodes.addAll(nodes(doc.getDocumentElement(), Map.of()));
+            } catch (SAXException | IOException e) {
+                nodes.add(new Unsupported("<script> (" + e.getMessage() + ")"));
+            }
+        } else {
+            text(sql, nodes);
+        }
+        return new Statement(id, kind, nodes, keyProperty, keyColumn == null ? keyProperty : keyColumn, null, resultMap,
                 "@" + kind.name().charAt(0) + kind.name().substring(1).toLowerCase(Locale.ROOT));
+    }
+
+    private static ResultMap resultMap(Element e) {
+        List<ResultMapping> mappings = new ArrayList<>();
+        List<String> unsupported = new ArrayList<>();
+        if (!e.getAttribute("extends").isEmpty()) {
+            unsupported.add("<resultMap extends=\"" + e.getAttribute("extends") + "\">");
+        }
+        for (Element c : children(e)) {
+            switch (c.getTagName()) {
+                case "id", "result" -> {
+                    if (!c.getAttribute("typeHandler").isEmpty()) {
+                        unsupported.add("<" + c.getTagName() + " typeHandler=\"" + c.getAttribute("typeHandler") + "\">");
+                    }
+                    mappings.add(new ResultMapping(c.getAttribute("property"), c.getAttribute("column")));
+                }
+                default -> unsupported.add("<" + c.getTagName() + "> in <resultMap>");
+            }
+        }
+        return new ResultMap(e.getAttribute("id"), e.getAttribute("type"), mappings, unsupported,
+                !"false".equals(e.getAttribute("autoMapping")));
     }
 
     private static DocumentBuilder builder() {
@@ -167,8 +233,13 @@ final class MyBatisXml {
                             }
                         }
                         case "if" -> out.add(new If(e.getAttribute("test"), nodes(e, fragments)));
-                        case "where" -> out.add(new Clause(true, nodes(e, fragments)));
-                        case "set" -> out.add(new Clause(false, nodes(e, fragments)));
+                        case "where" -> out.add(Trim.where(nodes(e, fragments)));
+                        case "set" -> out.add(Trim.set(nodes(e, fragments)));
+                        case "trim" -> out.add(new Trim(e.getAttribute("prefix").strip(), overrides(e.getAttribute("prefixOverrides")),
+                                e.getAttribute("suffix").strip(), overrides(e.getAttribute("suffixOverrides")), nodes(e, fragments), "trim"));
+                        case "foreach" -> out.add(new Foreach(e.getAttribute("collection"), e.getAttribute("item"), e.getAttribute("index"),
+                                e.getAttribute("open"), e.getAttribute("close"), e.getAttribute("separator"), nodes(e, fragments)));
+                        case "bind" -> out.add(new BindVar(e.getAttribute("name"), e.getAttribute("value")));
                         case "choose" -> {
                             List<If> whens = new ArrayList<>();
                             List<SqlNode> otherwise = null;
@@ -201,7 +272,7 @@ final class MyBatisXml {
                 out.add(new Text(s.substring(last, m.start())));
             }
             String expr = m.group(2).split(",")[0].strip();
-            out.add(m.group(1).equals("#") ? new Bind(expr) : new Unsupported("${" + m.group(2) + "} (string substitution)"));
+            out.add(m.group(1).equals("#") ? new Bind(expr) : new Subst(m.group(2).strip()));
             last = m.end();
         }
         if (last < s.length()) {
@@ -220,6 +291,17 @@ final class MyBatisXml {
             }
         }
         out.removeIf(n -> n instanceof Text t && t.sql().isBlank());
+        return out;
+    }
+
+    /** prefixOverrides="AND |OR " → [AND, OR]（前後の空白は除く）。 */
+    private static List<String> overrides(String attr) {
+        List<String> out = new ArrayList<>();
+        for (String o : attr.split("\\|")) {
+            if (!o.isBlank()) {
+                out.add(o.strip());
+            }
+        }
         return out;
     }
 

@@ -39,6 +39,14 @@ public abstract class TranslateToRustTask extends DefaultTask {
     @Classpath
     public abstract ConfigurableFileCollection getCompileClasspath();
 
+    /** テストのソースを変換するときのクラスパス（main の出力を除いた test ソースセットのコンパイルクラスパス）。 */
+    @Classpath
+    public abstract ConfigurableFileCollection getTestCompileClasspath();
+
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    public abstract ConfigurableFileCollection getTestSources();
+
     /** 変換器（j2r-cli とその依存）のクラスパス。 */
     @Classpath
     public abstract ConfigurableFileCollection getTranslatorClasspath();
@@ -101,10 +109,19 @@ public abstract class TranslateToRustTask extends DefaultTask {
                 args.add(d.getAbsolutePath());
             }
         }
-        if (!getCompileClasspath().isEmpty()) {
+        boolean tests = getFramework().get().equalsIgnoreCase("spring") && getTestSources().getFiles().stream().anyMatch(File::exists);
+        if (tests) {
+            for (File d : getTestSources().getFiles()) {
+                if (d.exists()) {
+                    args.add("--test-sources");
+                    args.add(d.getAbsolutePath());
+                }
+            }
+        }
+        ConfigurableFileCollection classpath = tests ? getTestCompileClasspath() : getCompileClasspath();
+        if (!classpath.isEmpty()) {
             args.add("--classpath");
-            args.add(getCompileClasspath().getFiles().stream().map(File::getAbsolutePath)
-                    .collect(Collectors.joining(File.pathSeparator)));
+            args.add(classpath.getFiles().stream().map(File::getAbsolutePath).collect(Collectors.joining(File.pathSeparator)));
         }
         for (File d : getMappingDirs().getFiles()) {
             args.add("--mapping-dir");

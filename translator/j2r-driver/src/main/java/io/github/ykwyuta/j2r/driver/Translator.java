@@ -41,7 +41,12 @@ public final class Translator {
 
     public static Result translate(TranslatorOptions options) {
         Diagnostics diags = new Diagnostics();
-        Decl.Program program = JavacFrontend.run(options.sources(), options.classpath(), options.javaRelease(), diags);
+        List<Path> sources = options.sources();
+        if (options.framework() == TranslatorOptions.Framework.SPRING && !options.testSources().isEmpty()) {
+            sources = new java.util.ArrayList<>(sources);
+            sources.addAll(options.testSources().stream().filter(Files::exists).toList());
+        }
+        Decl.Program program = JavacFrontend.run(sources, options.classpath(), options.javaRelease(), diags);
         if (program == null) {
             return new Result(false, options.outputDir(), diags.all(), List.of());
         }
@@ -77,7 +82,7 @@ public final class Translator {
     private static Result translateSpring(Decl.Program program, TranslatorOptions options, Diagnostics diags) {
         program = new PassManager(List.of(new DesugarStringConcat())).run(program);
         List<SpringTranslator.GeneratedFile> generated = SpringTranslator.translate(program, options.resourceDirs(),
-                options.crateName(), diags);
+                options.testSources(), options.crateName(), diags);
         Path root = options.outputDir();
         try {
             // Cargo.toml の「# j2r:keep」の行から後ろ（手で書いたテストの dev-dependencies など）は残す。

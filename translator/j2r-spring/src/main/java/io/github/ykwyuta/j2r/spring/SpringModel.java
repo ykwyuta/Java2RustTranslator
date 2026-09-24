@@ -31,7 +31,9 @@ import java.util.TreeSet;
  * </ul>
  */
 final class SpringModel {
-    enum Role { MAPPER, SERVICE, ENTITY, RECORD, ENUM, EXCEPTION, CONTROLLER, ADVICE, CONFIGURATION, APPLICATION, FORM, SKIPPED }
+    enum Role { MAPPER, SERVICE, ENTITY, RECORD, ENUM, EXCEPTION, CONTROLLER, ADVICE, CONFIGURATION, APPLICATION, FORM, TEST, SKIPPED }
+
+    static final String SPRING_BOOT_TEST = "org.springframework.boot.test.context.SpringBootTest";
 
     static final String MAPPER = "org.apache.ibatis.annotations.Mapper";
     static final String SERVICE = "org.springframework.stereotype.Service";
@@ -51,7 +53,8 @@ final class SpringModel {
 
     /** フレームワーク・ライブラリのパッケージ（テスト用のスタブがソースに含まれていても変換しない）。 */
     private static final List<String> LIBRARY_PACKAGES = List.of(
-            "org.springframework.", "org.apache.ibatis.", "org.mybatis.", "org.jspecify.", "jakarta.", "javax.", "java.");
+            "org.springframework.", "org.apache.ibatis.", "org.mybatis.", "org.jspecify.", "jakarta.", "javax.", "java.", "org.junit.",
+            "org.hamcrest.", "org.assertj.");
 
     final Decl.Program program;
     final Map<String, Decl.TypeDecl> types = new LinkedHashMap<>();
@@ -59,10 +62,12 @@ final class SpringModel {
     /** 変換の基点のパッケージ（この下のパッケージが crate のモジュールになる）。 */
     final String basePackage;
     private final Diagnostics diags;
+    private final List<java.nio.file.Path> testSources;
 
-    SpringModel(Decl.Program program, Diagnostics diags) {
+    SpringModel(Decl.Program program, List<java.nio.file.Path> testSources, Diagnostics diags) {
         this.program = program;
         this.diags = diags;
+        this.testSources = testSources.stream().map(p -> p.toAbsolutePath().normalize()).toList();
         program.types().filter(t -> LIBRARY_PACKAGES.stream().noneMatch(p -> t.qualifiedName().startsWith(p)))
                 .forEach(t -> types.put(t.qualifiedName(), t));
         classify();
@@ -71,9 +76,29 @@ final class SpringModel {
 
     // ------------------------------------------------------------------ 分類
 
+    /** テストのソースの型（テストのクラスと、その入れ子のクラス）。 */
+    boolean isTestSource(Decl.TypeDecl t) {
+        java.nio.file.Path file = java.nio.file.Path.of(t.pos().file()).toAbsolutePath().normalize();
+        return testSources.stream().anyMatch(file::startsWith);
+    }
+
     private void classify() {
         Deque<String> work = new ArrayDeque<>();
         for (Decl.TypeDecl t : types.values()) {
+            if (isTestSource(t)) {
+                // @SpringBootTest のクラス（と入れ子の @TestConfiguration）は結合テストにする。ほかのテストは変換しない。
+                Decl.TypeDecl top = t;
+                while (top.outer() != null && types.containsKey(top.outer())) {
+                    top = types.get(top.outer());
+                }
+                boolean test = program.info(DeclInfo.typeKey(top.qualifiedName())).has(SPRING_BOOT_TEST);
+                roles.put(t.qualifiedName(), test ? Role.TEST : Role.SKIPPED);
+                if (!test && t.outer() == null) {
+                    diags.report(DiagnosticCode.SPRING_SKIPPED, t.pos(),
+                            t.simpleName() + " is not translated: only @SpringBootTest tests (with MockMvc) are translated");
+                }
+                continue;
+            }
             DeclInfo info = program.info(DeclInfo.typeKey(t.qualifiedName()));
             String skipped = SKIPPED_STEREOTYPES.entrySet().stream().filter(e -> info.has(e.getKey()))
                     .map(Map.Entry::getValue).findFirst().orElse(null);

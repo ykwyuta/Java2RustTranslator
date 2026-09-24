@@ -4,12 +4,16 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 
 use crate::error::Error;
+use crate::spring_web::render;
 use crate::views::Error404View;
 
 /// `@ExceptionHandler(TodoNotFoundException)`
 pub fn handle_not_found(_e: &Error) -> Response {
     let model_message = "指定された Todo は見つかりませんでした".to_string();
-    (StatusCode::NOT_FOUND, Error404View {
-        message: Some(model_message),
-    }).into_response()
+    (StatusCode::NOT_FOUND, render(
+        "error/404",
+        Error404View {
+            message: Some(model_message),
+        },
+    )).into_response()
 }

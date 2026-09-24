@@ -1,13 +1,15 @@
 package com.example.todo.web;
 
 import com.example.todo.domain.Todo;
+import com.example.todo.domain.Priority;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.jspecify.annotations.Nullable;
 
-/** 登録・編集フォーム。name 属性は title / description / dueDate / done。 */
+/** 登録・編集フォーム。name 属性は title / description / dueDate / priority / done。 */
 public class TodoForm {
 
     @NotBlank(message = "タイトルを入力してください")
@@ -20,6 +22,9 @@ public class TodoForm {
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private @Nullable LocalDate dueDate;
 
+    @NotNull(message = "優先度を選択してください")
+    private @Nullable Priority priority = Priority.MEDIUM;
+
     private boolean done;
 
     public static TodoForm from(Todo todo) {
@@ -27,6 +32,7 @@ public class TodoForm {
         form.setTitle(todo.getTitle());
         form.setDescription(todo.getDescription());
         form.setDueDate(todo.getDueDate());
+        form.setPriority(todo.getPriority());
         form.setDone(todo.isDone());
         return form;
     }
@@ -66,6 +72,14 @@ public class TodoForm {
 
     public void setDueDate(@Nullable LocalDate dueDate) {
         this.dueDate = dueDate;
+    }
+
+    public @Nullable Priority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(@Nullable Priority priority) {
+        this.priority = priority;
     }
 
     public boolean isDone() {

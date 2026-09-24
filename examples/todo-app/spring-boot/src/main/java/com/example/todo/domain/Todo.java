@@ -11,6 +11,7 @@ public class Todo {
     private String title;
     private @Nullable String description;
     private boolean done;
+    private Priority priority;
     private @Nullable LocalDate dueDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -50,6 +51,14 @@ public class Todo {
 
     public void setDone(boolean done) {
         this.done = done;
+    }
+
+    public Priority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(Priority priority) {
+        this.priority = priority;
     }
 
     public @Nullable LocalDate getDueDate() {

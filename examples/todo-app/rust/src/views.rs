@@ -4,20 +4,22 @@ use askama::Template;
 use askama_web::WebTemplate;
 use chrono::NaiveDate;
 
-use crate::domain::Todo;
+use crate::domain::{Activity, Priority, Todo};
 use crate::service::TodoSummary;
-use crate::spring_web::{BindingResult, Present};
+use crate::spring_web::{BindingResult, MessageArg, Present};
 use crate::web::TodoForm;
 
 /// templates/todos/list.html
 #[derive(Template, WebTemplate)]
 #[template(path = "todos/list.html")]
 pub struct TodosListView {
+    pub priorities: Vec<Priority>,
     pub todos: Vec<Todo>,
     pub summary: TodoSummary,
     pub filter: String,
     pub q: String,
     pub today: NaiveDate,
+    pub activities: Vec<Activity>,
     pub message: Option<String>,
 }
 
@@ -25,6 +27,7 @@ pub struct TodosListView {
 #[derive(Template, WebTemplate)]
 #[template(path = "todos/form.html")]
 pub struct TodosFormView {
+    pub priorities: Vec<Priority>,
     pub todo_form: TodoForm,
     pub todo_id: Option<i64>,
     pub todo_form_binding: BindingResult,

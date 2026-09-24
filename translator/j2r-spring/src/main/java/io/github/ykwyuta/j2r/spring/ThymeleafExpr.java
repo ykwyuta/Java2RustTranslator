@@ -35,6 +35,16 @@ final class ThymeleafExpr {
 
     record Str(String value) implements Node {}
 
+    /**
+     * メッセージ式 {@code #{todo.title}}・{@code #{todos.summary(${a}, ${b})}}・{@code #{${'priority.' + p}}}。
+     * key はキーの文字列（{@link Str}）か、キーを求める式。
+     */
+    record Message(Node key, List<Node> args) implements Node {
+        Message {
+            args = List.copyOf(args);
+        }
+    }
+
     record Num(String text) implements Node {}
 
     record Bool(boolean value) implements Node {}
@@ -296,6 +306,10 @@ final class ThymeleafExpr {
             }
             return new Num(src.substring(start, pos));
         }
+        if (src.startsWith("#{", pos)) {
+            pos += 2;
+            return message();
+        }
         if (c == '#') {
             pos++;
             String object = ident();
@@ -328,6 +342,27 @@ final class ThymeleafExpr {
             throw new ParseException("only property paths are supported in selection expressions: " + src);
         }
         return first;
+    }
+
+    private Node message() throws ParseException {
+        ws();
+        Node key;
+        if (src.startsWith("${", pos)) {
+            key = primary();
+        } else {
+            int start = pos;
+            while (pos < src.length() && src.charAt(pos) != '(' && src.charAt(pos) != '}') {
+                pos++;
+            }
+            key = new Str(src.substring(start, pos).strip());
+        }
+        List<Node> args = List.of();
+        if (peek('(')) {
+            pos++;
+            args = args(')');
+        }
+        expect('}');
+        return new Message(key, args);
     }
 
     private Node link() throws ParseException {

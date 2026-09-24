@@ -47,12 +47,16 @@ public final class Main implements Callable<Integer> {
 
     @Option(names = "--framework", defaultValue = "NONE",
             description = "Framework rules: ${COMPLETION-CANDIDATES} (default: ${DEFAULT-VALUE}). SPRING translates the @Mapper interfaces "
-                    + "(with their MyBatis XML), @Service classes and the domain types of a Spring Boot + MyBatis application "
-                    + "into a Rust library crate using sqlx.")
+                    + "(with their MyBatis XML), @Service classes, controllers, Thymeleaf templates and configuration of a Spring Boot "
+                    + "+ MyBatis application into a Rust crate using axum, sqlx and askama.")
     private TranslatorOptions.Framework framework;
 
     @Option(names = "--resources", description = "Resource directory with the MyBatis Mapper XML files and schema.sql (--framework SPRING).")
     private List<Path> resourceDirs = new ArrayList<>();
+
+    @Option(names = "--test-sources", description = "Test source directory; its @SpringBootTest MockMvc tests become Rust integration "
+            + "tests (--framework SPRING).")
+    private List<Path> testSources = new ArrayList<>();
 
     @Option(names = "--cargo-check", description = "Run 'cargo check' on the generated project.")
     private boolean cargoCheck;
@@ -72,6 +76,7 @@ public final class Main implements Callable<Integer> {
                 .cargoCheck(cargoCheck)
                 .framework(framework);
         resourceDirs.forEach(b::addResourceDir);
+        testSources.forEach(b::addTestSource);
         classpath.forEach(b::addClasspath);
         mappingDirs.forEach(b::addMappingDir);
         if (runtimePath != null) {

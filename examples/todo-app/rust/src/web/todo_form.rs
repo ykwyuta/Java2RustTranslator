@@ -2,16 +2,30 @@
 
 use chrono::NaiveDate;
 
-use crate::domain::Todo;
-use crate::spring_web::{BindingResult, RequestParams, length, not_blank, parse_bool, parse_date};
+use crate::domain::{Priority, Todo};
+use crate::spring_web::{BindingResult, RequestParams, length, not_blank, parse_bool, parse_date, parse_enum};
 
-/// 登録・編集フォーム。name 属性は title / description / dueDate / done。
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// 登録・編集フォーム。name 属性は title / description / dueDate / priority / done。
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TodoForm {
     pub title: Option<String>,
     pub description: Option<String>,
     pub due_date: Option<NaiveDate>,
+    pub priority: Option<Priority>,
     pub done: bool,
+}
+
+impl Default for TodoForm {
+    /// フィールドの初期化子の値（初期化子のないフィールドは既定値）。
+    fn default() -> Self {
+        Self {
+            title: Default::default(),
+            description: Default::default(),
+            due_date: Default::default(),
+            priority: Some(Priority::Medium),
+            done: Default::default(),
+        }
+    }
 }
 
 impl TodoForm {
@@ -20,6 +34,7 @@ impl TodoForm {
             title: Some(todo.title.clone()),
             description: todo.description.clone(),
             due_date: todo.due_date,
+            priority: Some(todo.priority),
             done: todo.done,
         }
     }
@@ -56,6 +71,14 @@ impl TodoForm {
                 Err(_) => result.reject("dueDate", "期限は yyyy-MM-dd 形式で入力してください", Some(v)),
             }
         }
+        if let Some(v) = params.get("priority") {
+            match parse_enum(v, Priority::value_of) {
+                Ok(x) => {
+                    form.priority = x;
+                }
+                Err(_) => result.reject("priority", "優先度が正しくありません", Some(v)),
+            }
+        }
         if let Some(v) = params.get("done") {
             match parse_bool(v) {
                 Ok(x) => {
@@ -85,6 +108,9 @@ impl TodoForm {
         }
         if self.description.as_deref().is_some_and(|v| length(v) > 1000) {
             result.reject("description", "説明は1000文字以内で入力してください", None);
+        }
+        if self.priority.is_none() {
+            result.reject("priority", "優先度を選択してください", None);
         }
     }
 }

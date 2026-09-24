@@ -56,4 +56,9 @@ public record DeclInfo(List<Annotation> annotations, JType genericType) {
     public static String paramKey(MethodRef method, int index) {
         return method.key() + "@" + index;
     }
+
+    /** ローカル変数（宣言の位置と名前で区別する）。 */
+    public static String localKey(io.github.ykwyuta.j2r.common.SourcePos pos, String name) {
+        return "local:" + pos.file() + ":" + pos.line() + ":" + pos.column() + ":" + name;
+    }
 }

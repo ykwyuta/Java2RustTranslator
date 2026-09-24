@@ -608,6 +608,7 @@ final class JirBuilder {
                 JType vt = type(el.asType());
                 reportIfUnsupportedType(vt, v);
                 Expr init = v.getInitializer() == null ? null : coerce(expr(new TreePath(path, v.getInitializer())), vt);
+                recordInfo(DeclInfo.localKey(pos, v.getName().toString()), el, el.asType());
                 yield new Stmt.LocalVar(v.getName().toString(), vt, init, false, pos);
             }
             case ExpressionStatementTree es -> new Stmt.ExprStmt(expr(new TreePath(path, es.getExpression())), pos);

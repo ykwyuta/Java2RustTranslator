@@ -10,7 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
+import com.example.todo.domain.Priority;
 import com.example.todo.domain.Todo;
 import com.example.todo.domain.TodoFilter;
 import com.example.todo.service.TodoService;
@@ -58,7 +60,13 @@ class TodoControllerTest {
 
     @BeforeEach
     void cleanUp() {
+        jdbcTemplate.update("DELETE FROM activities");
         jdbcTemplate.update("DELETE FROM todos");
+    }
+
+    /** 一覧の Todo のタイトルの表示（最近の操作の一覧と区別する）。 */
+    private static String title(String title) {
+        return "<span class=\"title\">" + title + "</span>";
     }
 
     @Test
@@ -78,39 +86,40 @@ class TodoControllerTest {
     void validationErrorsRerenderTheForm() throws Exception {
         mockMvc.perform(post("/todos").param("title", " ").param("dueDate", "not-a-date"))
                 .andExpect(status().isOk())
+                .andExpect(view().name("todos/form"))
                 .andExpect(content().string(containsString("タイトルを入力してください")))
                 .andExpect(content().string(containsString("期限は yyyy-MM-dd 形式で入力してください")));
     }
 
     @Test
     void toggleAndFilter() throws Exception {
-        Todo done = todoService.create("完了するもの", null, null);
-        todoService.create("残すもの", null, null);
+        Todo done = todoService.create("完了するもの", null, null, Priority.MEDIUM);
+        todoService.create("残すもの", null, null, Priority.MEDIUM);
 
         mockMvc.perform(post("/todos/{id}/toggle", done.getId()).param("filter", "active"))
                 .andExpect(redirectedUrl("/todos?filter=active"));
 
         mockMvc.perform(get("/todos").param("filter", "active"))
-                .andExpect(content().string(containsString("残すもの")))
-                .andExpect(content().string(not(containsString("完了するもの"))));
+                .andExpect(content().string(containsString(title("残すもの"))))
+                .andExpect(content().string(not(containsString(title("完了するもの")))));
         mockMvc.perform(get("/todos").param("filter", "completed"))
-                .andExpect(content().string(containsString("完了するもの")))
-                .andExpect(content().string(not(containsString("残すもの"))));
+                .andExpect(content().string(containsString(title("完了するもの"))))
+                .andExpect(content().string(not(containsString(title("残すもの")))));
     }
 
     @Test
     void searchByKeyword() throws Exception {
-        todoService.create("Rust を勉強する", null, null);
-        todoService.create("掃除", null, null);
+        todoService.create("Rust を勉強する", null, null, Priority.MEDIUM);
+        todoService.create("掃除", null, null, Priority.MEDIUM);
 
         mockMvc.perform(get("/todos").param("q", "rust"))
-                .andExpect(content().string(containsString("Rust を勉強する")))
-                .andExpect(content().string(not(containsString("掃除"))));
+                .andExpect(content().string(containsString(title("Rust を勉強する"))))
+                .andExpect(content().string(not(containsString(title("掃除")))));
     }
 
     @Test
     void overdueTodoIsMarked() throws Exception {
-        todoService.create("期限切れのもの", null, LocalDate.of(2026, 9, 23));
+        todoService.create("期限切れのもの", null, LocalDate.of(2026, 9, 23), Priority.MEDIUM);
 
         mockMvc.perform(get("/todos"))
                 .andExpect(content().string(containsString("class=\"todo overdue\"")))
@@ -119,7 +128,7 @@ class TodoControllerTest {
 
     @Test
     void updateAndDelete() throws Exception {
-        Todo todo = todoService.create("旧タイトル", null, null);
+        Todo todo = todoService.create("旧タイトル", null, null, Priority.MEDIUM);
 
         mockMvc.perform(post("/todos/{id}", todo.getId()).param("title", "新タイトル").param("done", "true"))
                 .andExpect(redirectedUrl("/todos"))
@@ -131,6 +140,28 @@ class TodoControllerTest {
         mockMvc.perform(post("/todos/completed/delete"))
                 .andExpect(flash().attribute("message", "完了済みの 1 件を削除しました"));
         assertTrue(todoService.findAll(TodoFilter.ALL, null).isEmpty());
+        mockMvc.perform(get("/todos"))
+                .andExpect(content().string(containsString("削除: 新タイトル")))
+                .andExpect(content().string(containsString("更新: 新タイトル")));
+    }
+
+    @Test
+    void priorityAndActivities() throws Exception {
+        mockMvc.perform(get("/todos/new"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("todos/form"))
+                .andExpect(content().string(containsString("<option value=\"MEDIUM\" selected=\"selected\">中</option>")));
+
+        mockMvc.perform(post("/todos").param("title", "急ぎの用事").param("priority", "HIGH"))
+                .andExpect(redirectedUrl("/todos"));
+        mockMvc.perform(post("/todos").param("title", "優先度なし").param("priority", "URGENT"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("優先度が正しくありません")));
+
+        mockMvc.perform(get("/todos"))
+                .andExpect(content().string(containsString("class=\"priority priority-high\"")))
+                .andExpect(content().string(containsString("追加: 急ぎの用事")))
+                .andExpect(content().string(containsString("全 1 件（うち完了 0 件）")));
     }
 
     @Test

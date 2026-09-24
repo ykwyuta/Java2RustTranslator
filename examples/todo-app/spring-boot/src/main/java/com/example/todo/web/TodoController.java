@@ -1,7 +1,9 @@
 package com.example.todo.web;
 
+import com.example.todo.domain.Priority;
 import com.example.todo.domain.Todo;
 import com.example.todo.domain.TodoFilter;
+import com.example.todo.service.ActivityService;
 import com.example.todo.service.TodoService;
 import jakarta.validation.Valid;
 import java.time.Clock;
@@ -23,11 +25,19 @@ import org.jspecify.annotations.Nullable;
 public class TodoController {
 
     private final TodoService todoService;
+    private final ActivityService activityService;
     private final Clock clock;
 
-    public TodoController(TodoService todoService, Clock clock) {
+    public TodoController(TodoService todoService, ActivityService activityService, Clock clock) {
         this.todoService = todoService;
+        this.activityService = activityService;
         this.clock = clock;
+    }
+
+    /** フォームの優先度の選択肢（このコントローラのすべてのハンドラのモデルに入る）。 */
+    @ModelAttribute("priorities")
+    public Priority[] priorities() {
+        return Priority.values();
     }
 
     @GetMapping
@@ -41,6 +51,7 @@ public class TodoController {
         model.addAttribute("filter", filter.param());
         model.addAttribute("q", keyword == null ? "" : keyword);
         model.addAttribute("today", LocalDate.now(clock));
+        model.addAttribute("activities", activityService.recent(5));
         return "todos/list";
     }
 
@@ -58,7 +69,7 @@ public class TodoController {
         if (bindingResult.hasErrors()) {
             return "todos/form";
         }
-        Todo todo = todoService.create(form.normalizedTitle(), form.normalizedDescription(), form.getDueDate());
+        Todo todo = todoService.create(form.normalizedTitle(), form.normalizedDescription(), form.getDueDate(), form.getPriority());
         redirectAttributes.addFlashAttribute("message", "「" + todo.getTitle() + "」を追加しました");
         return "redirect:/todos";
     }
@@ -82,7 +93,7 @@ public class TodoController {
             return "todos/form";
         }
         Todo todo = todoService.update(
-                id, form.normalizedTitle(), form.normalizedDescription(), form.getDueDate(), form.isDone());
+                id, form.normalizedTitle(), form.normalizedDescription(), form.getDueDate(), form.getPriority(), form.isDone());
         redirectAttributes.addFlashAttribute("message", "「" + todo.getTitle() + "」を更新しました");
         return "redirect:/todos";
     }

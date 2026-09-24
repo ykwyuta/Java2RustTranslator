@@ -1,8 +1,9 @@
 //! Translated from `TodoFilter` (TodoFilter.java) by Java2RustTranslator.
 
 /// 一覧の絞り込み。クエリパラメータ filter=all|active|completed に対応する。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub enum TodoFilter {
+    #[default]
     All,
     Active,
     Completed,
@@ -29,6 +30,16 @@ impl TodoFilter {
             Self::All => 0,
             Self::Active => 1,
             Self::Completed => 2,
+        }
+    }
+
+    /// 名前の定数（`valueOf(name)`。なければ None）。
+    pub fn value_of(name: &str) -> Option<Self> {
+        match name {
+            "ALL" => Some(Self::All),
+            "ACTIVE" => Some(Self::Active),
+            "COMPLETED" => Some(Self::Completed),
+            _ => None,
         }
     }
 

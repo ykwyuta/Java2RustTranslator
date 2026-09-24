@@ -40,6 +40,9 @@ public abstract class J2rExtension {
     /** MyBatis の Mapper XML と schema.sql を探すリソースのディレクトリ（既定: main ソースセットの resources）。 */
     public abstract ConfigurableFileCollection getResourceDirs();
 
+    /** テストの Java ソース（framework が spring のとき、MockMvc の結合テストを変換する。既定: test ソースセットの java ディレクトリ）。 */
+    public abstract ConfigurableFileCollection getTestSources();
+
     /** 変換後に cargo check を実行するか。 */
     public abstract Property<Boolean> getCargoCheck();
 

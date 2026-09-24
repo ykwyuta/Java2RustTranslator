@@ -30,6 +30,8 @@
         <a class="button primary" href="/todos/new">新規作成</a>
     </div>
 
+    <p class="summary">全 {{ summary.total().message_arg() }} 件（うち完了 {{ summary.completed.message_arg() }} 件）</p>
+
     {% if todos.is_empty() %}<p class="empty">Todo はありません</p>{% endif %}
 
     {% if !(todos.is_empty()) %}<ul class="todo-list">
@@ -39,6 +41,7 @@
                 <button type="submit" class="check" title="{% if todo.done %}未完了に戻す{% else %}完了にする{% endif %}">{% if todo.done %}✔{% else %}{% endif %}</button>
             </form>
             <div class="body">
+                <span class="priority priority-{{ todo.priority.name().to_lowercase() }}">{% match todo.priority.name() %}{% when "HIGH" %}高{% when "LOW" %}低{% when "MEDIUM" %}中{% else %}??priority.{{ todo.priority.name() }}??{% endmatch %}</span>
                 <span class="title">{{ todo.title }}</span>
                 {% if let Some(description) = todo.description %}<p class="description">{{ description }}</p>{% endif %}
                 {% if let Some(due_date) = todo.due_date %}<span class="due">
@@ -60,6 +63,13 @@
           onsubmit="return confirm('完了済みの Todo をすべて削除しますか？');">
         <button type="submit" class="danger">完了済みを削除</button>
     </form>{% endif %}
+
+    {% if !(activities.is_empty()) %}<section class="activities">
+        <h2>最近の操作</h2>
+        <ul>
+            {% for activity in activities %}<li>{% match activity.action.name() %}{% when "COMPLETE" %}完了: {{ activity.title }}{% when "CREATE" %}追加: {{ activity.title }}{% when "DELETE" %}削除: {{ activity.title }}{% when "REOPEN" %}未完了に戻す: {{ activity.title }}{% when "UPDATE" %}更新: {{ activity.title }}{% else %}??activity.{{ activity.action.name() }}??{% endmatch %}</li>{% endfor %}
+        </ul>
+    </section>{% endif %}
 </main>
 </body>
 </html>

@@ -69,15 +69,13 @@ final class ServiceGenerator {
 
         List<RItem> methods = new ArrayList<>();
         methods.add(constructor(t, usesPool, fields, imports));
-        boolean classTx = model.info(DeclInfo.typeKey(t.qualifiedName())).has(SpringModel.TRANSACTIONAL);
         for (Decl.MethodDecl m : t.methods()) {
             if (m.isConstructor() || m.isAbstract()) {
                 continue;
             }
             Plans.Method plan = tr.plans().methods.get(m.ref().key());
             Annotation tx = model.info(DeclInfo.methodKey(m.ref())).get(SpringModel.TRANSACTIONAL);
-            boolean transactional = !m.isPrivate() && (tx != null || classTx);
-            methods.addAll(method(t, m, plan, transactional, tx, imports));
+            methods.addAll(method(t, m, plan, tr.plans().tx.get(m.ref().key()), tx, imports));
         }
         List<RItem> items = new ArrayList<>(imports.items());
         List<String> docs = new ArrayList<>(SpringTranslator.docs(t.javadoc()));
@@ -153,15 +151,23 @@ final class ServiceGenerator {
         return flat.length() <= 80 ? new RExpr.Path(flat) : lit;
     }
 
-    private List<RItem> method(Decl.TypeDecl t, Decl.MethodDecl m, Plans.Method plan, boolean transactional, Annotation txAnnotation,
+    private List<RItem> method(Decl.TypeDecl t, Decl.MethodDecl m, Plans.Method plan, Plans.Tx txPlan, Annotation txAnnotation,
                                Imports imports) {
+        boolean transactional = txPlan.begins();
         BodyLowerer lowerer = new BodyLowerer(tr.model(), tr.types(), tr.plans(), tr.diags(), imports);
         List<String> docs = new ArrayList<>(SpringTranslator.docs(m.javadoc()));
+        List<String> attrs = new ArrayList<>();
         if (txAnnotation != null && txAnnotation.booleanValue("readOnly", false)) {
+            attrs.add("readOnly = true");
+        }
+        if (txPlan.propagation() != null && !txPlan.propagation().equals("REQUIRED")) {
+            attrs.add("propagation = " + txPlan.propagation());
+        }
+        if (!attrs.isEmpty()) {
             if (!docs.isEmpty()) {
                 docs.add("");
             }
-            docs.add("`@Transactional(readOnly = true)`");
+            docs.add("`@Transactional(" + String.join(", ", attrs) + ")`");
         }
         String vis = m.isPrivate() ? "" : "pub";
         RType ret = returnType(plan, imports);
@@ -181,6 +187,7 @@ final class ServiceGenerator {
             // 本体をトランザクションの中にそのまま展開する。
             BodyLowerer.Ctx ctx = new BodyLowerer.Ctx(t, true, plan.ret(), true, "&mut " + var,
                     transactional ? BodyLowerer.Tail.COMMIT : BodyLowerer.Tail.VALUE, var);
+            ctx.inTx = transactional;
             List<RItem.Param> params = params(m, plan, ctx, imports, false);
             RExpr.Block body = lowerer.body(m, ctx);
             List<RStmt> stmts = new ArrayList<>();
@@ -193,6 +200,7 @@ final class ServiceGenerator {
         // 接続を受け取る版（helper）と、トランザクションを張ってそれを呼ぶ版。
         imports.add("sqlx::PgConnection");
         BodyLowerer.Ctx ctx = new BodyLowerer.Ctx(t, true, plan.ret(), true, "conn", BodyLowerer.Tail.VALUE, null);
+        ctx.inTx = txPlan.inTx();
         List<RItem.Param> helperParams = params(m, plan, ctx, imports, true);
         RExpr.Block helperBody = lowerer.body(m, ctx);
         if (!m.isPrivate()) {
@@ -206,7 +214,21 @@ final class ServiceGenerator {
             List<RStmt> stmts = new ArrayList<>();
             stmts.add(open);
             RExpr tail;
-            if (transactional) {
+            if (transactional && !txPlan.commitOnError().isEmpty()) {
+                // ロールバックしない例外（検査例外・noRollbackFor）は、コミットしてから返す。
+                imports.add("crate::error::Error");
+                stmts.add(new RStmt.Let("result", false, null, new RExpr.Await(new RExpr.MethodCall(new RExpr.Path("self"), plan.helperName(),
+                        args))));
+                List<String> patterns = new ArrayList<>(List.of("Ok(_)"));
+                for (String ex : txPlan.commitOnError()) {
+                    Plans.ErrorVariant v = tr.plans().errors.get(ex);
+                    patterns.add("Err(Error::" + v.name() + (v.fields().isEmpty() ? "" : "(..)") + ")");
+                }
+                stmts.add(new RStmt.ExprStmt(new RExpr.If(new RExpr.Macro("matches", List.of(new RExpr.Path("result"),
+                        new RExpr.Path(String.join(" | ", patterns)))), RExpr.Block.of(List.of(new RStmt.ExprStmt(new RExpr.Try(new RExpr.Await(
+                        new RExpr.MethodCall(new RExpr.Path(var), "commit", List.of()))), true))), null), false));
+                tail = new RExpr.Path("result");
+            } else if (transactional) {
                 boolean unit = plan.ret() instanceof RT.Unit;
                 if (unit) {
                     stmts.add(new RStmt.ExprStmt(call, true));
@@ -221,7 +243,8 @@ final class ServiceGenerator {
             out.add(new RItem.Fn(docs, List.of(), vis, true, plan.rustName(), params, ret, new RExpr.Block(stmts, tail, null, false)));
             docs = List.of("`" + plan.rustName() + "` の本体。呼び出し元の接続（トランザクション）で実行する。");
         }
-        out.add(new RItem.Fn(docs, List.of(), "", true, plan.helperName(), helperParams, ret, helperBody));
+        out.add(new RItem.Fn(docs, List.of(), txPlan.calledByOther() && !m.isPrivate() ? "pub(crate)" : "", true, plan.helperName(),
+                helperParams, ret, helperBody));
         return out;
     }
 

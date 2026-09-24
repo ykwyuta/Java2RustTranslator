@@ -24,8 +24,7 @@ tower-sessions = "0.14"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# j2r:keep（この行から後ろは j2r で作り直しても残る）
-# 手で書いた結合テスト（tests/）が使う依存。
+# 結合テスト（tests/。MockMvc に当たる）
 [dev-dependencies]
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }

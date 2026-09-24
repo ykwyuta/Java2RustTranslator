@@ -48,7 +48,10 @@ final class TemplateTranslator {
     }
 
     /** 変換結果。 */
-    record Result(String text, Set<String> formBindings, boolean usesTruthy, boolean usesPresent) {}
+    record Result(String text, Set<String> formBindings, boolean usesTruthy, boolean usesPresent, boolean usesMessageArg) {}
+
+    /** {@code <select th:field>} の中（option の th:value と比べて selected を付ける）。 */
+    private record SelectField(TV value, RT type) {}
 
     private record Alias(ThymeleafExpr.Node expr, Scope scope) {}
 
@@ -59,10 +62,12 @@ final class TemplateTranslator {
         final Map<String, Object> vars = new HashMap<>();
         final Map<String, TV> paths = new HashMap<>();
         FormCtx form;
+        SelectField select;
 
         Scope(Scope parent) {
             this.parent = parent;
             this.form = parent == null ? null : parent.form;
+            this.select = parent == null ? null : parent.select;
         }
 
         Object lookup(String name) {
@@ -94,6 +99,7 @@ final class TemplateTranslator {
     private final Map<String, Integer> fieldIds = new HashMap<>();
     private boolean usesTruthy;
     private boolean usesPresent;
+    private boolean usesMessageArg;
     private final Map<String, Integer> names = new HashMap<>();
 
     TemplateTranslator(SpringTranslator tr, Path templatesDir) {
@@ -113,9 +119,10 @@ final class TemplateTranslator {
         fieldIds.clear();
         usesTruthy = false;
         usesPresent = false;
+        usesMessageArg = false;
         names.clear();
         String text = nodes(load(view), new Scope(null));
-        return new Result(text, Set.copyOf(formBindings), usesTruthy, usesPresent);
+        return new Result(text, Set.copyOf(formBindings), usesTruthy, usesPresent, usesMessageArg);
     }
 
     private List<ThymeleafHtml.Node> load(String view) {
@@ -311,6 +318,15 @@ final class TemplateTranslator {
                         content = result[0];
                     }
                     after = result[1];
+                    if (e.name().equalsIgnoreCase("select") && scope.form != null) {
+                        // 中の option の th:value と、フォームのプロパティの値を比べる。
+                        String prop = a.value().replaceAll("^\\*\\{\\s*|\\s*}$", "");
+                        RT type = tr.types().field(scope.form.qname(), prop);
+                        if (type != null) {
+                            scope = new Scope(scope);
+                            scope.select = new SelectField(new TV(scope.form.form().code() + "." + Naming.valueName(prop), type, true), type);
+                        }
+                    }
                 }
                 case "th:errors" -> {
                     remove(attrs, i);
@@ -326,6 +342,11 @@ final class TemplateTranslator {
                     attrs.set(i, new OutAttr(attrs.get(i).ws(), attrName, attribute(attrs.get(i).ws(), attrName, parse(a.value()), scope)));
                 }
             }
+        }
+        if (e.name().equalsIgnoreCase("option") && scope.select != null && e.has("th:value")) {
+            attrs.add(new OutAttr(" ", "selected", selected(scope.select, parse(e.attr("th:value").value()), scope)));
+            scope = new Scope(scope);
+            scope.select = null;
         }
         String children = content != null ? content : nodes(e.children(), scope);
         if (block) {
@@ -502,6 +523,13 @@ final class TemplateTranslator {
         String rust = form.form().code() + "." + Naming.valueName(prop);
         String input = e.name().toLowerCase(Locale.ROOT);
         String kind = e.attr("type") == null ? "text" : e.attr("type").value().toLowerCase(Locale.ROOT);
+        if (input.equals("select")) {
+            if (!hasAttr(attrs, "id")) {
+                attrs.add(new OutAttr(" ", "id", " id=\"" + prop + "\""));
+            }
+            attrs.add(new OutAttr(" ", "name", " name=\"" + prop + "\""));
+            return new String[] {null, ""};
+        }
         if (input.equals("input") && kind.equals("checkbox")) {
             int n = fieldIds.merge(prop, 1, Integer::sum);
             if (!hasAttr(attrs, "id")) {
@@ -525,6 +553,24 @@ final class TemplateTranslator {
         }
         attrs.add(new OutAttr(" ", "value", " value=\"" + value + "\""));
         return new String[] {null, ""};
+    }
+
+    /**
+     * {@code <select th:field>} の中の option の selected（Spring の SelectedValueComparator と同じく、プロパティの値と th:value を
+     * 比べる。enum は名前で比べる）。
+     */
+    private String selected(SelectField select, ThymeleafExpr.Node optionValue, Scope scope) {
+        TV option = value(optionValue, scope);
+        RT fieldType = RT.unwrapOpt(select.type());
+        String v = select.type() instanceof RT.Opt ? fresh("selected") : select.value().code();
+        boolean fieldEnum = fieldType instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM;
+        RT optionType = option.type() instanceof RT.Ref r ? r.inner() : option.type();
+        boolean optionEnum = optionType instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM;
+        String left = fieldEnum ? v + ".name()" : v + ".to_string()";
+        String right = optionEnum ? option.code() + ".name()" : option.type() instanceof RT.StrRef && !option.var() ? option.code()
+                : option.code() + ".to_string()";
+        String test = "{% if " + left + " == " + right + " %} selected=\"selected\"{% endif %}";
+        return select.type() instanceof RT.Opt ? "{% if let Some(" + v + ") = " + select.value().code() + " %}" + test + "{% endif %}" : test;
     }
 
     private static boolean hasAttr(List<OutAttr> attrs, String name) {
@@ -903,6 +949,9 @@ final class TemplateTranslator {
             case ThymeleafExpr.Link l -> {
                 return link(l, scope);
             }
+            case ThymeleafExpr.Message m -> {
+                return message(m, scope, raw);
+            }
             case ThymeleafExpr.Var v when scope.lookup(v.name()) instanceof Alias a -> {
                 return output(a.expr(), a.scope(), raw);
             }
@@ -969,6 +1018,7 @@ final class TemplateTranslator {
     private boolean isText(ThymeleafExpr.Node n, Scope scope) {
         return switch (n) {
             case ThymeleafExpr.Str s -> true;
+            case ThymeleafExpr.Message m -> true;
             case ThymeleafExpr.Binary b when b.op().equals("+") -> isText(b.left(), scope) || isText(b.right(), scope);
             case ThymeleafExpr.Num x -> false;
             case ThymeleafExpr.Cond c -> true;
@@ -995,6 +1045,152 @@ final class TemplateTranslator {
             return "{{ " + v.code() + ".name()" + filter + " }}";
         }
         return "{{ " + v.code() + filter + " }}";
+    }
+
+    // ================================================================== メッセージ（#{...}）
+
+    /**
+     * メッセージ式。messages.properties の値を変換時に埋め込む。キーが {@code ${'priority.' + p}} のように値で決まるなら、
+     * その値で分岐する（{@code {% match p.name() %}{% when "LOW" %}低...}）。
+     */
+    private String message(ThymeleafExpr.Message m, Scope scope, boolean raw) {
+        if (m.key() instanceof ThymeleafExpr.Str k) {
+            String text = tr.messages().getProperty(k.value());
+            if (text == null) {
+                diags.report(DiagnosticCode.SPRING_UNSUPPORTED, pos(), "message '" + k.value() + "' is not in messages.properties");
+                return staticText(ThymeleafHtml.escape("??" + k.value() + "??"));
+            }
+            return formatMessage(text, m.args(), scope, raw);
+        }
+        // キー = 文字列の連結（前後は文字列リテラル、間に 1 つの値）
+        List<ThymeleafExpr.Node> parts = new ArrayList<>();
+        flattenPlus(m.key(), parts);
+        StringBuilder prefix = new StringBuilder();
+        StringBuilder suffix = new StringBuilder();
+        ThymeleafExpr.Node dynamic = null;
+        for (ThymeleafExpr.Node p : parts) {
+            if (p instanceof ThymeleafExpr.Str str) {
+                (dynamic == null ? prefix : suffix).append(str.value());
+            } else if (dynamic == null) {
+                dynamic = p;
+            } else {
+                return unsupported("message key " + m.key());
+            }
+        }
+        if (dynamic == null) {
+            return message(new ThymeleafExpr.Message(new ThymeleafExpr.Str(prefix + suffix.toString()), m.args()), scope, raw);
+        }
+        TV v = value(dynamic, scope);
+        RT t = v.type() instanceof RT.Ref r ? r.inner() : v.type();
+        String code;
+        if (t instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM) {
+            code = v.code() + ".name()";
+        } else if (t instanceof RT.Str) {
+            code = v.code() + ".as_str()";
+        } else if (t instanceof RT.StrRef) {
+            code = v.code();
+        } else {
+            return unsupported("message key from " + v.code());
+        }
+        StringBuilder sb = new StringBuilder("{% match " + code + " %}");
+        for (String key : new java.util.TreeSet<>(tr.messages().stringPropertyNames())) {
+            if (key.length() > prefix.length() + suffix.length() && key.startsWith(prefix.toString()) && key.endsWith(suffix.toString())) {
+                String middle = key.substring(prefix.length(), key.length() - suffix.length());
+                sb.append("{% when ").append(BodyLowerer.rustString(middle)).append(" %}")
+                        .append(formatMessage(tr.messages().getProperty(key), m.args(), scope, raw));
+            }
+        }
+        sb.append("{% else %}").append(staticText(ThymeleafHtml.escape("??" + prefix))).append("{{ ").append(code).append(" }}")
+                .append(staticText(ThymeleafHtml.escape(suffix + "??"))).append("{% endmatch %}");
+        return sb.toString();
+    }
+
+    private static void flattenPlus(ThymeleafExpr.Node n, List<ThymeleafExpr.Node> out) {
+        if (n instanceof ThymeleafExpr.Binary b && b.op().equals("+")) {
+            flattenPlus(b.left(), out);
+            flattenPlus(b.right(), out);
+        } else {
+            out.add(n);
+        }
+    }
+
+    /**
+     * メッセージの書式。引数がなければそのまま（Spring の MessageSource は MessageFormat を通さない）、あれば
+     * java.text.MessageFormat と同じく {@code {0}} を引数で置き換え、{@code '...'} を引用として扱う。
+     */
+    private String formatMessage(String pattern, List<ThymeleafExpr.Node> args, Scope scope, boolean raw) {
+        if (args.isEmpty()) {
+            return staticText(raw ? pattern : ThymeleafHtml.escape(pattern));
+        }
+        StringBuilder out = new StringBuilder();
+        StringBuilder lit = new StringBuilder();
+        int i = 0;
+        boolean quoted = false;
+        while (i < pattern.length()) {
+            char c = pattern.charAt(i);
+            if (c == '\'') {
+                if (i + 1 < pattern.length() && pattern.charAt(i + 1) == '\'') {
+                    lit.append('\'');
+                    i += 2;
+                } else {
+                    quoted = !quoted;
+                    i++;
+                }
+                continue;
+            }
+            if (c == '{' && !quoted) {
+                int end = pattern.indexOf('}', i);
+                if (end < 0) {
+                    lit.append(pattern.substring(i));
+                    break;
+                }
+                String spec = pattern.substring(i + 1, end).strip();
+                String[] fields = spec.split(",", 2);
+                int index;
+                try {
+                    index = Integer.parseInt(fields[0].strip());
+                } catch (NumberFormatException e) {
+                    diags.report(DiagnosticCode.SPRING_UNSUPPORTED, pos(), "message format {" + spec + "} is not supported yet");
+                    lit.append(pattern, i, end + 1);
+                    i = end + 1;
+                    continue;
+                }
+                if (fields.length > 1) {
+                    diags.report(DiagnosticCode.SPRING_UNSUPPORTED, pos(), "message format type {" + spec + "} is not supported yet");
+                }
+                out.append(staticText(raw ? lit.toString() : ThymeleafHtml.escape(lit.toString())));
+                lit.setLength(0);
+                out.append(index < args.size() ? messageArg(value(args.get(index), scope), raw) : "{" + index + "}");
+                i = end + 1;
+                continue;
+            }
+            lit.append(c);
+            i++;
+        }
+        out.append(staticText(raw ? lit.toString() : ThymeleafHtml.escape(lit.toString())));
+        return out.toString();
+    }
+
+    /** MessageFormat の引数の表示（数値は 3 桁ごとに区切る。null は "null"）。 */
+    private String messageArg(TV v, boolean raw) {
+        RT t = v.type() instanceof RT.Ref r ? r.inner() : v.type();
+        if (t instanceof RT.Null) {
+            return "null";
+        }
+        if (t instanceof RT.Opt o) {
+            String binding = fresh("arg");
+            return "{% if let Some(" + binding + ") = " + v.code() + " %}" + messageArg(new TV(binding, o.inner(), true), raw)
+                    + "{% else %}null{% endif %}";
+        }
+        if (t instanceof RT.Prim p && !p.equals(RT.BOOL)) {
+            usesMessageArg = true;
+            return "{{ " + v.code() + ".message_arg() }}";
+        }
+        if (t instanceof RT.Named n && n.name().equals("NaiveDateTime")) {
+            diags.report(DiagnosticCode.LOSSY_STRING_IDENTITY, pos(),
+                    "LocalDateTime in a message is printed as 'yyyy-MM-dd HH:mm:ss' in Rust ('yyyy-MM-ddTHH:mm' in Java)");
+        }
+        return display(v, raw);
     }
 
     /** リンク式 @{/path/{var}(var=..., q=...)} の URL。 */

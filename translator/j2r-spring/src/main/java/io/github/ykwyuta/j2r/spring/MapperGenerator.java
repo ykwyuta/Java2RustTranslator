@@ -45,6 +45,7 @@ final class MapperGenerator {
         Imports imports = new Imports(module);
         imports.add("sqlx::PgConnection");
         List<RItem> fns = new ArrayList<>();
+        java.util.Map<String, RItem> rowMappers = new java.util.LinkedHashMap<>();
         for (Decl.MethodDecl m : t.methods()) {
             Plans.MapperFn fn = tr.plans().mapperFns.get(m.ref().key());
             if (fn == null) {
@@ -53,10 +54,11 @@ final class MapperGenerator {
                 }
                 continue;
             }
-            fns.add(function(t, mapper, m, fn, imports));
+            fns.add(function(t, mapper, m, fn, imports, rowMappers));
         }
         List<RItem> items = new ArrayList<>(imports.items());
         items.addAll(fns);
+        items.addAll(rowMappers.values());
         String path = String.join("/", model.modulePath(t.packageName()));
         List<String> header = mapper == null ? SpringTranslator.header(t)
                 : SpringTranslator.header(t, mapper.file().getFileName().toString());
@@ -66,7 +68,8 @@ final class MapperGenerator {
     // ------------------------------------------------------------------ 引数
 
     /** SQL から参照できる引数。 */
-    private record Param(String name, String rust, RT type) {}
+    /** owned は {@code <bind>} の値（関数の中で作った値なので、渡すときは借用する）。 */
+    private record Param(String name, String rust, RT type, boolean owned) {}
 
     /** {@code #{...}} と test の名前を解決する環境。 */
     private final class Env {
@@ -100,7 +103,7 @@ final class MapperGenerator {
             }
             RExpr e = new RExpr.Path(p.rust());
             RT type = p.type();
-            BodyLowerer.Place place = BodyLowerer.Place.LOCAL;
+            BodyLowerer.Place place = p.owned() ? BodyLowerer.Place.FIELD : BodyLowerer.Place.LOCAL;
             for (int i = from; i < segs.size(); i++) {
                 RT owner = type instanceof RT.Ref r ? r.inner() : type;
                 if (!(owner instanceof RT.Named n)) {
@@ -125,7 +128,8 @@ final class MapperGenerator {
 
     // ------------------------------------------------------------------ 関数
 
-    private RItem function(Decl.TypeDecl t, MyBatisXml.Mapper mapper, Decl.MethodDecl m, Plans.MapperFn fn, Imports imports) {
+    private RItem function(Decl.TypeDecl t, MyBatisXml.Mapper mapper, Decl.MethodDecl m, Plans.MapperFn fn, Imports imports,
+                           java.util.Map<String, RItem> rowMappers) {
         Env env = new Env(imports);
         List<RItem.Param> params = new ArrayList<>();
         params.add(new RItem.Param("conn", false, new RType("&mut PgConnection")));
@@ -136,7 +140,7 @@ final class MapperGenerator {
             anyParamAnnotation |= a != null;
             String name = a != null ? a.stringValue("value") : p.name();
             String rust = Naming.valueName(p.name());
-            env.params.add(new Param(name, rust, fn.params().get(i)));
+            env.params.add(new Param(name, rust, fn.params().get(i), false));
             params.add(new RItem.Param(rust, false, new RType(fn.params().get(i).text(imports))));
         }
         env.single = m.params().size() == 1 && !anyParamAnnotation;
@@ -150,10 +154,15 @@ final class MapperGenerator {
                     null, false);
         } else {
             docs.add("`" + st.source() + "`");
-            if (st.resultMap() != null) {
-                tr.report(m.pos(), m.name() + ": resultMap is not supported yet (columns are mapped to fields by name)");
+            String rowMapper = null;
+            MyBatisXml.ResultMap rm = st.kind() == MyBatisXml.Kind.SELECT ? tr.resultMap(t, mapper, m, st) : null;
+            if (rm != null) {
+                rowMapper = Naming.toSnakeCase(rm.id());
+                if (!rowMappers.containsKey(rowMapper)) {
+                    rowMappers.put(rowMapper, rowMapperFn(rowMapper, rm, rowType(fn.ret()), imports, m));
+                }
             }
-            body = st.isDynamic() ? dynamic(st, fn, env, m) : staticStatement(st, fn, env, m);
+            body = st.isDynamic() ? dynamic(st, fn, env, m, rowMapper) : staticStatement(st, fn, env, m, rowMapper);
         }
         List<String> javadoc = SpringTranslator.docs(m.javadoc());
         if (!javadoc.isEmpty()) {
@@ -165,7 +174,7 @@ final class MapperGenerator {
 
     // ------------------------------------------------------------------ 静的な SQL
 
-    private RExpr.Block staticStatement(MyBatisXml.Statement st, Plans.MapperFn fn, Env env, Decl.MethodDecl m) {
+    private RExpr.Block staticStatement(MyBatisXml.Statement st, Plans.MapperFn fn, Env env, Decl.MethodDecl m, String rowMapper) {
         StringBuilder sql = new StringBuilder();
         List<RExpr> binds = new ArrayList<>();
         for (MyBatisXml.SqlNode n : st.body()) {
@@ -184,7 +193,7 @@ final class MapperGenerator {
         }
         List<RStmt> stmts = new ArrayList<>();
         RExpr base = null;
-        String kind = queryKind(st, fn);
+        String kind = queryKind(st, fn, rowMapper);
         RExpr lit = new RExpr.Lit(sqlLiteral(sql.toString()));
         switch (kind) {
             case "query_as" -> base = new RExpr.Call(new RExpr.Path("sqlx::query_as::<_, " + rowType(fn.ret()).text(env.imports) + ">"), List.of(lit));
@@ -194,12 +203,21 @@ final class MapperGenerator {
         for (RExpr b : binds) {
             base = new RExpr.MethodCall(base, "bind", List.of(b));
         }
+        if (kind.equals("query_map")) {
+            base = new RExpr.MethodCall(base, "try_map", List.of(new RExpr.Path(rowMapper)));
+        }
         return execute(st, fn, env, m, base, stmts);
     }
 
-    /** query_as（エンティティ・record の行）/ query_scalar（1 列の値・生成されたキー）/ query（更新系）。 */
-    private static String queryKind(MyBatisXml.Statement st, Plans.MapperFn fn) {
+    /**
+     * query_as（エンティティ・record の行）/ query_map（resultMap で対応付ける行）/ query_scalar（1 列の値・生成されたキー）/
+     * query（更新系）。
+     */
+    private static String queryKind(MyBatisXml.Statement st, Plans.MapperFn fn, String rowMapper) {
         if (st.kind() == MyBatisXml.Kind.SELECT) {
+            if (rowMapper != null) {
+                return "query_map";
+            }
             return isEntity(rowType(fn.ret())) ? "query_as" : "query_scalar";
         }
         return st.keyProperty() != null ? "query_scalar" : "query";
@@ -248,6 +266,58 @@ final class MapperGenerator {
         stmts.add(new RStmt.Let("result", false, null, exec));
         RExpr rows = new RExpr.MethodCall(new RExpr.Path("result"), "rows_affected", List.of());
         return new RExpr.Block(stmts, ok(countValue(fn.ret(), rows, false)), null, false);
+    }
+
+    /**
+     * {@code <resultMap>}（{@code @Results}）の行の対応。書いた列をプロパティに入れ、autoMapping なら残りのプロパティも
+     * 同じ名前（snake_case）の列から入れる。結果にない列は無視する（プロパティは既定値のまま）。
+     */
+    private RItem rowMapperFn(String name, MyBatisXml.ResultMap rm, RT rowType, Imports imports, Decl.MethodDecl m) {
+        tr.supportModules.add("mybatis");
+        imports.add("sqlx::postgres::PgRow");
+        imports.add("crate::mybatis::column");
+        for (String u : rm.unsupported()) {
+            tr.report(m.pos(), "resultMap " + rm.id() + ": " + u + " is not supported yet");
+        }
+        Decl.TypeDecl decl = rowType instanceof RT.Named n ? tr.model().types.get(n.javaName()) : null;
+        if (decl == null || !BodyLowerer.isEntityLike(tr.model().role(decl.qualifiedName()))) {
+            tr.report(m.pos(), "resultMap " + rm.id() + ": mapping to " + rowType.text(imports)
+                    + " is not supported yet (only classes with setters)");
+            return new RItem.Fn(List.of(), List.of(), "", name, List.of(new RItem.Param("_row", false, new RType("PgRow"))),
+                    new RType("sqlx::Result<" + rowType.text(imports) + ">"), new RExpr.Block(List.of(), new RExpr.Macro("todo",
+                    List.of(new RExpr.Lit(BodyLowerer.rustString("resultMap " + rm.id())))), null, false));
+        }
+        String var = Naming.valueName(Character.toLowerCase(decl.simpleName().charAt(0)) + decl.simpleName().substring(1));
+        List<RStmt> stmts = new ArrayList<>();
+        stmts.add(new RStmt.Let(var, true, null, new RExpr.Call(new RExpr.Path(rowType.text(imports) + "::default"), List.of())));
+        java.util.Set<String> mapped = new java.util.HashSet<>();
+        List<String[]> columns = new ArrayList<>();
+        for (MyBatisXml.ResultMapping rmap : rm.mappings()) {
+            if (tr.types().field(decl.qualifiedName(), rmap.property()) == null) {
+                tr.report(m.pos(), "resultMap " + rm.id() + ": unknown property '" + rmap.property() + "'");
+                continue;
+            }
+            mapped.add(rmap.property());
+            columns.add(new String[] {rmap.property(), rmap.column().toLowerCase(Locale.ROOT)});
+        }
+        if (rm.autoMapping()) {
+            for (Decl.FieldDecl f : decl.fields()) {
+                if (!f.isStatic() && !mapped.contains(f.name())) {
+                    columns.add(new String[] {f.name(), Naming.toSnakeCase(f.name())});
+                }
+            }
+        }
+        for (String[] c : columns) {
+            RExpr get = new RExpr.Try(new RExpr.Call(new RExpr.Path("column"), List.of(new RExpr.Path("&row"),
+                    new RExpr.Lit(BodyLowerer.rustString(c[1])))));
+            stmts.add(new RStmt.ExprStmt(new RExpr.IfLet("Some(v)", get, RExpr.Block.of(List.of(new RStmt.ExprStmt(
+                    new RExpr.Assign(new RExpr.Field(new RExpr.Path(var), Naming.valueName(c[0])), "=", new RExpr.Path("v")), true))), null),
+                    false));
+        }
+        String source = rm.type().isEmpty() ? "`@Results`" : "`<resultMap id=\"" + rm.id() + "\">`";
+        return new RItem.Fn(List.of(source + " の行の対応。"), List.of(), "", name, List.of(new RItem.Param("row", false, new RType("PgRow"))),
+                new RType("sqlx::Result<" + rowType.text(imports) + ">"),
+                new RExpr.Block(stmts, new RExpr.Call(new RExpr.Path("Ok"), List.of(new RExpr.Path(var))), null, false));
     }
 
     /** 更新件数を Java の戻り値の型にする（int → as i32、boolean → > 0）。 */
@@ -315,7 +385,7 @@ final class MapperGenerator {
 
     // ------------------------------------------------------------------ 動的な SQL（QueryBuilder）
 
-    private RExpr.Block dynamic(MyBatisXml.Statement st, Plans.MapperFn fn, Env env, Decl.MethodDecl m) {
+    private RExpr.Block dynamic(MyBatisXml.Statement st, Plans.MapperFn fn, Env env, Decl.MethodDecl m, String rowMapper) {
         env.imports.add("sqlx::Postgres");
         env.imports.add("sqlx::QueryBuilder");
         List<MyBatisXml.SqlNode> nodes = new ArrayList<>(st.body());
@@ -332,11 +402,12 @@ final class MapperGenerator {
             d.stmts.add(new RStmt.ExprStmt(new RExpr.MethodCall(new RExpr.Path("query"), "push",
                     List.of(new RExpr.Lit(BodyLowerer.rustString(" RETURNING " + columnName(st.keyColumn()))))), true));
         }
-        String kind = queryKind(st, fn);
+        String kind = queryKind(st, fn, rowMapper);
         RExpr q = new RExpr.Path("query");
         RExpr base = switch (kind) {
             case "query_as" -> new RExpr.MethodCall(q, "build_query_as::<" + rowType(fn.ret()).text(env.imports) + ">", List.of());
             case "query_scalar" -> new RExpr.MethodCall(q, "build_query_scalar::<" + scalarType(st, fn, env) + ">", List.of());
+            case "query_map" -> new RExpr.MethodCall(new RExpr.MethodCall(q, "build", List.of()), "try_map", List.of(new RExpr.Path(rowMapper)));
             default -> new RExpr.MethodCall(q, "build", List.of());
         };
         return execute(st, fn, env, m, base, d.stmts);
@@ -346,50 +417,70 @@ final class MapperGenerator {
         return s.replaceAll("\\s+", " ");
     }
 
+    /** {@code <trim>}（{@code <where>}・{@code <set>}）の中の出力先。var は mybatis::Trim の変数。 */
+    private record TrimCtx(String var, MyBatisXml.Trim trim) {}
+
     /** 動的 SQL の組み立て。 */
     private final class Dyn {
         final Env env;
         final Decl.MethodDecl method;
         final List<RStmt> stmts = new ArrayList<>();
-        int clauses;
+        final java.util.Map<String, Integer> names = new java.util.HashMap<>();
+        /** 次の断片の前に空白を入れない（{@code <foreach>} の open の直後）。 */
+        boolean noSpace;
 
         Dyn(Env env, Decl.MethodDecl method) {
             this.env = env;
             this.method = method;
         }
 
-        /**
-         * nodes を out に出力する。clause が null でなければ &lt;where&gt; / &lt;set&gt; の中（Text と Bind の並びが 1 つの断片）。
-         */
-        void nodes(List<MyBatisXml.SqlNode> nodes, List<RStmt> out, Clause clause) {
+        private String fresh(String base) {
+            int n = names.merge(base, 1, Integer::sum);
+            return n == 1 ? base : base + n;
+        }
+
+        /** nodes を out に出力する。trim が null でなければ {@code <trim>} の中（Text・Bind などの並びが 1 つの断片）。 */
+        void nodes(List<MyBatisXml.SqlNode> nodes, List<RStmt> out, TrimCtx trim) {
             List<MyBatisXml.SqlNode> run = new ArrayList<>();
             for (MyBatisXml.SqlNode n : nodes) {
-                if (n instanceof MyBatisXml.Text || n instanceof MyBatisXml.Bind) {
+                if (n instanceof MyBatisXml.Text || n instanceof MyBatisXml.Bind || n instanceof MyBatisXml.Subst
+                        || n instanceof MyBatisXml.Foreach) {
                     run.add(n);
                     continue;
                 }
-                flush(run, out, clause);
+                flush(run, out, trim);
                 switch (n) {
-                    case MyBatisXml.If i -> out.add(new RStmt.ExprStmt(new RExpr.If(test(i.test()), block(i.body(), clause), null), false));
+                    case MyBatisXml.If i -> out.add(new RStmt.ExprStmt(new RExpr.If(test(i.test()), block(i.body(), trim), null), false));
                     case MyBatisXml.Choose c -> {
-                        RExpr chain = c.otherwise() == null ? null : block(c.otherwise(), clause);
+                        RExpr chain = c.otherwise() == null ? null : block(c.otherwise(), trim);
                         for (int k = c.whens().size() - 1; k >= 0; k--) {
                             MyBatisXml.If w = c.whens().get(k);
-                            chain = new RExpr.If(test(w.test()), block(w.body(), clause), chain);
+                            chain = new RExpr.If(test(w.test()), block(w.body(), trim), chain);
                         }
                         if (chain != null) {
                             out.add(new RStmt.ExprStmt(chain, false));
                         }
                     }
-                    case MyBatisXml.Clause cl -> {
+                    case MyBatisXml.Trim t -> {
+                        if (trim != null) {
+                            tr.report(method.pos(), method.name() + ": <" + t.tag() + "> inside <" + trim.trim().tag() + "> is not supported yet");
+                        }
                         tr.supportModules.add("mybatis");
-                        env.imports.add("crate::mybatis::Clause");
-                        clauses++;
-                        String var = (cl.where() ? "where_clause" : "set_clause") + (clauses > 1 ? Integer.toString(clauses) : "");
-                        out.add(new RStmt.Let(var, true, null, new RExpr.Call(
-                                new RExpr.Path(cl.where() ? "Clause::where_clause" : "Clause::set_clause"), List.of())));
-                        nodes(cl.body(), out, new Clause(var, cl.where()));
+                        env.imports.add("crate::mybatis::Trim");
+                        String var = fresh(switch (t.tag()) {
+                            case "where" -> "where_clause";
+                            case "set" -> "set_clause";
+                            default -> "trim";
+                        });
+                        out.add(new RStmt.Let(var, true, null, new RExpr.Call(new RExpr.Path("Trim::new"),
+                                List.of(new RExpr.Lit(BodyLowerer.rustString(t.prefix())), new RExpr.Lit(BodyLowerer.rustString(t.suffix()))))));
+                        nodes(t.body(), out, new TrimCtx(var, t));
+                        if (!t.suffix().isEmpty()) {
+                            out.add(new RStmt.ExprStmt(new RExpr.MethodCall(new RExpr.Path(var), "finish", List.of(new RExpr.Path("&mut query"))),
+                                    true));
+                        }
                     }
+                    case MyBatisXml.BindVar b -> bindVar(b, out);
                     case MyBatisXml.Unsupported u -> {
                         tr.report(method.pos(), method.name() + ": " + u.description() + " is not supported yet");
                         out.add(new RStmt.ExprStmt(new RExpr.Macro("todo", List.of(new RExpr.Lit(BodyLowerer.rustString(u.description())))), true));
@@ -397,69 +488,229 @@ final class MapperGenerator {
                     default -> throw new IllegalStateException(n.toString());
                 }
             }
-            flush(run, out, clause);
+            flush(run, out, trim);
         }
 
-        private RExpr.Block block(List<MyBatisXml.SqlNode> body, Clause clause) {
+        private RExpr.Block block(List<MyBatisXml.SqlNode> body, TrimCtx trim) {
             List<RStmt> inner = new ArrayList<>();
-            nodes(body, inner, clause);
+            int params = env.params.size();
+            nodes(body, inner, trim);
+            // <bind> の名前はブロックの中だけで使える。
+            while (env.params.size() > params) {
+                env.params.remove(env.params.size() - 1);
+            }
             return new RExpr.Block(inner, null, null, false);
         }
 
-        /** Text と Bind の並びを 1 つの文（push / push_bind の連鎖）にする。 */
-        private void flush(List<MyBatisXml.SqlNode> run, List<RStmt> out, Clause clause) {
+        /**
+         * Text・Bind・${}・foreach の並びを文にする（push / push_bind の連鎖）。{@code <trim>} の中なら、先頭の prefixOverrides と
+         * 末尾の suffixOverrides を取り除いて Trim::part に渡す。
+         */
+        private void flush(List<MyBatisXml.SqlNode> run, List<RStmt> out, TrimCtx trim) {
             if (run.isEmpty()) {
                 return;
             }
             List<MyBatisXml.SqlNode> parts = new ArrayList<>(run);
             run.clear();
-            RExpr chain;
-            if (clause != null) {
-                String sep = clause.where() ? " AND " : ", ";
-                if (parts.get(0) instanceof MyBatisXml.Text t) {
-                    String s = collapse(t.sql()).stripLeading();
-                    String upper = s.toUpperCase(Locale.ROOT);
-                    if (clause.where() && (upper.startsWith("AND ") || upper.equals("AND"))) {
-                        s = s.substring(3).stripLeading();
-                    } else if (clause.where() && (upper.startsWith("OR ") || upper.equals("OR"))) {
-                        s = s.substring(2).stripLeading();
-                        sep = " OR ";
-                    }
-                    parts.set(0, new MyBatisXml.Text(s));
-                }
-                if (!clause.where() && parts.get(parts.size() - 1) instanceof MyBatisXml.Text t) {
-                    String s = collapse(t.sql()).stripTrailing();
-                    if (s.endsWith(",")) {
-                        s = s.substring(0, s.length() - 1).stripTrailing();
-                    }
-                    parts.set(parts.size() - 1, new MyBatisXml.Text(s));
-                }
-                chain = new RExpr.MethodCall(new RExpr.Path(clause.var()), "part",
-                        List.of(new RExpr.Path("&mut query"), new RExpr.Lit(BodyLowerer.rustString(sep))));
-            } else {
-                chain = new RExpr.Path("query");
-                if (parts.get(0) instanceof MyBatisXml.Text t) {
-                    parts.set(0, new MyBatisXml.Text(" " + collapse(t.sql()).stripLeading()));
-                }
-            }
-            if (parts.get(parts.size() - 1) instanceof MyBatisXml.Text t && clause == null) {
-                parts.set(parts.size() - 1, new MyBatisXml.Text(collapse(t.sql()).stripTrailing()));
-            }
             for (int i = 0; i < parts.size(); i++) {
-                MyBatisXml.SqlNode p = parts.get(i);
-                if (p instanceof MyBatisXml.Text t) {
+                if (parts.get(i) instanceof MyBatisXml.Text t) {
                     String s = collapse(t.sql());
+                    if (i == 0) {
+                        s = s.stripLeading();
+                    }
                     if (i == parts.size() - 1) {
                         s = s.stripTrailing();
                     }
-                    if (!s.isEmpty()) {
-                        chain = new RExpr.MethodCall(chain, "push", List.of(new RExpr.Lit(BodyLowerer.rustString(s))));
-                    }
-                } else if (p instanceof MyBatisXml.Bind b) {
-                    chain = new RExpr.MethodCall(chain, "push_bind", List.of(bindArg(env, b.expr(), method)));
+                    parts.set(i, new MyBatisXml.Text(s));
                 }
             }
-            out.add(new RStmt.ExprStmt(chain, true));
+            String lead = "";
+            String trail = "";
+            if (trim != null) {
+                if (parts.get(0) instanceof MyBatisXml.Text t) {
+                    String o = override(t.sql(), trim.trim().prefixOverrides(), true);
+                    if (o != null) {
+                        lead = t.sql().substring(0, o.length());
+                        parts.set(0, new MyBatisXml.Text(t.sql().substring(o.length()).stripLeading()));
+                    }
+                }
+                if (parts.get(parts.size() - 1) instanceof MyBatisXml.Text t) {
+                    String o = override(t.sql(), trim.trim().suffixOverrides(), false);
+                    if (o != null) {
+                        trail = t.sql().substring(t.sql().length() - o.length());
+                        parts.set(parts.size() - 1, new MyBatisXml.Text(t.sql().substring(0, t.sql().length() - o.length()).stripTrailing()));
+                    }
+                }
+            }
+            RExpr part = trim == null ? null : new RExpr.MethodCall(new RExpr.Path(trim.var()), "part", List.of(new RExpr.Path("&mut query"),
+                    new RExpr.Lit(BodyLowerer.rustString(lead)), new RExpr.Lit(BodyLowerer.rustString(trail))));
+            if (parts.size() == 1 && parts.get(0) instanceof MyBatisXml.Foreach f && part != null) {
+                // <where> の中の <foreach> だけの断片は、要素があるときだけ断片にする。
+                foreach(f, out, part);
+                return;
+            }
+            RExpr chain = part != null ? part : new RExpr.Path("query");
+            boolean space = trim == null && !noSpace;
+            noSpace = false;
+            for (int i = 0; i < parts.size(); i++) {
+                switch (parts.get(i)) {
+                    case MyBatisXml.Text t -> {
+                        String s = (i == 0 && space ? " " : "") + t.sql();
+                        if (!s.isEmpty()) {
+                            chain = new RExpr.MethodCall(chain, "push", List.of(new RExpr.Lit(BodyLowerer.rustString(s))));
+                        }
+                    }
+                    case MyBatisXml.Bind b -> chain = new RExpr.MethodCall(chain, "push_bind", List.of(bindArg(env, b.expr(), method)));
+                    case MyBatisXml.Subst x -> chain = new RExpr.MethodCall(chain, "push", List.of(substArg(x.expr())));
+                    case MyBatisXml.Foreach f -> {
+                        if (!(chain instanceof RExpr.Path p && p.path().equals("query"))) {
+                            out.add(new RStmt.ExprStmt(chain, true));
+                        }
+                        foreach(f, out, null);
+                        chain = new RExpr.Path("query");
+                    }
+                    default -> throw new IllegalStateException();
+                }
+            }
+            if (!(chain instanceof RExpr.Path p && p.path().equals("query"))) {
+                out.add(new RStmt.ExprStmt(chain, true));
+            }
+        }
+
+        /** text の先頭（prefix なら）か末尾に overrides のどれかがあれば、その文字列（大文字と小文字は区別しない）。 */
+        private static String override(String text, List<String> overrides, boolean prefix) {
+            String upper = text.toUpperCase(Locale.ROOT);
+            for (String o : overrides) {
+                String u = o.toUpperCase(Locale.ROOT);
+                boolean word = Character.isLetterOrDigit(u.charAt(0));
+                if (prefix && upper.startsWith(u)
+                        && (!word || upper.length() == u.length() || !Character.isLetterOrDigit(upper.charAt(u.length())))) {
+                    return text.substring(0, o.length());
+                }
+                if (!prefix && upper.endsWith(u)
+                        && (!word || upper.length() == u.length() || !Character.isLetterOrDigit(upper.charAt(upper.length() - u.length() - 1)))) {
+                    return text.substring(text.length() - o.length());
+                }
+            }
+            return null;
+        }
+
+        /**
+         * {@code <foreach>}。要素がなければ何も書かない（open・close も）。part があれば（{@code <where>} の中）要素があるときだけ
+         * Trim::part を呼ぶ。
+         */
+        private void foreach(MyBatisXml.Foreach f, List<RStmt> out, RExpr part) {
+            BodyLowerer.RV coll = env.resolve(f.collection());
+            if (coll == null) {
+                tr.report(method.pos(), method.name() + ": unknown collection '" + f.collection() + "' in <foreach>");
+                out.add(new RStmt.ExprStmt(new RExpr.Macro("todo", List.of(new RExpr.Lit(BodyLowerer.rustString(f.collection())))), true));
+                return;
+            }
+            RT type = coll.type() instanceof RT.Ref r ? r.inner() : coll.type();
+            RT elem = switch (type) {
+                case RT.VecT v -> v.elem();
+                case RT.Slice v -> v.elem();
+                case RT.ArrayT v -> v.elem();
+                default -> null;
+            };
+            if (elem == null) {
+                tr.report(method.pos(), method.name() + ": <foreach> over " + type.text(env.imports) + " is not supported yet");
+                out.add(new RStmt.ExprStmt(new RExpr.Macro("todo", List.of(new RExpr.Lit(BodyLowerer.rustString(f.collection())))), true));
+                return;
+            }
+            boolean ref = coll.place() == BodyLowerer.Place.FIELD || coll.type() instanceof RT.VecT;
+            boolean enumerate = !f.separator().isEmpty() || !f.index().isEmpty();
+            RExpr iter = elem.copy()
+                    ? new RExpr.MethodCall(new RExpr.MethodCall(coll.expr(), "iter", List.of()), "copied", List.of())
+                    : enumerate ? new RExpr.MethodCall(coll.expr(), "iter", List.of())
+                    : ref ? new RExpr.Unary("&", coll.expr()) : coll.expr();
+            String item = f.item().isEmpty() ? "item" : f.item();
+            String itemVar = fresh(Naming.valueName(item));
+            String indexVar = f.index().isEmpty() ? "i" : fresh(Naming.valueName(f.index()));
+            List<RStmt> body = new ArrayList<>();
+            if (!f.separator().isEmpty()) {
+                body.add(new RStmt.ExprStmt(new RExpr.If(new RExpr.Binary(">", new RExpr.Path(indexVar), new RExpr.Lit("0")),
+                        RExpr.Block.of(List.of(push(f.separator()))), null), false));
+            }
+            int params = env.params.size();
+            env.params.add(new Param(item, itemVar, elem.copy() ? elem : new RT.Ref(elem, false), false));
+            if (!f.index().isEmpty()) {
+                env.params.add(new Param(f.index(), "(" + indexVar + " as i32)", RT.I32, false));
+            }
+            noSpace = !f.open().isEmpty();
+            nodes(f.body(), body, null);
+            noSpace = false;
+            while (env.params.size() > params) {
+                env.params.remove(env.params.size() - 1);
+            }
+            RExpr loop = new RExpr.Template(List.of("for " + (enumerate ? "(" + indexVar + ", " + itemVar + ")" : itemVar) + " in ",
+                    enumerate ? new RExpr.MethodCall(iter, "enumerate", List.of()) : iter, " ", RExpr.Block.of(body)));
+            List<RStmt> guarded = new ArrayList<>();
+            if (part != null) {
+                guarded.add(new RStmt.ExprStmt(part, true));
+            }
+            if (!f.open().isEmpty()) {
+                guarded.add(push((part != null ? "" : " ") + f.open()));
+            }
+            guarded.add(new RStmt.ExprStmt(loop, false));
+            if (!f.close().isEmpty()) {
+                guarded.add(push(f.close()));
+            }
+            if (part == null && f.open().isEmpty() && f.close().isEmpty()) {
+                out.addAll(guarded);
+            } else {
+                out.add(new RStmt.ExprStmt(new RExpr.If(new RExpr.Unary("!", new RExpr.MethodCall(coll.expr(), "is_empty", List.of())),
+                        RExpr.Block.of(guarded), null), false));
+            }
+        }
+
+        private RStmt push(String sql) {
+            return new RStmt.ExprStmt(new RExpr.MethodCall(new RExpr.Path("query"), "push", List.of(new RExpr.Lit(BodyLowerer.rustString(sql)))),
+                    true);
+        }
+
+        /** {@code <bind name="pattern" value="'%' + keyword + '%'"/>} → {@code let pattern = format!("%{}%", keyword);}。 */
+        private void bindVar(MyBatisXml.BindVar b, List<RStmt> out) {
+            BodyLowerer.RV v;
+            try {
+                v = new OgnlLowerer(env).value(Ognl.parse(b.value()));
+            } catch (Ognl.ParseException e) {
+                tr.report(method.pos(), method.name() + ": " + e.getMessage());
+                v = BodyLowerer.RV.of(new RExpr.Macro("todo", List.of(new RExpr.Lit(BodyLowerer.rustString(b.value())))), RT.STR);
+            }
+            String rust = fresh(Naming.valueName(b.name()));
+            RT type = v.type() instanceof RT.StrRef ? RT.STR : v.type();
+            RExpr value = v.type() instanceof RT.StrRef ? new RExpr.MethodCall(v.expr(), "to_string", List.of()) : v.expr();
+            out.add(new RStmt.Let(rust, false, null, value));
+            env.params.add(new Param(b.name(), rust, type, true));
+        }
+
+        /** {@code ${expr}} の値（SQL にそのまま書く文字列。null は空文字列）。 */
+        private RExpr substArg(String expr) {
+            BodyLowerer.RV v = env.resolve(expr);
+            if (v == null) {
+                tr.report(method.pos(), method.name() + ": unknown parameter ${" + expr + "}");
+                return new RExpr.Macro("todo", List.of(new RExpr.Lit(BodyLowerer.rustString("${" + expr + "}"))));
+            }
+            RT t = v.type() instanceof RT.Ref r ? r.inner() : v.type();
+            RExpr e = v.expr();
+            if (t instanceof RT.Opt o) {
+                RT inner = o.inner() instanceof RT.Ref r ? r.inner() : o.inner();
+                if (inner instanceof RT.Str) {
+                    return new RExpr.MethodCall(new RExpr.MethodCall(e, "as_deref", List.of()), "unwrap_or", List.of(new RExpr.Lit("\"\"")));
+                }
+                if (inner instanceof RT.StrRef) {
+                    return new RExpr.MethodCall(e, "unwrap_or", List.of(new RExpr.Lit("\"\"")));
+                }
+                RExpr some = inner instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM
+                        ? new RExpr.MethodCall(new RExpr.Path("v"), "name", List.of()) : new RExpr.Path("v");
+                return new RExpr.MethodCall(e, "map_or_else", List.of(RExpr.Closure.of(List.of(), new RExpr.Path("String::new()")),
+                        RExpr.Closure.of(List.of("v"), new RExpr.MethodCall(some, "to_string", List.of()))));
+            }
+            if (t instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM) {
+                return new RExpr.MethodCall(e, "name", List.of());
+            }
+            return v.place() == BodyLowerer.Place.FIELD && !t.copy() ? new RExpr.Unary("&", e) : e;
         }
 
         private RExpr test(String src) {
@@ -471,8 +722,6 @@ final class MapperGenerator {
             }
         }
     }
-
-    private record Clause(String var, boolean where) {}
 
     // ------------------------------------------------------------------ test 属性（OGNL）
 
@@ -527,8 +776,51 @@ final class MapperGenerator {
             return new RExpr.Binary(c.op(), l, r);
         }
 
+        /** {@code a + b + ...}（文字列の連結。OGNL と同じく null は "null"）→ format!。 */
+        private BodyLowerer.RV concat(Ognl.Add add) {
+            List<Ognl.Node> parts = new ArrayList<>();
+            flattenAdd(add, parts);
+            StringBuilder fmt = new StringBuilder();
+            List<RExpr> args = new ArrayList<>();
+            for (Ognl.Node p : parts) {
+                if (p instanceof Ognl.StrLit s) {
+                    fmt.append(s.value().replace("{", "{{").replace("}", "}}"));
+                    continue;
+                }
+                BodyLowerer.RV v = value(p);
+                fmt.append("{}");
+                RT t = v.type() instanceof RT.Ref r ? r.inner() : v.type();
+                if (t instanceof RT.Opt o) {
+                    RT inner = o.inner() instanceof RT.Ref r ? r.inner() : o.inner();
+                    RExpr view = inner instanceof RT.Str ? new RExpr.MethodCall(v.expr(), "as_deref", List.of()) : v.expr();
+                    args.add(inner instanceof RT.Str || inner instanceof RT.StrRef
+                            ? new RExpr.MethodCall(view, "unwrap_or", List.of(new RExpr.Lit("\"null\"")))
+                            : new RExpr.MethodCall(view, "map_or_else", List.of(RExpr.Closure.of(List.of(), new RExpr.Path("\"null\".to_string()")),
+                            RExpr.Closure.of(List.of("v"), new RExpr.MethodCall(new RExpr.Path("v"), "to_string", List.of())))));
+                } else if (t instanceof RT.Named n && n.kind() == RT.Named.Kind.ENUM) {
+                    args.add(new RExpr.MethodCall(v.expr(), "name", List.of()));
+                } else {
+                    args.add(v.expr());
+                }
+            }
+            List<RExpr> macroArgs = new ArrayList<>();
+            macroArgs.add(new RExpr.Lit(BodyLowerer.rustString(fmt.toString())));
+            macroArgs.addAll(args);
+            return BodyLowerer.RV.of(new RExpr.Macro("format", macroArgs), RT.STR);
+        }
+
+        private static void flattenAdd(Ognl.Node n, List<Ognl.Node> out) {
+            if (n instanceof Ognl.Add a) {
+                flattenAdd(a.left(), out);
+                flattenAdd(a.right(), out);
+            } else {
+                out.add(n);
+            }
+        }
+
         private BodyLowerer.RV value(Ognl.Node n) {
             return switch (n) {
+                case Ognl.Add a -> concat(a);
                 case Ognl.StrLit s -> BodyLowerer.RV.of(new RExpr.Lit(BodyLowerer.rustString(s.value())), RT.STR_REF);
                 case Ognl.NumLit x -> BodyLowerer.RV.of(new RExpr.Lit(x.text()), RT.I64);
                 case Ognl.BoolLit b -> BodyLowerer.RV.of(new RExpr.Lit(Boolean.toString(b.value())), RT.BOOL);
