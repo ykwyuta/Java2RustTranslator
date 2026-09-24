@@ -1324,7 +1324,7 @@ final class JirBuilder {
         String name = ve.getSimpleName().toString();
         String candidate = name;
         for (int i = 2; bindingTypes.containsKey(candidate) && !bindingTypes.get(candidate).equals(t); i++) {
-            candidate = name + "__" + i;
+            candidate = name + "_p" + i;
         }
         bindingTypes.put(candidate, t);
         bindingNames.put(ve, candidate);
