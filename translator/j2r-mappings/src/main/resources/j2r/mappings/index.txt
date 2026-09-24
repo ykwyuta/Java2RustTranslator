@@ -2,3 +2,5 @@
 java.lang.yaml
 java.io.yaml
 java.util.yaml
+java.util.stream.yaml
+java.util.regex.yaml

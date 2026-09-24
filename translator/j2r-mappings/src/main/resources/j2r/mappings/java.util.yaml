@@ -280,6 +280,11 @@ classes:
       - { sig: "reversed()", rust: "jrt::util::functional::reversed({&this})?" }
       - { sig: "thenComparing(java.util.Comparator)", rust: "jrt::util::functional::then_comparing({&this}, {&0})?" }
       - { sig: "thenComparing(java.util.function.Function)", rust: "jrt::util::functional::then_comparing_key({&this}, {&0})?" }
+      - { sig: "thenComparing(java.util.function.Function,java.util.Comparator)", rust: "jrt::util::functional::then_comparing({&this}, &jrt::util::functional::comparing_with({&0}, {&1})?)?" }
+      - { sig: "thenComparingLong(java.util.function.ToLongFunction)", rust: "jrt::util::functional::then_comparing({&this}, &jrt::util::functional::comparing_number({&0}, \"applyAsLong\")?)?" }
+      - { sig: "thenComparingDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::functional::then_comparing({&this}, &jrt::util::functional::comparing_number({&0}, \"applyAsDouble\")?)?" }
+      - { sig: "nullsFirst(java.util.Comparator)", rust: "jrt::util::functional::nulls({&0}, true)?" }
+      - { sig: "nullsLast(java.util.Comparator)", rust: "jrt::util::functional::nulls({&0}, false)?" }
       - { sig: "thenComparingInt(java.util.function.ToIntFunction)", rust: "jrt::util::functional::then_comparing({&this}, &jrt::util::functional::comparing_number({&0}, \"applyAsInt\")?)?" }
       - { sig: "naturalOrder()", rust: "jrt::util::functional::natural_order()" }
       - { sig: "reverseOrder()", rust: "jrt::util::functional::reverse_order()" }

@@ -411,28 +411,9 @@ impl JString {
         Ok(JString::from(parts.join(sep)))
     }
 
-    /// `split(regex)`。正規表現は、メタ文字を含まない文字列・1 文字の文字クラス・`\\s+` などのよく使う形に対応する。
-    /// Java と同じく末尾の空文字列は取り除き、先頭の幅 0 の一致では分割しない。
+    /// `split(regex)`（Java と同じく末尾の空文字列を除く）。
     pub fn split(&self, regex: &JString) -> JResult<JArray<JString>> {
-        let s = self.as_str()?;
-        let regex = regex.as_str()?;
-        let pieces: Vec<&str> = match crate::lang::regex::SimpleRegex::parse(regex) {
-            Some(re) => re.split(s),
-            None => {
-                return throw(
-                    "java.lang.UnsupportedOperationException",
-                    Some(&format!("regex not supported by the translator: {regex}")),
-                )
-            }
-        };
-        let mut out: Vec<JString> = pieces.into_iter().map(JString::from).collect();
-        while out.len() > 1 && out.last().is_some_and(|x| x.opt_str() == Some("")) {
-            out.pop();
-        }
-        if out.len() == 1 && out[0].opt_str() == Some("") && !s.is_empty() {
-            out.clear();
-        }
-        Ok(JArray::from_vec(out))
+        crate::lang::regex::split(self, regex, 0)
     }
 
     /// `String.valueOf(Object)`（null は "null"）。
@@ -448,4 +429,33 @@ impl JString {
     pub fn compare_to_ignore_case(&self, other: &JString) -> JResult<i32> {
         self.to_lower_case()?.compare_to(&other.to_lower_case()?)
     }
+}
+
+/// `CharSequence` として渡される値（String・StringBuilder・Object）。
+pub trait CharSeq {
+    fn char_seq(&self) -> JResult<JString>;
+}
+
+impl CharSeq for JString {
+    fn char_seq(&self) -> JResult<JString> {
+        self.as_str()?;
+        Ok(self.clone())
+    }
+}
+
+impl CharSeq for crate::object::JObject {
+    fn char_seq(&self) -> JResult<JString> {
+        self.to_jstring()
+    }
+}
+
+impl CharSeq for crate::lang::StringBuilder {
+    fn char_seq(&self) -> JResult<JString> {
+        Ok(self.to_jstring())
+    }
+}
+
+/// `CharSequence` の引数を String にする（null なら NullPointerException）。
+pub fn char_sequence<T: CharSeq + ?Sized>(x: &T) -> JResult<JString> {
+    x.char_seq()
 }

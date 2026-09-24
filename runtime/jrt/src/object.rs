@@ -435,3 +435,80 @@ impl<T: Clone + 'static> Object for ArrObj<T> {
         Ok(other.downcast_ref::<ArrObj<T>>().is_some_and(|o| crate::JArray::ptr_eq(&o.a, &self.a)))
     }
 }
+
+// ------------------------------------------------------------------ StringBuilder などを Object として扱う
+
+/// Object として扱える、ランタイムの値型（StringBuilder・Scanner・PrintStream）。
+pub trait NativeClass: Clone + 'static {
+    /// Java のクラス名。
+    const CLASS: &'static str;
+    /// 実装しているインタフェース（instanceof 用）。
+    const INTERFACES: &'static [&'static str] = &[];
+    fn native_to_string(&self) -> Option<JString> {
+        None
+    }
+}
+
+/// Object として扱われるランタイムの値（中身は共有されるので、変更は元の値にも反映される）。
+struct Native<T: NativeClass> {
+    base: ObjectBase,
+    v: T,
+}
+
+impl<T: NativeClass> Object for Native<T> {
+    fn base(&self) -> &ObjectBase {
+        &self.base
+    }
+    fn class_name(&self) -> &'static str {
+        T::CLASS
+    }
+    fn instance_of(&self, class: &str) -> bool {
+        class == "java.lang.Object" || class == T::CLASS || T::INTERFACES.contains(&class)
+    }
+    fn to_jstring(&self) -> JResult<JString> {
+        Ok(self.v.native_to_string().unwrap_or_else(|| default_to_string(T::CLASS, self.base.identity_hash())))
+    }
+}
+
+impl JObject {
+    /// ランタイムの値（StringBuilder など）を Object にする。
+    pub fn from_native<T: NativeClass>(v: T) -> JObject {
+        alloc(|base| Native { base, v })
+    }
+
+    /// Object → ランタイムの値（null はそのまま既定値にせず NullPointerException にしない: Java の参照の null を表せないので、
+    /// null は型の既定値になる）。型が違えば ClassCastException。
+    pub fn cast_native<T: NativeClass + Default>(&self) -> JResult<T> {
+        match &self.0 {
+            None => Ok(T::default()),
+            Some(_) => match self.downcast_ref::<Native<T>>() {
+                Some(n) => Ok(n.v.clone()),
+                None => class_cast(self, T::CLASS),
+            },
+        }
+    }
+}
+
+impl NativeClass for crate::lang::StringBuilder {
+    const CLASS: &'static str = "java.lang.StringBuilder";
+    const INTERFACES: &'static [&'static str] = &["java.lang.CharSequence", "java.lang.Appendable", "java.lang.Comparable"];
+    fn native_to_string(&self) -> Option<JString> {
+        Some(self.to_jstring())
+    }
+}
+
+impl NativeClass for crate::util::Scanner {
+    const CLASS: &'static str = "java.util.Scanner";
+    const INTERFACES: &'static [&'static str] = &["java.io.Closeable", "java.lang.AutoCloseable", "java.util.Iterator"];
+}
+
+impl NativeClass for crate::io::PrintStream {
+    const CLASS: &'static str = "java.io.PrintStream";
+    const INTERFACES: &'static [&'static str] = &["java.io.Closeable", "java.lang.AutoCloseable", "java.lang.Appendable"];
+}
+
+impl From<crate::lang::StringBuilder> for JObject {
+    fn from(v: crate::lang::StringBuilder) -> JObject {
+        JObject::from_native(v)
+    }
+}

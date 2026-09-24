@@ -1721,12 +1721,20 @@ final class JirBuilder {
             Expr unboxed = new Expr.Cast(e, prim, true, e.pos());
             return prim.equals(target) ? unboxed : new Expr.Cast(unboxed, target, true, e.pos());
         }
-        boolean fromSpecial = JType.isString(from) || from instanceof JType.ArrayType;
-        boolean toSpecial = JType.isString(target) || target instanceof JType.ArrayType;
+        boolean fromSpecial = JType.isString(from) || from instanceof JType.ArrayType || isNativeValue(from);
+        boolean toSpecial = JType.isString(target) || target instanceof JType.ArrayType || isNativeValue(target);
         if (fromSpecial != toSpecial || (from instanceof JType.ArrayType && target instanceof JType.ArrayType && !from.equals(target))) {
             return new Expr.Cast(e, target, true, e.pos());
         }
         return e;
+    }
+
+    /** Rust では参照型（JObject）ではなく値の型で表す JDK のクラス（Object との間で変換が必要）。 */
+    private static boolean isNativeValue(JType t) {
+        return t instanceof JType.ClassType c && switch (c.qualifiedName()) {
+            case "java.lang.StringBuilder", "java.util.Scanner", "java.io.PrintStream", "java.io.InputStream" -> true;
+            default -> false;
+        };
     }
 
     private static JType boxedType(JType.Primitive p) {

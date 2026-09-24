@@ -1521,6 +1521,13 @@ final class FnLowerer {
         if (template == null) {
             template = cx.mappings().method(r.owner(), sig);
         }
+        if (template == null && !r.isStatic() && (r.owner().endsWith("Exception") || r.owner().endsWith("Error"))) {
+            // JDK の例外クラスが上書きしたメソッド（PatternSyntaxException.getMessage など）は Throwable の規則を使う。
+            template = cx.mappings().method("java.lang.Throwable", sig);
+        }
+        if (template == null && !r.isStatic()) {
+            template = cx.mappings().method("java.lang.Object", sig);
+        }
         if (template != null) {
             return expandTemplate(template, recv, c.args());
         }

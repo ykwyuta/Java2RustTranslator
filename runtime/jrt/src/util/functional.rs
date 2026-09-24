@@ -134,3 +134,17 @@ pub fn comparing_by_value() -> JObject {
     use crate::util::collections::Collections as _;
     lambda(COMPARATOR, |a| Ok(box_i32(a[0].get_value()?.compare_to(&a[1].get_value()?)?)))
 }
+
+/// `Comparator.nullsFirst(cmp)` / `nullsLast(cmp)`（cmp が null なら null 以外は等しいとみなす）。
+pub fn nulls(cmp: &JObject, first: bool) -> JResult<JObject> {
+    let cmp = cmp.clone();
+    Ok(lambda(COMPARATOR, move |a| {
+        let r = match (a[0].is_null(), a[1].is_null()) {
+            (true, true) => 0,
+            (true, false) => if first { -1 } else { 1 },
+            (false, true) => if first { 1 } else { -1 },
+            (false, false) => if cmp.is_null() { 0 } else { compare_with(&cmp, &a[0], &a[1])? },
+        };
+        Ok(box_i32(r))
+    }))
+}

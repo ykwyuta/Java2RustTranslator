@@ -210,7 +210,7 @@ pub fn jdk_super(class: &str) -> Option<&'static str> {
         "java.lang.ArrayIndexOutOfBoundsException" | "java.lang.StringIndexOutOfBoundsException" => {
             "java.lang.IndexOutOfBoundsException"
         }
-        "java.lang.NumberFormatException" | "java.util.IllegalFormatException" => "java.lang.IllegalArgumentException",
+        "java.lang.NumberFormatException" | "java.util.IllegalFormatException" | "java.util.regex.PatternSyntaxException" => "java.lang.IllegalArgumentException",
         "java.util.IllegalFormatConversionException"
         | "java.util.MissingFormatArgumentException"
         | "java.util.UnknownFormatConversionException" => "java.util.IllegalFormatException",
