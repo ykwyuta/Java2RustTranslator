@@ -152,6 +152,10 @@ impl AnimalApi for Dog {
 
 ## 5. 例外
 
+> **実装状況（M1）**: 例外の捕捉は未実装。`throw new X(msg)` と実行時例外（ゼロ除算・配列の範囲外・数値の解析失敗など）は
+> `jrt` でパニックとして送出し、`jrt::run_main` が Java と同じ `Exception in thread "main" X: msg` を標準エラーに出して
+> 終了コード 1 で終わる。以下の `Result` 方式は M3 で実装する。
+
 ### 5.1 基本方式
 - 例外は `jrt::Throwable`（`Ref<dyn ThrowableApi>`）値。ユーザ定義例外クラスも通常のクラス規則で生成し、
   `ThrowableApi` を実装させる。

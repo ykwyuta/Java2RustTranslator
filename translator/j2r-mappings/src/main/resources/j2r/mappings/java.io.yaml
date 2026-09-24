@@ -1,0 +1,28 @@
+# java.io のマッピング（System.out / System.err / System.in のみ）。
+classes:
+  - class: java.io.PrintStream
+    rustType: jrt::io::PrintStream
+    methods:
+      - { sig: "println()", rust: "{this}.newline()" }
+      - { sig: "println(java.lang.String)", rust: "{this}.println({s0})" }
+      - { sig: "println(int)", rust: "{this}.println({s0})" }
+      - { sig: "println(long)", rust: "{this}.println({s0})" }
+      - { sig: "println(double)", rust: "{this}.println({s0})" }
+      - { sig: "println(float)", rust: "{this}.println({s0})" }
+      - { sig: "println(boolean)", rust: "{this}.println({s0})" }
+      - { sig: "println(char)", rust: "{this}.println({s0})" }
+      - { sig: "println(char[])", rust: "{this}.print_chars({&0}, true)" }
+      - { sig: "println(java.lang.Object)", rust: "{this}.println({s0})" }
+      - { sig: "print(java.lang.String)", rust: "{this}.print({s0})" }
+      - { sig: "print(int)", rust: "{this}.print({s0})" }
+      - { sig: "print(long)", rust: "{this}.print({s0})" }
+      - { sig: "print(double)", rust: "{this}.print({s0})" }
+      - { sig: "print(float)", rust: "{this}.print({s0})" }
+      - { sig: "print(boolean)", rust: "{this}.print({s0})" }
+      - { sig: "print(char)", rust: "{this}.print({s0})" }
+      - { sig: "print(char[])", rust: "{this}.print_chars({&0}, false)" }
+      - { sig: "print(java.lang.Object)", rust: "{this}.print({s0})" }
+      - { sig: "flush()", rust: "{this}.flush()" }
+
+  - class: java.io.InputStream
+    rustType: jrt::io::InputStream

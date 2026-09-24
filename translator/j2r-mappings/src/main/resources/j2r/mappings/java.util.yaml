@@ -1,0 +1,51 @@
+# java.util のマッピング。
+classes:
+  - class: java.util.Scanner
+    rustType: jrt::util::Scanner
+    constructors:
+      - { sig: "<init>(java.io.InputStream)", rust: "jrt::util::Scanner::new({0})" }
+    methods:
+      - { sig: "next()", rust: "{this}.next()" }
+      - { sig: "nextInt()", rust: "{this}.next_int()" }
+      - { sig: "nextLong()", rust: "{this}.next_long()" }
+      - { sig: "nextDouble()", rust: "{this}.next_double()" }
+      - { sig: "nextBoolean()", rust: "{this}.next_boolean()" }
+      - { sig: "nextLine()", rust: "{this}.next_line()" }
+      - { sig: "hasNext()", rust: "{this}.has_next()" }
+      - { sig: "hasNextInt()", rust: "{this}.has_next_int()" }
+      - { sig: "hasNextLine()", rust: "{this}.has_next_line()" }
+      - { sig: "close()", rust: "{this}.close()" }
+
+  - class: java.util.Arrays
+    methods:
+      - { sig: "sort(int[])", rust: "jrt::util::arrays::sort({&0})" }
+      - { sig: "sort(long[])", rust: "jrt::util::arrays::sort({&0})" }
+      - { sig: "sort(short[])", rust: "jrt::util::arrays::sort({&0})" }
+      - { sig: "sort(byte[])", rust: "jrt::util::arrays::sort({&0})" }
+      - { sig: "sort(char[])", rust: "jrt::util::arrays::sort({&0})" }
+      - { sig: "sort(double[])", rust: "jrt::util::arrays::sort_f64({&0})" }
+      - { sig: "sort(float[])", rust: "jrt::util::arrays::sort_f32({&0})" }
+      - { sig: "sort(int[],int,int)", rust: "jrt::util::arrays::sort_range({&0}, {1}, {2})" }
+      - { sig: "sort(long[],int,int)", rust: "jrt::util::arrays::sort_range({&0}, {1}, {2})" }
+      - { sig: "sort(java.lang.Object[])", rust: "jrt::util::arrays::sort({&0})" }
+      - { sig: "fill(int[],int)", rust: "jrt::util::arrays::fill({&0}, {1})" }
+      - { sig: "fill(long[],long)", rust: "jrt::util::arrays::fill({&0}, {1})" }
+      - { sig: "fill(double[],double)", rust: "jrt::util::arrays::fill({&0}, {1})" }
+      - { sig: "fill(boolean[],boolean)", rust: "jrt::util::arrays::fill({&0}, {1})" }
+      - { sig: "fill(char[],char)", rust: "jrt::util::arrays::fill({&0}, {1})" }
+      - { sig: "fill(int[],int,int,int)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})" }
+      - { sig: "fill(long[],int,int,long)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})" }
+      - { sig: "toString(int[])", rust: "jrt::util::arrays::to_string({&0})" }
+      - { sig: "toString(long[])", rust: "jrt::util::arrays::to_string({&0})" }
+      - { sig: "toString(double[])", rust: "jrt::util::arrays::to_string({&0})" }
+      - { sig: "toString(boolean[])", rust: "jrt::util::arrays::to_string({&0})" }
+      - { sig: "toString(char[])", rust: "jrt::util::arrays::to_string_chars({&0})" }
+      - { sig: "toString(java.lang.Object[])", rust: "jrt::util::arrays::to_string({&0})" }
+      - { sig: "copyOf(int[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
+      - { sig: "copyOf(long[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
+      - { sig: "copyOf(double[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
+      - { sig: "copyOf(char[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
+      - { sig: "copyOfRange(int[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})" }
+      - { sig: "copyOfRange(char[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})" }
+      - { sig: "equals(int[],int[])", rust: "jrt::util::arrays::equals({&0}, {&1})" }
+      - { sig: "equals(char[],char[])", rust: "jrt::util::arrays::equals({&0}, {&1})" }

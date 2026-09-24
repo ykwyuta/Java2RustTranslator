@@ -1,8 +1,10 @@
 # 04. ディレクトリ構成
 
-Gradle マルチプロジェクト（Java 実装のトランスパイラ本体）と、Cargo ワークスペース（Rust ランタイム crate）を
-1 リポジトリに同居させる。モジュール境界は [02-architecture.md](02-architecture.md) のパイプライン段に対応させ、
-**依存方向を一方向に保つ**（下図の上から下へのみ依存）。
+Gradle マルチプロジェクト（Java で書くトランスパイラ本体）と、Cargo ワークスペース（Rust のランタイム crate）を
+1 つのリポジトリに置く。モジュールの境界は [02-architecture.md](02-architecture.md) のパイプラインの段に対応させ、
+**依存の向きを一方向に保つ**（§2 の図で上から下へのみ依存する）。
+
+`（予定）` と書いた項目はまだ存在しない。いつ作るかは [05-roadmap.md](05-roadmap.md) を参照。
 
 ## 1. ツリー
 
@@ -10,154 +12,156 @@ Gradle マルチプロジェクト（Java 実装のトランスパイラ本体�
 Java2RustTranslator/
 ├── README.md
 ├── LICENSE
-├── settings.gradle.kts              # Gradle サブプロジェクト定義
-├── build.gradle.kts                 # 共通設定（Java 21 toolchain、テスト、フォーマッタ）
+├── settings.gradle.kts              # Gradle サブプロジェクトの定義（translator/*, tests/harness）
+├── build.gradle.kts                 # 全 Java モジュール共通の設定（Java 21 toolchain、-Werror、JUnit 5）
 ├── gradle/
-│   ├── libs.versions.toml           # 依存バージョン一元管理（picocli, junit, assertj, snakeyaml-engine）
-│   └── wrapper/
+│   ├── libs.versions.toml           # 依存ライブラリのバージョン一元管理（picocli, snakeyaml-engine, junit, assertj）
+│   └── wrapper/                     # Gradle Wrapper（8.14.3）
 ├── gradlew / gradlew.bat
-├── Cargo.toml                       # Cargo ワークスペース（members = ["runtime/*"]）
-├── rust-toolchain.toml              # Rust バージョン固定（stable）
+├── Cargo.toml                       # Cargo ワークスペース（members = ["runtime/jrt"]）
+├── rust-toolchain.toml              # Rust は stable を使う
 │
 ├── docs/                            # 設計ドキュメント（本書を含む）
 │   ├── README.md
-│   ├── 01-prior-art.md
-│   ├── 02-architecture.md
-│   ├── 03-translation-rules.md
-│   ├── 04-directory-structure.md
-│   ├── 05-roadmap.md
-│   └── adr/                         # Architecture Decision Records（0001-use-javac-frontend.md …）
+│   ├── 01-prior-art.md … 06-usage.md
+│   └── adr/                         # Architecture Decision Records（予定）
 │
-├── translator/                      # ===== トランスパイラ本体（Java）=====
-│   ├── j2r-common/                  # 共通基盤: 診断(Diagnostic)、ソース位置、名前変換ユーティリティ、オプション
-│   ├── j2r-jir/                     # JIR（Java IR）のデータ型定義、Visitor/Rewriter、ダンプ用プリンタ
-│   ├── j2r-frontend/                # javac 呼び出し、javac Tree → JIR 変換（javac 依存はここに閉じ込める）
-│   ├── j2r-passes/                  # JIR → JIR の正規化（desugar）パス群
-│   ├── j2r-analysis/                # 全体解析: CHA、呼び出しグラフ、null 性、不変性、エスケープ、例外フロー、スレッド
-│   ├── j2r-rir/                     # RIR（Rust IR）のデータ型定義、RIR パス、Rust ソースプリンタ
-│   ├── j2r-lowering/                # JIR(+解析結果) → RIR 変換、型マッピング、JDK API マッピングエンジン
-│   ├── j2r-mappings/                # JDK API マッピング規則（YAML リソースのみ）
-│   ├── j2r-backend/                 # Cargo プロジェクト出力、rustfmt / cargo check 実行、エラー逆マッピング
-│   ├── j2r-driver/                  # パイプライン組み立て・実行（ライブラリ API: Translator.translate(...)）
-│   └── j2r-cli/                     # コマンドライン（picocli）、fat jar / 配布物生成
+├── translator/                      # ===== トランスパイラ本体（Java 21）=====
+│   ├── j2r-common/                  # 診断（Diagnostic）、ソース位置、命名規則の変換（Naming）、TranslatorOptions
+│   ├── j2r-jir/                     # JIR（Java IR）の定義: JType / Expr / Stmt / Decl、JirRewriter
+│   ├── j2r-frontend/                # javac の実行と、javac の構文木 → JIR の変換（javac への依存はここだけ）
+│   ├── j2r-passes/                  # JIR → JIR の正規化パス（DesugarEnhancedFor, DesugarStringConcat, MangleOverloads）
+│   ├── j2r-analysis/                # プログラム全体の解析（ProgramIndex、LocalMutability。CHA・null 性などは予定）
+│   ├── j2r-rir/                     # RIR（Rust IR）の定義と RustPrinter（優先順位に基づく括弧付け）
+│   ├── j2r-mappings/                # JDK API のマッピング規則（YAML リソースのみ）
+│   ├── j2r-lowering/                # JIR → RIR の変換（Lowerer）、型の対応（TypeMapper）、マッピング規則の読み込み
+│   ├── j2r-backend/                 # Cargo プロジェクトの書き出し、jrt ソースの同梱、cargo の実行
+│   ├── j2r-driver/                  # パイプライン全体の実行（ライブラリ API: Translator.translate(options)）
+│   ├── j2r-cli/                     # コマンドライン `j2r`（picocli）。installDist で配布物を作る
+│   └── j2r-gradle-plugin/           # Gradle プラグイン `io.github.ykwyuta.j2r`（translateToRust / cargoRun など）
 │
 ├── runtime/                         # ===== 生成コードが依存する Rust crate =====
-│   ├── jrt/                         # Java ランタイム（object, lang, num, array, exception, util, io, init）
-│   │   ├── Cargo.toml
-│   │   ├── src/
-│   │   └── tests/                   # Java 意味論の単体テスト（整数演算・文字列・コレクション）
-│   └── jrt-junit/                   # 変換後テスト用のアサーション関数（assert_equals 等）
+│   └── jrt/
+│       ├── Cargo.toml
+│       ├── src/
+│       │   ├── lib.rs               # prelude, jstr! / jconcat! マクロ
+│       │   ├── num.rs               # Java の意味の整数除算・剰余
+│       │   ├── array.rs             # JArray<T>（共有・固定長・境界検査）、arraycopy
+│       │   ├── rt.rs                # run_main、未捕捉例外（パニック）の表示と終了コード、exit
+│       │   ├── io.rs                # System.out / System.err / System.in
+│       │   ├── lang/                # JString, JChar, JStringify, StringBuilder, Math, Integer/Double 等, Character
+│       │   └── util/                # Arrays, Scanner
+│       └── tests/semantics.rs       # Java の意味論の単体テスト
 │
-├── tests/                           # ===== 横断テスト =====
-│   ├── golden/                      # ゴールデンテスト: <case>/Input.java + expected/*.rs
-│   │   └── primitives/int_overflow/ ...
-│   ├── e2e/                         # 差分実行テスト: <case>/src/**/*.java (+ 任意の stdin.txt, args.txt)
-│   │   └── algorithms/quicksort/ ...
-│   ├── corpus/                      # 実プロジェクト回帰コーパス（git submodule または取得スクリプト）
-│   └── harness/                     # テストハーネス（Gradle サブプロジェクト j2r-test-harness）
-│                                    #   javac+java 実行 → 変換 → cargo run → 出力比較
+├── tests/                           # ===== 変換全体のテスト =====
+│   ├── harness/                     # テストハーネス（Gradle サブプロジェクト :j2r-test-harness）
+│   ├── e2e/<カテゴリ>/<ケース>/     # 差分実行テスト: src/**/*.java（+ 任意の stdin.txt）
+│   ├── golden/<カテゴリ>/<ケース>/  # ゴールデンテスト: src/**/*.java + expected/（生成される src/ の中身）
+│   └── corpus/                      # 実プロジェクトの回帰コーパス（予定）
 │
-├── examples/                        # 利用例（Hello World、小さなアプリ）と変換結果
+├── examples/
+│   └── hello-gradle/                # Gradle プラグインの利用例（./gradlew translateToRust cargoRun）
 │
-├── tools/                           # 開発用スクリプト
-│   ├── update-golden.sh             # ゴールデンファイル再生成
-│   └── run-e2e.sh
-│
-└── .github/
-    └── workflows/
-        ├── ci.yml                   # gradle build + cargo test + golden + e2e
-        └── corpus.yml               # 定期実行: コーパス回帰（夜間）
+└── .github/workflows/ci.yml         # cargo test + gradle build（単体・ゴールデン・E2E）+ 利用例の実行
 ```
 
-## 2. モジュール依存関係
+## 2. モジュールの依存関係
 
 ```
-j2r-cli ─▶ j2r-driver ─┬─▶ j2r-backend ──▶ j2r-rir
+j2r-cli ─▶ j2r-driver ─┬─▶ j2r-backend ───▶ j2r-rir ─▶ j2r-common
                        ├─▶ j2r-lowering ─┬─▶ j2r-rir
+                       │                 ├─▶ j2r-jir ─▶ j2r-common
                        │                 ├─▶ j2r-analysis ─▶ j2r-jir
-                       │                 └─▶ j2r-mappings（リソース）
-                       ├─▶ j2r-passes ────▶ j2r-jir
-                       └─▶ j2r-frontend ──▶ j2r-jir
-                 （全モジュール）──▶ j2r-common
+                       │                 └─▶ j2r-mappings（YAML リソース）
+                       ├─▶ j2r-passes ───▶ j2r-jir
+                       └─▶ j2r-frontend ─▶ j2r-jir
+
+j2r-gradle-plugin（コンパイル時の依存なし。実行時に j2r-cli を別 JVM で起動する）
+j2r-test-harness ─▶ j2r-driver, j2r-backend
 ```
 
 ルール:
-- `jdk.compiler`（javac）を参照してよいのは **`j2r-frontend` のみ**。以降の段は JIR だけを見る。
-- `j2r-jir` と `j2r-rir` は互いに依存しない。両者を知るのは `j2r-lowering` のみ。
-- `j2r-analysis` は JIR を読むだけで書き換えない（結果は別オブジェクトの注釈マップとして返す）。
-- 依存違反は ArchUnit テスト（`j2r-driver` のテスト）で検出する。
+- javac（`jdk.compiler`）を参照してよいのは **`j2r-frontend` だけ**。後段は JIR だけを見る。
+- `j2r-jir` と `j2r-rir` は互いに依存しない。両方を知っているのは `j2r-lowering` だけ。
+- `j2r-analysis` は JIR を読むだけで書き換えない。
+- モジュール間の依存は Gradle の `implementation` / `api` で宣言したものに限られるため、宣言していない方向の依存は
+  コンパイルエラーになる。
+- Gradle プラグインは変換器を **別 JVM**（`j2rTranslator` 構成で解決した j2r-cli）で動かす。Gradle デーモンに
+  javac や変換器のクラスを読み込ませないため。
 
-## 3. Java パッケージ命名
+## 3. Java パッケージ名
 
-ベースパッケージ: `io.github.ykwyuta.j2r`
+ベースパッケージは `io.github.ykwyuta.j2r`。
 
-| モジュール | パッケージ | 主要クラス例 |
+| モジュール | パッケージ | 主なクラス |
 |---|---|---|
-| j2r-common | `…j2r.common` | `Diagnostic`, `DiagnosticCode`, `SourcePos`, `Naming`, `TranslatorOptions` |
-| j2r-jir | `…j2r.jir`, `…j2r.jir.expr`, `…j2r.jir.stmt`, `…j2r.jir.decl`, `…j2r.jir.type` | `Program`, `TypeDecl`, `MethodDecl`, `Expr`, `Stmt`, `JType`, `JirRewriter` |
-| j2r-frontend | `…j2r.frontend` | `JavacRunner`, `JirBuilder`, `TypeConverter` |
-| j2r-passes | `…j2r.passes` | `Pass`, `PassManager`, `DesugarEnhancedFor`, `LiftInnerClasses`, … |
-| j2r-analysis | `…j2r.analysis.{cha,callgraph,nullness,mutability,escape,exceptions,threads}` | `ClassHierarchy`, `NullnessAnalysis`, `RepresentationPlanner` |
-| j2r-rir | `…j2r.rir`, `…j2r.rir.print` | `RItem`, `RExpr`, `RType`, `RustPrinter` |
-| j2r-lowering | `…j2r.lowering`, `…j2r.lowering.mapping` | `Lowerer`, `TypeMapper`, `ApiMappingEngine` |
-| j2r-backend | `…j2r.backend` | `CargoProjectWriter`, `CargoCheckRunner`, `ErrorBackMapper` |
-| j2r-driver | `…j2r.driver` | `Translator`, `Pipeline` |
+| j2r-common | `…j2r.common` | `Diagnostic`, `DiagnosticCode`, `Diagnostics`, `SourcePos`, `Naming`, `TranslatorOptions` |
+| j2r-jir | `…j2r.jir` | `JType`, `Expr`, `Stmt`, `Decl`, `MethodRef`, `JirRewriter` |
+| j2r-frontend | `…j2r.frontend` | `JavacFrontend`, `JirBuilder` |
+| j2r-passes | `…j2r.passes` | `Pass`, `PassManager`, `DesugarEnhancedFor`, `DesugarStringConcat`, `MangleOverloads` |
+| j2r-analysis | `…j2r.analysis` | `ProgramIndex`, `LocalMutability` |
+| j2r-rir | `…j2r.rir` | `RItem`, `RStmt`, `RExpr`, `RType`, `RFile`, `RustPrinter` |
+| j2r-lowering | `…j2r.lowering` | `Lowerer`, `TypeMapper`, `ApiMappings`, `LoweredCrate` |
+| j2r-backend | `…j2r.backend` | `CargoProjectWriter`, `CargoRunner` |
+| j2r-driver | `…j2r.driver` | `Translator` |
 | j2r-cli | `…j2r.cli` | `Main` |
-
-各モジュールは JPMS の `module-info.java` を持ち、公開パッケージを明示する（`internal` サブパッケージは非公開）。
+| j2r-gradle-plugin | `…j2r.gradle` | `J2rPlugin`, `J2rExtension`, `TranslateToRustTask` |
 
 ## 4. モジュール内の標準レイアウト
 
 ```
-translator/j2r-passes/
+translator/j2r-xxx/
 ├── build.gradle.kts
 └── src/
-    ├── main/java/io/github/ykwyuta/j2r/passes/...
-    ├── main/resources/
-    ├── test/java/...              # 単体テスト（JUnit 5 + AssertJ）
-    └── test/resources/            # 小さな Java 入力断片
+    ├── main/java/io/github/ykwyuta/j2r/xxx/...
+    ├── main/resources/            # j2r-mappings: j2r/mappings/*.yaml
+    └── test/java/...              # 単体テスト（JUnit 5 + AssertJ）
 ```
 
-## 5. テストケースの配置規約
+生成されるリソース:
+- `j2r-backend` のビルドは `runtime/jrt` のソースをリソース `j2r/runtime/jrt/` に同梱する（`bundleJrt` タスク）。
+  変換時に出力先へコピー（vendor）するため、変換結果は単体で `cargo build` できる。
+- `j2r-gradle-plugin` のビルドは、プラグインが既定で使う j2r-cli のバージョンを `j2r-plugin.properties` に埋め込む。
 
-### ゴールデンテスト（`tests/golden/<カテゴリ>/<ケース>/`）
-```
-tests/golden/classes/simple_inheritance/
-├── Input.java             # 1 ファイル（または src/ 以下に複数）
-├── options.txt            # 任意: 変換オプション（--mode=idiomatic 等）
-└── expected/
-    ├── src/lib.rs
-    └── src/simple_inheritance.rs
-```
-`tools/update-golden.sh` で `expected/` を再生成し、差分をレビューしてコミットする。
+## 5. テストケースの置き方
 
 ### 差分実行テスト（`tests/e2e/<カテゴリ>/<ケース>/`）
 ```
-tests/e2e/exceptions/nested_finally/
-├── src/Main.java          # main を持つ
-├── stdin.txt              # 任意
-└── meta.yaml              # 任意: 期待終了コード、既知の非互換（skip 理由）
+tests/e2e/io/scanner_sum/
+├── src/ScannerSum.java     # main を持つクラスを 1 つ含む
+└── stdin.txt               # 任意: 標準入力
 ```
-ハーネスは `javac && java` の出力と、変換 → `cargo run` の出力を比較する。期待出力ファイルは置かない
-（JVM を正とする）。
+ハーネスは `javac && java` の結果と、変換 → `cargo build` → 実行した結果の **標準出力と終了コード** を比べる。
+期待値ファイルは置かない（JVM の結果を正とする）。生成コードで `cargo build` が警告を出した場合も失敗にする。
 
-## 6. 生成物（トランスパイラの出力）の構成
-
-入力 `src/main/java/com/example/app/Main.java` 等に対し:
+### ゴールデンテスト（`tests/golden/<カテゴリ>/<ケース>/`）
 ```
-<out>/
-├── Cargo.toml
+tests/golden/control/loops/
+├── src/Loops.java
+└── expected/               # 生成される src/ 配下の .rs（lib.rs, bin/main.rs, クラスごとのファイル）
+```
+変換規則を変えたら `./gradlew :j2r-test-harness:test -PupdateGolden=true` で `expected/` を作り直し、
+差分をレビューしてからコミットする。
+
+## 6. 変換結果（出力）の構成
+
+入力 `src/main/java/com/example/hello/App.java` を crate 名 `hello` で変換した場合:
+```
+<出力先>/                     # Gradle プラグインの既定は build/rust
+├── Cargo.toml                # [workspace] を持つ独立したプロジェクト。jrt は path 依存
+├── jrt/                      # 同梱したランタイム crate（--runtime-path を指定した場合は作らない）
 ├── src/
-│   ├── main.rs            # main クラスがある場合
-│   ├── lib.rs             # pub mod com;
+│   ├── lib.rs                # pub mod com; と、生成コード向けの #![allow(...)]
+│   ├── bin/main.rs           # fn main() { jrt::run_main(|args| hello::com::example::hello::app::main(args)); }
 │   └── com/
-│       ├── mod.rs         # pub mod example;
+│       ├── mod.rs            # pub mod example;
 │       └── example/
 │           ├── mod.rs
-│           └── app/
+│           └── hello/
 │               ├── mod.rs
-│               └── main.rs    # クラス Main（予約語と衝突する名前は r#… または接尾辞 _）
-├── tests/                 # 変換された JUnit テスト
-├── j2r-names.json         # Java 名 ⇔ Rust 名 対応表
-└── j2r-report.json        # 診断・未対応箇所・表現戦略
+│               └── app.rs    # クラス App（関数・定数・thread_local の static）
+└── j2r-report.json           # 診断（未対応機能・意味が変わりうる変換）の一覧
 ```
+- クラス名が `Main` でも `src/main.rs` がバイナリと誤認されないよう、`Cargo.toml` では `autobins = false` とし、
+  バイナリは `src/bin/main.rs` に置く。
+- パッケージと同名のクラスがあるとモジュール名が衝突する（診断 `J2R-NAME-COLLISION`）。

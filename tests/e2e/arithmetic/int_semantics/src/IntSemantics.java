@@ -1,0 +1,53 @@
+public class IntSemantics {
+    public static void main(String[] args) {
+        int max = Integer.MAX_VALUE;
+        int min = Integer.MIN_VALUE;
+        System.out.println(max + 1);
+        System.out.println(min - 1);
+        System.out.println(min / -1);
+        System.out.println(min % -1);
+        System.out.println(-min);
+        System.out.println(Math.abs(min));
+        System.out.println(46341 * 46341);
+        long big = Long.MAX_VALUE;
+        System.out.println(big + 1);
+        System.out.println(1 << 33);
+        System.out.println(1L << 65);
+        System.out.println(-8 >> 1);
+        System.out.println(-8 >>> 1);
+        System.out.println(-8L >>> 1);
+        System.out.println(-7 / 2 + " " + -7 % 2 + " " + 7 / -2 + " " + 7 % -2);
+        System.out.println((byte) 200 + " " + (short) 70000 + " " + (char) 65 + " " + (int) 'z');
+        System.out.println((int) 3.99 + " " + (int) -3.99 + " " + (int) 1e20 + " " + (long) -1e30 + " " + (int) Double.NaN);
+        System.out.println((byte) 300.7 + " " + (char) 66.6 + " " + (short) -40000.0);
+        byte b = 127;
+        b++;
+        short s = 10;
+        s *= 5000;
+        char c = 'y';
+        c += 3;
+        System.out.println(b + " " + s + " " + (int) c);
+        int x = 7;
+        x >>>= 1;
+        x <<= 4;
+        x ^= 0xFF;
+        x |= 256;
+        x &= ~1;
+        System.out.println(x);
+        double d = 0.1 + 0.2;
+        System.out.println(d + " " + (float) d + " " + 1.0 / 0 + " " + -1.0 / 0 + " " + 0.0 / 0);
+        System.out.println(100.0 + " " + 1e7 + " " + 1.5e-5 + " " + 123456.789 + " " + 0.001);
+        System.out.println(5 / 2.0 + " " + 7 % 2.5 + " " + -0.0);
+        System.out.println(Math.round(2.5) + " " + Math.round(-2.5) + " " + Math.floorMod(-7, 3) + " " + Math.floorDiv(-7, 3));
+        System.out.println(Integer.toBinaryString(10) + " " + Integer.toHexString(-1) + " " + Long.toString(Long.MIN_VALUE));
+        System.out.println(Integer.parseInt("-42") + Integer.parseInt("8") + " " + Double.parseDouble("2.5"));
+        int i = 0;
+        int j = i++ + i++ * ++i;
+        System.out.println(i + " " + j);
+        long acc = 1;
+        for (int k = 0; k < 70; k++) acc = acc * 31 + k;
+        System.out.println(acc);
+        System.out.println(0x7fffffff + 0x7fffffff);
+        System.out.println(Integer.MAX_VALUE * 2L);
+    }
+}

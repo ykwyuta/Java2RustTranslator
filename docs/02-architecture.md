@@ -239,16 +239,18 @@ methods:
 
 ```
 out/
-├── Cargo.toml          # [dependencies] jrt = { path/version }
+├── Cargo.toml          # [dependencies] jrt = { path = "jrt" }、独立した [workspace]
+├── jrt/                # ランタイム crate のソース（同梱。--runtime-path 指定時は作らない）
 ├── src/
-│   ├── lib.rs          # mod 宣言ツリー
-│   ├── main.rs         # public static void main がある場合のみ
+│   ├── lib.rs          # mod 宣言のツリー
+│   ├── bin/main.rs     # public static void main がある場合のみ
 │   └── com/example/...
-├── tests/              # JUnit テストを変換したもの（#[test]）
-└── j2r-report.json     # 診断・未対応箇所・適用した表現戦略の一覧
+└── j2r-report.json     # 診断・未対応箇所の一覧
 ```
-- 生成後に任意で `rustfmt` と `cargo check --message-format=json` を実行し、Rust 側のエラーを
-  **元の Java ソース位置に逆マッピング** して報告する（RIR が元位置を保持しているため可能）。
+- 構成の詳細は [04-directory-structure.md §6](04-directory-structure.md) を参照。
+- `--cargo-check` を指定すると、生成後に `cargo check` を実行して失敗を診断として報告する。
+- （予定）Rust 側のエラーを元の Java ソースの位置に対応付けて報告する（RIR が元の位置を保持しているため可能）、
+  JUnit テストを変換した `tests/`、Java 名と Rust 名の対応表 `j2r-names.json`。
 
 ## 10. 診断
 

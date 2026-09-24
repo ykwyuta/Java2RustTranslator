@@ -9,7 +9,8 @@ Java ソースコードを Rust ソースコードへ変換するトランスパ
 | [02-architecture.md](02-architecture.md) | 実装方式（パイプライン、IR、解析、ランタイム、検証戦略） |
 | [03-translation-rules.md](03-translation-rules.md) | Java 言語機能 → Rust への変換規則（型・クラス・例外・null 等） |
 | [04-directory-structure.md](04-directory-structure.md) | 本プロジェクトのディレクトリ構成・モジュール分割・命名規約 |
-| [05-roadmap.md](05-roadmap.md) | 段階的な実装計画とサポート範囲 |
+| [05-roadmap.md](05-roadmap.md) | 段階的な実装計画と現在の状況 |
+| [06-usage.md](06-usage.md) | ビルド方法、Gradle プラグイン・コマンドラインでの変換、現在の対応範囲 |
 
 ## 要約（TL;DR）
 
