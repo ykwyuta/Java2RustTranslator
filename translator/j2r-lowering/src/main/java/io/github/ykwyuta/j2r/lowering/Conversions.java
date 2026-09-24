@@ -18,10 +18,27 @@ import java.util.List;
 final class Conversions {
     private final LowerContext cx;
     private final Imports imp;
+    /** {@code ?}（例外の伝播）を生成したときに呼ぶ（呼び出し側の関数が JResult を返す必要があることを記録する）。 */
+    private final Runnable onTry;
 
-    Conversions(LowerContext cx, Imports imp) {
+    Conversions(LowerContext cx, Imports imp, Runnable onTry) {
         this.cx = cx;
         this.imp = imp;
+        this.onTry = onTry;
+    }
+
+    /** {@code Ok(v)}（v が {@code x?} なら、同じ意味の {@code x} にする）。 */
+    static RExpr ok(RExpr v) {
+        if (v instanceof RExpr.Try t) {
+            return t.expr();
+        }
+        return new RExpr.Call(new RExpr.Path("Ok"), List.of(v));
+    }
+
+    /** {@code e?}。 */
+    RExpr tryOp(RExpr e) {
+        onTry.run();
+        return new RExpr.Try(e);
     }
 
     /** ボックス型ならプリミティブ型、それ以外はそのまま。 */
@@ -71,12 +88,12 @@ final class Conversions {
                 prim = to;
             }
             RExpr obj = kf == TypeMapper.Kind.OBJECT ? e : toObject(e, from);
-            RExpr unboxed = new RExpr.MethodCall(obj, "unbox_" + TypeMapper.boxSuffix(((JType.Primitive) prim).kind()), List.of());
+            RExpr unboxed = tryOp(new RExpr.MethodCall(obj, "unbox_" + TypeMapper.boxSuffix(((JType.Primitive) prim).kind()), List.of()));
             return primitiveCast(unboxed, prim, to);
         }
         if (kf == TypeMapper.Kind.OBJECT && kt == TypeMapper.Kind.OBJECT) {
             if (explicit && to instanceof JType.ClassType c && !c.equals(JType.OBJECT)) {
-                return new RExpr.MethodCall(e, "checkcast", List.of(new RExpr.Lit("\"" + c.qualifiedName() + "\"")));
+                return tryOp(new RExpr.MethodCall(e, "checkcast", List.of(new RExpr.Lit("\"" + c.qualifiedName() + "\""))));
             }
             return e;
         }
@@ -116,9 +133,9 @@ final class Conversions {
         return switch (cx.types().kind(to)) {
             case OBJECT -> e;
             case VOID -> e;
-            case PRIMITIVE -> new RExpr.MethodCall(e, "unbox_" + TypeMapper.boxSuffix(((JType.Primitive) to).kind()), List.of());
-            case STRING -> new RExpr.MethodCall(e, "cast_string", List.of());
-            case ARRAY -> new RExpr.MethodCall(e, "cast_array::<" + cx.types().text(((JType.ArrayType) to).component()) + ">", List.of());
+            case PRIMITIVE -> tryOp(new RExpr.MethodCall(e, "unbox_" + TypeMapper.boxSuffix(((JType.Primitive) to).kind()), List.of()));
+            case STRING -> tryOp(new RExpr.MethodCall(e, "cast_string", List.of()));
+            case ARRAY -> tryOp(new RExpr.MethodCall(e, "cast_array::<" + cx.types().text(((JType.ArrayType) to).component()) + ">", List.of()));
             default -> {
                 cx.diags().report(DiagnosticCode.UNSUPPORTED_TYPE, SourcePos.UNKNOWN,
                         "conversion from Object to " + to.javaName() + " is not supported yet");
@@ -157,6 +174,7 @@ final class Conversions {
     /**
      * プログラムのメソッドの本体 impl を直接呼ぶ。呼び出し側の型（called の引数・戻り値の型）と本体の宣言の型が
      * 違う場合（ジェネリクスの消去・共変戻り値）は変換する。args の先頭はレシーバ（インスタンスメソッドの場合）。
+     * 呼び先が例外を送出しうる（JResult を返す）なら {@code ?} を付けた値にする。
      */
     RExpr callImpl(ProgramIndex.MethodInfo impl, MethodRef called, List<RExpr> args) {
         Decl.MethodDecl d = impl.decl();
@@ -170,6 +188,9 @@ final class Conversions {
             out.add(convert(args.get(i + offset), from, d.params().get(i).type(), false));
         }
         RExpr call = new RExpr.Call(new RExpr.Path(imp.type(impl.owner()) + "::" + cx.hierarchy().bodyName(impl)), out);
+        if (cx.throwing().isThrowing(d)) {
+            call = tryOp(call);
+        }
         return convert(call, d.ref().returnType(), called.returnType(), false);
     }
 }

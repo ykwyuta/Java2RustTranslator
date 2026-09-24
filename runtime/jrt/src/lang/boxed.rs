@@ -5,8 +5,8 @@
 
 use crate::lang::string::JString;
 use crate::lang::stringify::{double_to_string, float_to_string, JChar, JStringify};
-use crate::object::{alloc, bad_cast, JObject, Object, ObjectBase};
-use crate::rt::throw;
+use crate::object::{alloc, class_cast, JObject, Object, ObjectBase};
+use crate::rt::{npe, JResult};
 use std::cell::RefCell;
 
 macro_rules! boxed {
@@ -26,26 +26,26 @@ macro_rules! boxed {
             fn instance_of(&self, class: &str) -> bool {
                 matches!(class, $class | "java.lang.Object" | "java.io.Serializable" | "java.lang.Comparable" $(| $iface)*)
             }
-            fn to_jstring(&self) -> JString {
+            fn to_jstring(&self) -> JResult<JString> {
                 let f: fn($t) -> String = $show;
-                JString::from(f(self.value))
+                Ok(JString::from(f(self.value)))
             }
-            fn equals(&self, other: &JObject) -> bool {
+            fn equals(&self, other: &JObject) -> JResult<bool> {
                 // Double/Float の equals はビット表現で比べる（NaN == NaN、0.0 != -0.0）。
-                other.downcast_ref::<$name>().is_some_and(|o| same_bits(o.value, self.value))
+                Ok(other.downcast_ref::<$name>().is_some_and(|o| same_bits(o.value, self.value)))
             }
-            fn hash_code(&self) -> i32 {
+            fn hash_code(&self) -> JResult<i32> {
                 let h: fn($t) -> i32 = $hash;
-                h(self.value)
+                Ok(h(self.value))
             }
-            fn compare_to(&self, other: &JObject) -> i32 {
+            fn compare_to(&self, other: &JObject) -> JResult<i32> {
                 match other.downcast_ref::<$name>() {
                     Some(o) => {
                         let c: fn($t, $t) -> i32 = $cmp;
-                        c(self.value, o.value)
+                        Ok(c(self.value, o.value))
                     }
-                    None if other.is_null() => throw("java.lang.NullPointerException", None),
-                    None => bad_cast(other, $class),
+                    None if other.is_null() => npe(),
+                    None => class_cast(other, $class),
                 }
             }
         }
@@ -157,12 +157,12 @@ pub fn box_f32(v: f32) -> JObject {
 macro_rules! unbox {
     ($fn:ident, $t:ty, $struct:ident, $class:literal) => {
         /// 自動アンボクシング（null なら NullPointerException、型が違えば ClassCastException）。
-        pub fn $fn(&self) -> $t {
+        pub fn $fn(&self) -> JResult<$t> {
             match self.downcast_ref::<$struct>() {
-                Some(b) => b.value,
+                Some(b) => Ok(b.value),
                 None => {
-                    self.obj();
-                    bad_cast(self, $class)
+                    self.obj()?;
+                    class_cast(self, $class)
                 }
             }
         }
@@ -181,31 +181,31 @@ impl JObject {
 }
 
 /// `Number.doubleValue()` など: 数値のボックスを f64 として読む。
-pub fn number_f64(o: &JObject) -> f64 {
-    if let Some(b) = o.downcast_ref::<JInteger>() { return b.value as f64; }
-    if let Some(b) = o.downcast_ref::<JLong>() { return b.value as f64; }
-    if let Some(b) = o.downcast_ref::<JDouble>() { return b.value; }
-    if let Some(b) = o.downcast_ref::<JFloat>() { return b.value as f64; }
-    if let Some(b) = o.downcast_ref::<JShort>() { return b.value as f64; }
-    if let Some(b) = o.downcast_ref::<JByte>() { return b.value as f64; }
-    o.obj();
-    bad_cast(o, "java.lang.Number")
+pub fn number_f64(o: &JObject) -> JResult<f64> {
+    if let Some(b) = o.downcast_ref::<JInteger>() { return Ok(b.value as f64); }
+    if let Some(b) = o.downcast_ref::<JLong>() { return Ok(b.value as f64); }
+    if let Some(b) = o.downcast_ref::<JDouble>() { return Ok(b.value); }
+    if let Some(b) = o.downcast_ref::<JFloat>() { return Ok(b.value as f64); }
+    if let Some(b) = o.downcast_ref::<JShort>() { return Ok(b.value as f64); }
+    if let Some(b) = o.downcast_ref::<JByte>() { return Ok(b.value as f64); }
+    o.obj()?;
+    class_cast(o, "java.lang.Number")
 }
 
 /// `Number.longValue()`。
-pub fn number_i64(o: &JObject) -> i64 {
-    if let Some(b) = o.downcast_ref::<JInteger>() { return b.value as i64; }
-    if let Some(b) = o.downcast_ref::<JLong>() { return b.value; }
-    if let Some(b) = o.downcast_ref::<JShort>() { return b.value as i64; }
-    if let Some(b) = o.downcast_ref::<JByte>() { return b.value as i64; }
-    number_f64(o) as i64
+pub fn number_i64(o: &JObject) -> JResult<i64> {
+    if let Some(b) = o.downcast_ref::<JInteger>() { return Ok(b.value as i64); }
+    if let Some(b) = o.downcast_ref::<JLong>() { return Ok(b.value); }
+    if let Some(b) = o.downcast_ref::<JShort>() { return Ok(b.value as i64); }
+    if let Some(b) = o.downcast_ref::<JByte>() { return Ok(b.value as i64); }
+    Ok(number_f64(o)? as i64)
 }
 
 /// `Number.intValue()`。
-pub fn number_i32(o: &JObject) -> i32 {
-    if let Some(b) = o.downcast_ref::<JDouble>() { return b.value as i32; }
-    if let Some(b) = o.downcast_ref::<JFloat>() { return b.value as i32; }
-    number_i64(o) as i32
+pub fn number_i32(o: &JObject) -> JResult<i32> {
+    if let Some(b) = o.downcast_ref::<JDouble>() { return Ok(b.value as i32); }
+    if let Some(b) = o.downcast_ref::<JFloat>() { return Ok(b.value as i32); }
+    Ok(number_i64(o)? as i32)
 }
 
 /// ボックスの toString（`Integer.toString()` 等の文字列化で使う）。

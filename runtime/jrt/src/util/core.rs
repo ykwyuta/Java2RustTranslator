@@ -6,6 +6,7 @@
 
 use crate::lang::string::JString;
 use crate::object::{alloc_rc, equals_nullable, hash_nullable, JObject, Object, ObjectBase};
+use crate::rt::JResult;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -49,25 +50,26 @@ impl Object for MapEntry {
     fn instance_of(&self, class: &str) -> bool {
         matches!(class, "java.lang.Object" | "java.util.Map$Entry")
     }
-    fn to_jstring(&self) -> JString {
-        crate::jconcat!(self.key, "=", self.value())
+    fn to_jstring(&self) -> JResult<JString> {
+        let (k, v) = (crate::lang::stringify::to_java_string(&self.key)?, crate::lang::stringify::to_java_string(&self.value())?);
+        Ok(JString::from(format!("{k}={v}")))
     }
-    fn equals(&self, other: &JObject) -> bool {
+    fn equals(&self, other: &JObject) -> JResult<bool> {
         match other.downcast_ref::<MapEntry>() {
-            Some(o) => equals_nullable(&self.key, &o.key) && equals_nullable(&self.value(), &o.value()),
-            None => false,
+            Some(o) => Ok(equals_nullable(&self.key, &o.key)? && equals_nullable(&self.value(), &o.value())?),
+            None => Ok(false),
         }
     }
-    fn hash_code(&self) -> i32 {
-        hash_nullable(&self.key) ^ hash_nullable(&self.value())
+    fn hash_code(&self) -> JResult<i32> {
+        Ok(hash_nullable(&self.key)? ^ hash_nullable(&self.value())?)
     }
-    fn invoke(&self, method: &str, args: &[JObject]) -> Option<JObject> {
-        match method {
-            "getKey" => Some(self.key()),
-            "getValue" => Some(self.value()),
-            "setValue" => Some(self.set_value(args[0].clone())),
+    fn invoke(&self, method: &str, args: &[JObject]) -> JResult<Option<JObject>> {
+        Ok(match (method, args.len()) {
+            ("getKey", 0) => Some(self.key()),
+            ("getValue", 0) => Some(self.value()),
+            ("setValue", 1) => Some(self.set_value(args[0].clone())),
             _ => None,
-        }
+        })
     }
 }
 
@@ -77,13 +79,13 @@ pub fn new_entry(key: JObject, value: JObject) -> JObject {
 }
 
 /// HashMap.hash(): `h ^ (h >>> 16)`。
-pub(crate) fn spread(key: &JObject) -> i32 {
-    let h = hash_nullable(key);
-    h ^ ((h as u32) >> 16) as i32
+pub(crate) fn spread(key: &JObject) -> JResult<i32> {
+    let h = hash_nullable(key)?;
+    Ok(h ^ ((h as u32) >> 16) as i32)
 }
 
-fn keys_equal(a: &JObject, b: &JObject) -> bool {
-    a.same(b) || (!a.is_null() && a.equals(b))
+fn keys_equal(a: &JObject, b: &JObject) -> JResult<bool> {
+    Ok(a.same(b) || (!a.is_null() && a.equals(b)?))
 }
 
 /// `tableSizeFor(cap)`: cap 以上の最小の 2 のべき乗。
@@ -105,13 +107,13 @@ impl HashCore {
     }
 
     /// `new HashMap(initialCapacity)`。
-    pub(crate) fn with_capacity(linked: bool, cap: i32) -> HashCore {
+    pub(crate) fn with_capacity(linked: bool, cap: i32) -> JResult<HashCore> {
         if cap < 0 {
-            crate::rt::throw("java.lang.IllegalArgumentException", Some(&format!("Illegal initial capacity: {cap}")));
+            return crate::rt::throw("java.lang.IllegalArgumentException", Some(&format!("Illegal initial capacity: {cap}")));
         }
         let mut c = HashCore::new(linked);
         c.threshold = table_size_for(cap as usize);
-        c
+        Ok(c)
     }
 
     pub(crate) fn len(&self) -> usize {
@@ -119,12 +121,17 @@ impl HashCore {
     }
 
     /// 同じキーの要素（equals の呼び出しはユーザーのコードを実行しうるので、呼び出し側は共有借用で呼ぶ）。
-    pub(crate) fn find(&self, key: &JObject, hash: i32) -> Option<Rc<MapEntry>> {
+    pub(crate) fn find(&self, key: &JObject, hash: i32) -> JResult<Option<Rc<MapEntry>>> {
         if self.table.is_empty() {
-            return None;
+            return Ok(None);
         }
         let idx = (self.table.len() - 1) & hash as u32 as usize;
-        self.table[idx].iter().find(|e| e.hash == hash && keys_equal(key, &e.key)).cloned()
+        for e in &self.table[idx] {
+            if e.hash == hash && keys_equal(key, &e.key)? {
+                return Ok(Some(e.clone()));
+            }
+        }
+        Ok(None)
     }
 
     /// 新しい要素を追加する（同じキーがないことは呼び出し側が確かめる）。
@@ -205,20 +212,20 @@ impl HashCore {
         self.table = new_table;
     }
 
-    pub(crate) fn remove(&mut self, key: &JObject, hash: i32) -> Option<Rc<MapEntry>> {
+    /// 要素を取り除く（find で見つけた要素。equals を呼ぶ探索とは分けて、可変借用中にユーザーのコードを実行しない）。
+    pub(crate) fn remove_entry(&mut self, e: &Rc<MapEntry>) {
         if self.table.is_empty() {
-            return None;
+            return;
         }
-        let idx = (self.table.len() - 1) & hash as u32 as usize;
-        let pos = self.table[idx].iter().position(|e| e.hash == hash && keys_equal(key, &e.key))?;
-        let e = self.table[idx].remove(pos);
+        let idx = (self.table.len() - 1) & e.hash as u32 as usize;
+        let Some(pos) = self.table[idx].iter().position(|x| Rc::ptr_eq(x, e)) else { return };
+        self.table[idx].remove(pos);
         if let Some(o) = &mut self.order {
-            if let Some(p) = o.iter().position(|x| Rc::ptr_eq(x, &e)) {
+            if let Some(p) = o.iter().position(|x| Rc::ptr_eq(x, e)) {
                 o.remove(p);
             }
         }
         self.size -= 1;
-        Some(e)
     }
 
     pub(crate) fn clear(&mut self) {
@@ -241,11 +248,11 @@ impl HashCore {
 }
 
 /// 比較関数（null なら自然順序 = compareTo）。
-pub fn compare_with(cmp: &JObject, a: &JObject, b: &JObject) -> i32 {
+pub fn compare_with(cmp: &JObject, a: &JObject, b: &JObject) -> JResult<i32> {
     if cmp.is_null() {
         a.compare_to(b)
     } else {
-        cmp.invoke("compare", &[a.clone(), b.clone()]).unbox_i32()
+        cmp.invoke("compare", &[a.clone(), b.clone()])?.unbox_i32()
     }
 }
 
@@ -261,22 +268,50 @@ impl TreeCore {
     }
 
     /// 二分探索（Ok: 一致した位置、Err: 挿入位置）。
-    pub(crate) fn search(&self, key: &JObject) -> Result<usize, usize> {
+    pub(crate) fn search(&self, key: &JObject) -> JResult<Result<usize, usize>> {
         if key.is_null() && self.comparator.is_null() {
-            crate::rt::throw("java.lang.NullPointerException", None);
+            return crate::rt::npe();
         }
         let (mut lo, mut hi) = (0usize, self.entries.len());
         while lo < hi {
             let mid = (lo + hi) / 2;
-            let c = compare_with(&self.comparator, &self.entries[mid].key, key);
+            let c = compare_with(&self.comparator, &self.entries[mid].key, key)?;
             if c < 0 {
                 lo = mid + 1;
             } else if c > 0 {
                 hi = mid;
             } else {
-                return Ok(mid);
+                return Ok(Ok(mid));
             }
         }
-        Err(lo)
+        Ok(Err(lo))
     }
+}
+
+/// 安定なソート（マージソート）。比較関数が例外を送出したら、その時点で止めて `Err` を返す（v は変更しない）。
+pub(crate) fn try_sort_by<T: Clone>(v: &mut Vec<T>, mut cmp: impl FnMut(&T, &T) -> JResult<std::cmp::Ordering>) -> JResult<()> {
+    fn merge_sort<T: Clone>(v: &[T], cmp: &mut dyn FnMut(&T, &T) -> JResult<std::cmp::Ordering>) -> JResult<Vec<T>> {
+        if v.len() <= 1 {
+            return Ok(v.to_vec());
+        }
+        let mid = v.len() / 2;
+        let left = merge_sort(&v[..mid], cmp)?;
+        let right = merge_sort(&v[mid..], cmp)?;
+        let mut out = Vec::with_capacity(v.len());
+        let (mut i, mut j) = (0, 0);
+        while i < left.len() && j < right.len() {
+            if cmp(&right[j], &left[i])? == std::cmp::Ordering::Less {
+                out.push(right[j].clone());
+                j += 1;
+            } else {
+                out.push(left[i].clone());
+                i += 1;
+            }
+        }
+        out.extend_from_slice(&left[i..]);
+        out.extend_from_slice(&right[j..]);
+        Ok(out)
+    }
+    *v = merge_sort(v, &mut cmp)?;
+    Ok(())
 }

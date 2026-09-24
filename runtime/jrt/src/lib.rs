@@ -17,9 +17,9 @@ pub use array::JArray;
 pub use lambda::lambda;
 pub use lang::boxed::{box_bool, box_f32, box_f64, box_i16, box_i32, box_i64, box_i8, box_u16};
 pub use lang::string::JString;
-pub use lang::stringify::{JChar, JStringify};
+pub use lang::stringify::{JChar, JStringify, JToString};
 pub use object::{alloc, JObject, Object, ObjectBase};
-pub use rt::{run_main, throw, throw_obj, try_block, Flow};
+pub use rt::{exception, npe, run_main, throw, throw_obj, try_block, Flow, JResult};
 
 /// 変換器が扱えない Java の型の代わりに置くプレースホルダ型。
 #[derive(Clone, Debug, Default)]
@@ -37,6 +37,7 @@ pub mod prelude {
     pub use crate::lang::stringify::JChar;
     pub use crate::object::JObject;
     pub use crate::object::Object as _;
+    pub use crate::rt::JResult;
     pub use crate::util::collections::Collections as _;
     pub use crate::{jconcat, jstr};
 }
@@ -57,6 +58,11 @@ macro_rules! jconcat {
         $( $crate::JStringify::append_to(&$e, &mut __j2r_s); )*
         $crate::JString::from(__j2r_s)
     }};
+}
+
+/// `String.valueOf(Object)` / 文字列連結での参照型の文字列化（null は "null"、それ以外は toString()）。
+pub fn string_of(o: &JObject) -> JResult<JString> {
+    lang::string::JString::value_of_object(o)
 }
 
 /// 到達しないコード（todo!() の後）でも型検査を通すための実装。

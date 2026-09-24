@@ -6,12 +6,12 @@ classes:
     constructors:
       - { sig: "<init>(java.io.InputStream)", rust: "jrt::util::Scanner::new({0})" }
     methods:
-      - { sig: "next()", rust: "{this}.next()" }
-      - { sig: "nextInt()", rust: "{this}.next_int()" }
-      - { sig: "nextLong()", rust: "{this}.next_long()" }
-      - { sig: "nextDouble()", rust: "{this}.next_double()" }
-      - { sig: "nextBoolean()", rust: "{this}.next_boolean()" }
-      - { sig: "nextLine()", rust: "{this}.next_line()" }
+      - { sig: "next()", rust: "{this}.next()?" }
+      - { sig: "nextInt()", rust: "{this}.next_int()?" }
+      - { sig: "nextLong()", rust: "{this}.next_long()?" }
+      - { sig: "nextDouble()", rust: "{this}.next_double()?" }
+      - { sig: "nextBoolean()", rust: "{this}.next_boolean()?" }
+      - { sig: "nextLine()", rust: "{this}.next_line()?" }
       - { sig: "hasNext()", rust: "{this}.has_next()" }
       - { sig: "hasNextInt()", rust: "{this}.has_next_int()" }
       - { sig: "hasNextLine()", rust: "{this}.has_next_line()" }
@@ -22,272 +22,272 @@ classes:
       - { sig: "<init>()", rust: "jrt::util::random::new_random_unseeded()" }
       - { sig: "<init>(long)", rust: "jrt::util::random::new_random({0})" }
     methods:
-      - { sig: "nextInt()", rust: "jrt::util::random::next_int({&this})" }
-      - { sig: "nextInt(int)", rust: "jrt::util::random::next_int_bound({&this}, {0})" }
-      - { sig: "nextInt(int,int)", rust: "jrt::util::random::next_int_range({&this}, {0}, {1})" }
-      - { sig: "nextLong()", rust: "jrt::util::random::next_long({&this})" }
-      - { sig: "nextDouble()", rust: "jrt::util::random::next_double({&this})" }
-      - { sig: "nextBoolean()", rust: "jrt::util::random::next_boolean({&this})" }
-      - { sig: "setSeed(long)", rust: "jrt::util::random::set_seed({&this}, {0})" }
+      - { sig: "nextInt()", rust: "jrt::util::random::next_int({&this})?" }
+      - { sig: "nextInt(int)", rust: "jrt::util::random::next_int_bound({&this}, {0})?" }
+      - { sig: "nextInt(int,int)", rust: "jrt::util::random::next_int_range({&this}, {0}, {1})?" }
+      - { sig: "nextLong()", rust: "jrt::util::random::next_long({&this})?" }
+      - { sig: "nextDouble()", rust: "jrt::util::random::next_double({&this})?" }
+      - { sig: "nextBoolean()", rust: "jrt::util::random::next_boolean({&this})?" }
+      - { sig: "setSeed(long)", rust: "jrt::util::random::set_seed({&this}, {0})?" }
   - class: [java.util.Collection, java.util.List, java.util.ArrayList, java.util.LinkedList, java.util.AbstractList, java.util.AbstractCollection, java.util.Queue, java.util.Deque, java.util.ArrayDeque, java.util.Stack, java.util.Vector, java.util.Set, java.util.HashSet, java.util.LinkedHashSet, java.util.TreeSet, java.util.SortedSet, java.util.NavigableSet, java.util.AbstractSet, java.util.PriorityQueue, java.util.AbstractQueue, java.util.SequencedCollection, java.util.SequencedSet, java.lang.Iterable]
     methods:
-      - { sig: "size()", rust: "{this}.size()" }
-      - { sig: "isEmpty()", rust: "{this}.is_empty()" }
-      - { sig: "contains(java.lang.Object)", rust: "{this}.contains({0})" }
-      - { sig: "add(java.lang.Object)", rust: "{this}.add({0})" }
-      - { sig: "remove(java.lang.Object)", rust: "{this}.remove({0})" }
-      - { sig: "clear()", rust: "{this}.clear()" }
-      - { sig: "addAll(java.util.Collection)", rust: "{this}.add_all({&0})" }
-      - { sig: "removeAll(java.util.Collection)", rust: "{this}.remove_all({&0})" }
-      - { sig: "retainAll(java.util.Collection)", rust: "{this}.retain_all({&0})" }
-      - { sig: "containsAll(java.util.Collection)", rust: "{this}.contains_all({&0})" }
-      - { sig: "iterator()", rust: "{this}.iterator()" }
-      - { sig: "forEach(java.util.function.Consumer)", rust: "{this}.for_each({&0})" }
-      - { sig: "removeIf(java.util.function.Predicate)", rust: "{this}.remove_if({&0})" }
-      - { sig: "get(int)", rust: "{this}.get({0})" }
-      - { sig: "set(int,java.lang.Object)", rust: "{this}.set(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "add(int,java.lang.Object)", rust: "{this}.add_at(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "remove(int)", rust: "{this}.remove_at({0})" }
-      - { sig: "indexOf(java.lang.Object)", rust: "{this}.index_of({0})" }
-      - { sig: "lastIndexOf(java.lang.Object)", rust: "{this}.last_index_of({0})" }
-      - { sig: "sort(java.util.Comparator)", rust: "{this}.sort({&0})" }
-      - { sig: "subList(int,int)", rust: "{this}.sub_list(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "replaceAll(java.util.function.UnaryOperator)", rust: "{this}.replace_all({&0})" }
-      - { sig: "getFirst()", rust: "{this}.get_first()" }
-      - { sig: "getLast()", rust: "{this}.get_last()" }
-      - { sig: "removeFirst()", rust: "{this}.remove_first()" }
-      - { sig: "removeLast()", rust: "{this}.remove_last()" }
-      - { sig: "offer(java.lang.Object)", rust: "{this}.offer({0})" }
-      - { sig: "poll()", rust: "{this}.poll()" }
-      - { sig: "peek()", rust: "{this}.peek()" }
-      - { sig: "element()", rust: "{this}.element()" }
-      - { sig: "remove()", rust: "{this}.remove_head()" }
-      - { sig: "push(java.lang.Object)", rust: "{this}.push({0})" }
-      - { sig: "pop()", rust: "{this}.pop()" }
-      - { sig: "empty()", rust: "{this}.is_empty()" }
-      - { sig: "addFirst(java.lang.Object)", rust: "{this}.add_first({0})" }
-      - { sig: "addLast(java.lang.Object)", rust: "{this}.add_last({0})" }
-      - { sig: "offerFirst(java.lang.Object)", rust: "{this}.offer_first({0})" }
-      - { sig: "offerLast(java.lang.Object)", rust: "{this}.offer_last({0})" }
-      - { sig: "pollFirst()", rust: "{this}.poll_first()" }
-      - { sig: "pollLast()", rust: "{this}.poll_last()" }
-      - { sig: "peekFirst()", rust: "{this}.peek_first()" }
-      - { sig: "peekLast()", rust: "{this}.peek_last()" }
-      - { sig: "first()", rust: "{this}.first()" }
-      - { sig: "last()", rust: "{this}.last()" }
-      - { sig: "floor(java.lang.Object)", rust: "{this}.floor({0})" }
-      - { sig: "ceiling(java.lang.Object)", rust: "{this}.ceiling({0})" }
-      - { sig: "higher(java.lang.Object)", rust: "{this}.higher({0})" }
-      - { sig: "lower(java.lang.Object)", rust: "{this}.lower({0})" }
-      - { sig: "headSet(java.lang.Object)", rust: "{this}.head_set({0}, false)" }
-      - { sig: "headSet(java.lang.Object,boolean)", rust: "{this}.head_set(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "tailSet(java.lang.Object)", rust: "{this}.tail_set({0}, true)" }
-      - { sig: "tailSet(java.lang.Object,boolean)", rust: "{this}.tail_set(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "toString()", rust: "{this}.to_jstring()" }
+      - { sig: "size()", rust: "{this}.size()?" }
+      - { sig: "isEmpty()", rust: "{this}.is_empty()?" }
+      - { sig: "contains(java.lang.Object)", rust: "{this}.contains({0})?" }
+      - { sig: "add(java.lang.Object)", rust: "{this}.add({0})?" }
+      - { sig: "remove(java.lang.Object)", rust: "{this}.remove({0})?" }
+      - { sig: "clear()", rust: "{this}.clear()?" }
+      - { sig: "addAll(java.util.Collection)", rust: "{this}.add_all({&0})?" }
+      - { sig: "removeAll(java.util.Collection)", rust: "{this}.remove_all({&0})?" }
+      - { sig: "retainAll(java.util.Collection)", rust: "{this}.retain_all({&0})?" }
+      - { sig: "containsAll(java.util.Collection)", rust: "{this}.contains_all({&0})?" }
+      - { sig: "iterator()", rust: "{this}.iterator()?" }
+      - { sig: "forEach(java.util.function.Consumer)", rust: "{this}.for_each({&0})?" }
+      - { sig: "removeIf(java.util.function.Predicate)", rust: "{this}.remove_if({&0})?" }
+      - { sig: "get(int)", rust: "{this}.get({0})?" }
+      - { sig: "set(int,java.lang.Object)", rust: "{this}.set({0}, JObject::from({1}))?" }
+      - { sig: "add(int,java.lang.Object)", rust: "{this}.add_at({0}, JObject::from({1}))?" }
+      - { sig: "remove(int)", rust: "{this}.remove_at({0})?" }
+      - { sig: "indexOf(java.lang.Object)", rust: "{this}.index_of({0})?" }
+      - { sig: "lastIndexOf(java.lang.Object)", rust: "{this}.last_index_of({0})?" }
+      - { sig: "sort(java.util.Comparator)", rust: "{this}.sort({&0})?" }
+      - { sig: "subList(int,int)", rust: "{this}.sub_list({0}, {1})?" }
+      - { sig: "replaceAll(java.util.function.UnaryOperator)", rust: "{this}.replace_all({&0})?" }
+      - { sig: "getFirst()", rust: "{this}.get_first()?" }
+      - { sig: "getLast()", rust: "{this}.get_last()?" }
+      - { sig: "removeFirst()", rust: "{this}.remove_first()?" }
+      - { sig: "removeLast()", rust: "{this}.remove_last()?" }
+      - { sig: "offer(java.lang.Object)", rust: "{this}.offer({0})?" }
+      - { sig: "poll()", rust: "{this}.poll()?" }
+      - { sig: "peek()", rust: "{this}.peek()?" }
+      - { sig: "element()", rust: "{this}.element()?" }
+      - { sig: "remove()", rust: "{this}.remove_head()?" }
+      - { sig: "push(java.lang.Object)", rust: "{this}.push({0})?" }
+      - { sig: "pop()", rust: "{this}.pop()?" }
+      - { sig: "empty()", rust: "{this}.is_empty()?" }
+      - { sig: "addFirst(java.lang.Object)", rust: "{this}.add_first({0})?" }
+      - { sig: "addLast(java.lang.Object)", rust: "{this}.add_last({0})?" }
+      - { sig: "offerFirst(java.lang.Object)", rust: "{this}.offer_first({0})?" }
+      - { sig: "offerLast(java.lang.Object)", rust: "{this}.offer_last({0})?" }
+      - { sig: "pollFirst()", rust: "{this}.poll_first()?" }
+      - { sig: "pollLast()", rust: "{this}.poll_last()?" }
+      - { sig: "peekFirst()", rust: "{this}.peek_first()?" }
+      - { sig: "peekLast()", rust: "{this}.peek_last()?" }
+      - { sig: "first()", rust: "{this}.first()?" }
+      - { sig: "last()", rust: "{this}.last()?" }
+      - { sig: "floor(java.lang.Object)", rust: "{this}.floor({0})?" }
+      - { sig: "ceiling(java.lang.Object)", rust: "{this}.ceiling({0})?" }
+      - { sig: "higher(java.lang.Object)", rust: "{this}.higher({0})?" }
+      - { sig: "lower(java.lang.Object)", rust: "{this}.lower({0})?" }
+      - { sig: "headSet(java.lang.Object)", rust: "{this}.head_set({0}, false)?" }
+      - { sig: "headSet(java.lang.Object,boolean)", rust: "{this}.head_set(JObject::from({0}), {1})?" }
+      - { sig: "tailSet(java.lang.Object)", rust: "{this}.tail_set({0}, true)?" }
+      - { sig: "tailSet(java.lang.Object,boolean)", rust: "{this}.tail_set(JObject::from({0}), {1})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
 
   - class: java.util.ArrayList
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_list(jrt::util::collections::ListKind::ArrayList)" }
-      - { sig: "<init>(int)", rust: "jrt::util::collections::new_list(jrt::util::collections::ListKind::ArrayList)" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_list_from(jrt::util::collections::ListKind::ArrayList, {&0})" }
+      - { sig: "<init>(int)", rust: "jrt::util::collections::new_list_with_capacity(jrt::util::collections::ListKind::ArrayList, {0})?" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_list_from(jrt::util::collections::ListKind::ArrayList, {&0})?" }
   - class: java.util.LinkedList
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_list(jrt::util::collections::ListKind::LinkedList)" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_list_from(jrt::util::collections::ListKind::LinkedList, {&0})" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_list_from(jrt::util::collections::ListKind::LinkedList, {&0})?" }
   - class: java.util.ArrayDeque
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_list(jrt::util::collections::ListKind::ArrayDeque)" }
       - { sig: "<init>(int)", rust: "jrt::util::collections::new_list(jrt::util::collections::ListKind::ArrayDeque)" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_list_from(jrt::util::collections::ListKind::ArrayDeque, {&0})" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_list_from(jrt::util::collections::ListKind::ArrayDeque, {&0})?" }
   - class: java.util.Stack
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_list(jrt::util::collections::ListKind::Stack)" }
   - class: java.util.HashSet
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_set(jrt::util::collections::SetKind::Hash)" }
-      - { sig: "<init>(int)", rust: "jrt::util::collections::new_set_with_capacity(jrt::util::collections::SetKind::Hash, {0})" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_set_from(jrt::util::collections::SetKind::Hash, {&0})" }
+      - { sig: "<init>(int)", rust: "jrt::util::collections::new_set_with_capacity(jrt::util::collections::SetKind::Hash, {0})?" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_set_from(jrt::util::collections::SetKind::Hash, {&0})?" }
   - class: java.util.LinkedHashSet
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_set(jrt::util::collections::SetKind::LinkedHash)" }
-      - { sig: "<init>(int)", rust: "jrt::util::collections::new_set(jrt::util::collections::SetKind::LinkedHash)" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_set_from(jrt::util::collections::SetKind::LinkedHash, {&0})" }
+      - { sig: "<init>(int)", rust: "jrt::util::collections::new_set_with_capacity(jrt::util::collections::SetKind::LinkedHash, {0})?" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_set_from(jrt::util::collections::SetKind::LinkedHash, {&0})?" }
   - class: java.util.TreeSet
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_set(jrt::util::collections::SetKind::Tree)" }
       - { sig: "<init>(java.util.Comparator)", rust: "jrt::util::collections::new_tree_set({0})" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_set_from(jrt::util::collections::SetKind::Tree, {&0})" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_set_from(jrt::util::collections::SetKind::Tree, {&0})?" }
   - class: java.util.PriorityQueue
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_priority_queue(JObject::null())" }
-      - { sig: "<init>(int)", rust: "jrt::util::collections::new_priority_queue(JObject::null())" }
+      - { sig: "<init>(int)", rust: "jrt::util::collections::new_priority_queue_with_capacity({0})?" }
       - { sig: "<init>(java.util.Comparator)", rust: "jrt::util::collections::new_priority_queue({0})" }
       - { sig: "<init>(int,java.util.Comparator)", rust: "jrt::util::collections::new_priority_queue({1})" }
-      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_priority_queue_from({&0})" }
+      - { sig: "<init>(java.util.Collection)", rust: "jrt::util::collections::new_priority_queue_from({&0})?" }
   - class: java.util.HashMap
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_map(jrt::util::collections::MapKind::Hash)" }
-      - { sig: "<init>(int)", rust: "jrt::util::collections::new_map_with_capacity(jrt::util::collections::MapKind::Hash, {0})" }
-      - { sig: "<init>(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Hash, {&0})" }
+      - { sig: "<init>(int)", rust: "jrt::util::collections::new_map_with_capacity(jrt::util::collections::MapKind::Hash, {0})?" }
+      - { sig: "<init>(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Hash, {&0})?" }
   - class: java.util.LinkedHashMap
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_map(jrt::util::collections::MapKind::LinkedHash)" }
-      - { sig: "<init>(int)", rust: "jrt::util::collections::new_map(jrt::util::collections::MapKind::LinkedHash)" }
-      - { sig: "<init>(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::LinkedHash, {&0})" }
+      - { sig: "<init>(int)", rust: "jrt::util::collections::new_map_with_capacity(jrt::util::collections::MapKind::LinkedHash, {0})?" }
+      - { sig: "<init>(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::LinkedHash, {&0})?" }
   - class: java.util.TreeMap
     constructors:
       - { sig: "<init>()", rust: "jrt::util::collections::new_map(jrt::util::collections::MapKind::Tree)" }
       - { sig: "<init>(java.util.Comparator)", rust: "jrt::util::collections::new_tree_map({0})" }
-      - { sig: "<init>(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Tree, {&0})" }
+      - { sig: "<init>(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Tree, {&0})?" }
   - class: [java.util.Map, java.util.HashMap, java.util.LinkedHashMap, java.util.TreeMap, java.util.SortedMap, java.util.NavigableMap, java.util.AbstractMap, java.util.SequencedMap]
     methods:
-      - { sig: "size()", rust: "{this}.size()" }
-      - { sig: "isEmpty()", rust: "{this}.is_empty()" }
-      - { sig: "clear()", rust: "{this}.clear()" }
-      - { sig: "get(java.lang.Object)", rust: "{this}.map_get({0})" }
-      - { sig: "put(java.lang.Object,java.lang.Object)", rust: "{this}.put(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "containsKey(java.lang.Object)", rust: "{this}.contains_key({0})" }
-      - { sig: "containsValue(java.lang.Object)", rust: "{this}.contains_value({0})" }
-      - { sig: "remove(java.lang.Object)", rust: "{this}.map_remove({0})" }
-      - { sig: "getOrDefault(java.lang.Object,java.lang.Object)", rust: "{this}.get_or_default(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "putIfAbsent(java.lang.Object,java.lang.Object)", rust: "{this}.put_if_absent(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "putAll(java.util.Map)", rust: "{this}.put_all({&0})" }
-      - { sig: "keySet()", rust: "{this}.key_set()" }
-      - { sig: "values()", rust: "{this}.values()" }
-      - { sig: "entrySet()", rust: "{this}.entry_set()" }
-      - { sig: "computeIfAbsent(java.lang.Object,java.util.function.Function)", rust: "{this}.compute_if_absent({0}, {&1})" }
-      - { sig: "computeIfPresent(java.lang.Object,java.util.function.BiFunction)", rust: "{this}.compute_if_present({0}, {&1})" }
-      - { sig: "compute(java.lang.Object,java.util.function.BiFunction)", rust: "{this}.compute({0}, {&1})" }
-      - { sig: "merge(java.lang.Object,java.lang.Object,java.util.function.BiFunction)", rust: "{this}.merge({0}, {1}, {&2})" }
-      - { sig: "forEach(java.util.function.BiConsumer)", rust: "{this}.map_for_each({&0})" }
-      - { sig: "replace(java.lang.Object,java.lang.Object)", rust: "{this}.map_replace(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "firstKey()", rust: "{this}.first_key()" }
-      - { sig: "lastKey()", rust: "{this}.last_key()" }
-      - { sig: "floorKey(java.lang.Object)", rust: "{this}.floor_key({0})" }
-      - { sig: "ceilingKey(java.lang.Object)", rust: "{this}.ceiling_key({0})" }
-      - { sig: "higherKey(java.lang.Object)", rust: "{this}.higher_key({0})" }
-      - { sig: "lowerKey(java.lang.Object)", rust: "{this}.lower_key({0})" }
-      - { sig: "firstEntry()", rust: "{this}.first_entry()" }
-      - { sig: "lastEntry()", rust: "{this}.last_entry()" }
-      - { sig: "pollFirstEntry()", rust: "{this}.poll_first_entry()" }
-      - { sig: "pollLastEntry()", rust: "{this}.poll_last_entry()" }
-      - { sig: "floorEntry(java.lang.Object)", rust: "{this}.floor_entry({0})" }
-      - { sig: "ceilingEntry(java.lang.Object)", rust: "{this}.ceiling_entry({0})" }
-      - { sig: "headMap(java.lang.Object)", rust: "{this}.head_map({0}, false)" }
-      - { sig: "headMap(java.lang.Object,boolean)", rust: "{this}.head_map(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "tailMap(java.lang.Object)", rust: "{this}.tail_map({0}, true)" }
-      - { sig: "tailMap(java.lang.Object,boolean)", rust: "{this}.tail_map(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "toString()", rust: "{this}.to_jstring()" }
+      - { sig: "size()", rust: "{this}.size()?" }
+      - { sig: "isEmpty()", rust: "{this}.is_empty()?" }
+      - { sig: "clear()", rust: "{this}.clear()?" }
+      - { sig: "get(java.lang.Object)", rust: "{this}.map_get({0})?" }
+      - { sig: "put(java.lang.Object,java.lang.Object)", rust: "{this}.put(JObject::from({0}), JObject::from({1}))?" }
+      - { sig: "containsKey(java.lang.Object)", rust: "{this}.contains_key({0})?" }
+      - { sig: "containsValue(java.lang.Object)", rust: "{this}.contains_value({0})?" }
+      - { sig: "remove(java.lang.Object)", rust: "{this}.map_remove({0})?" }
+      - { sig: "getOrDefault(java.lang.Object,java.lang.Object)", rust: "{this}.get_or_default(JObject::from({0}), JObject::from({1}))?" }
+      - { sig: "putIfAbsent(java.lang.Object,java.lang.Object)", rust: "{this}.put_if_absent(JObject::from({0}), JObject::from({1}))?" }
+      - { sig: "putAll(java.util.Map)", rust: "{this}.put_all({&0})?" }
+      - { sig: "keySet()", rust: "{this}.key_set()?" }
+      - { sig: "values()", rust: "{this}.values()?" }
+      - { sig: "entrySet()", rust: "{this}.entry_set()?" }
+      - { sig: "computeIfAbsent(java.lang.Object,java.util.function.Function)", rust: "{this}.compute_if_absent({0}, {&1})?" }
+      - { sig: "computeIfPresent(java.lang.Object,java.util.function.BiFunction)", rust: "{this}.compute_if_present({0}, {&1})?" }
+      - { sig: "compute(java.lang.Object,java.util.function.BiFunction)", rust: "{this}.compute({0}, {&1})?" }
+      - { sig: "merge(java.lang.Object,java.lang.Object,java.util.function.BiFunction)", rust: "{this}.merge({0}, {1}, {&2})?" }
+      - { sig: "forEach(java.util.function.BiConsumer)", rust: "{this}.map_for_each({&0})?" }
+      - { sig: "replace(java.lang.Object,java.lang.Object)", rust: "{this}.map_replace(JObject::from({0}), JObject::from({1}))?" }
+      - { sig: "firstKey()", rust: "{this}.first_key()?" }
+      - { sig: "lastKey()", rust: "{this}.last_key()?" }
+      - { sig: "floorKey(java.lang.Object)", rust: "{this}.floor_key({0})?" }
+      - { sig: "ceilingKey(java.lang.Object)", rust: "{this}.ceiling_key({0})?" }
+      - { sig: "higherKey(java.lang.Object)", rust: "{this}.higher_key({0})?" }
+      - { sig: "lowerKey(java.lang.Object)", rust: "{this}.lower_key({0})?" }
+      - { sig: "firstEntry()", rust: "{this}.first_entry()?" }
+      - { sig: "lastEntry()", rust: "{this}.last_entry()?" }
+      - { sig: "pollFirstEntry()", rust: "{this}.poll_first_entry()?" }
+      - { sig: "pollLastEntry()", rust: "{this}.poll_last_entry()?" }
+      - { sig: "floorEntry(java.lang.Object)", rust: "{this}.floor_entry({0})?" }
+      - { sig: "ceilingEntry(java.lang.Object)", rust: "{this}.ceiling_entry({0})?" }
+      - { sig: "headMap(java.lang.Object)", rust: "{this}.head_map({0}, false)?" }
+      - { sig: "headMap(java.lang.Object,boolean)", rust: "{this}.head_map(JObject::from({0}), {1})?" }
+      - { sig: "tailMap(java.lang.Object)", rust: "{this}.tail_map({0}, true)?" }
+      - { sig: "tailMap(java.lang.Object,boolean)", rust: "{this}.tail_map(JObject::from({0}), {1})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
 
   - class: [java.util.Map.Entry, java.util.AbstractMap.SimpleEntry]
     methods:
-      - { sig: "getKey()", rust: "{this}.get_key()" }
-      - { sig: "getValue()", rust: "{this}.get_value()" }
-      - { sig: "setValue(java.lang.Object)", rust: "{this}.set_value({0})" }
+      - { sig: "getKey()", rust: "{this}.get_key()?" }
+      - { sig: "getValue()", rust: "{this}.get_value()?" }
+      - { sig: "setValue(java.lang.Object)", rust: "{this}.set_value({0})?" }
 
   - class: [java.util.Iterator, java.util.ListIterator]
     methods:
-      - { sig: "hasNext()", rust: "{this}.has_next()" }
-      - { sig: "next()", rust: "{this}.next()" }
-      - { sig: "remove()", rust: "{this}.iter_remove()" }
+      - { sig: "hasNext()", rust: "{this}.has_next()?" }
+      - { sig: "next()", rust: "{this}.next()?" }
+      - { sig: "remove()", rust: "{this}.iter_remove()?" }
   - class: java.util.List
     methods:
-      - { sig: "of()", rust: "jrt::util::misc::list_of(&JArray::<JObject>::from_vec(Vec::new()))" }
-      - { sig: "of(java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8}), JObject::from({9})]))" }
-      - { sig: "of(java.lang.Object[])", rust: "jrt::util::misc::list_of({&0})" }
-      - { sig: "copyOf(java.util.Collection)", rust: "jrt::util::misc::list_copy_of({&0})" }
+      - { sig: "of()", rust: "jrt::util::misc::list_of(&JArray::<JObject>::from_vec(Vec::new()))?" }
+      - { sig: "of(java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::list_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8}), JObject::from({9})]))?" }
+      - { sig: "of(java.lang.Object[])", rust: "jrt::util::misc::list_of({&0})?" }
+      - { sig: "copyOf(java.util.Collection)", rust: "jrt::util::misc::list_copy_of({&0})?" }
   - class: java.util.Set
     methods:
-      - { sig: "of()", rust: "jrt::util::misc::set_of(&JArray::<JObject>::from_vec(Vec::new()))" }
-      - { sig: "of(java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8})]))" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8}), JObject::from({9})]))" }
-      - { sig: "of(java.lang.Object[])", rust: "jrt::util::misc::set_of({&0})" }
-      - { sig: "copyOf(java.util.Collection)", rust: "jrt::util::misc::set_copy_of({&0})" }
+      - { sig: "of()", rust: "jrt::util::misc::set_of(&JArray::<JObject>::from_vec(Vec::new()))?" }
+      - { sig: "of(java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8})]))?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::set_of(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4}), JObject::from({5}), JObject::from({6}), JObject::from({7}), JObject::from({8}), JObject::from({9})]))?" }
+      - { sig: "of(java.lang.Object[])", rust: "jrt::util::misc::set_of({&0})?" }
+      - { sig: "copyOf(java.util.Collection)", rust: "jrt::util::misc::set_copy_of({&0})?" }
   - class: java.util.Map
     methods:
-      - { sig: "of()", rust: "jrt::util::collections::map_of(vec![])" }
-      - { sig: "of(java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13})), (JObject::from({14}), JObject::from({15}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13})), (JObject::from({14}), JObject::from({15})), (JObject::from({16}), JObject::from({17}))])" }
-      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13})), (JObject::from({14}), JObject::from({15})), (JObject::from({16}), JObject::from({17})), (JObject::from({18}), JObject::from({19}))])" }
-      - { sig: "entry(java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_entry(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "copyOf(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Immutable, {&0})" }
+      - { sig: "of()", rust: "jrt::util::collections::map_of(vec![])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13})), (JObject::from({14}), JObject::from({15}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13})), (JObject::from({14}), JObject::from({15})), (JObject::from({16}), JObject::from({17}))])?" }
+      - { sig: "of(java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_of(vec![(JObject::from({0}), JObject::from({1})), (JObject::from({2}), JObject::from({3})), (JObject::from({4}), JObject::from({5})), (JObject::from({6}), JObject::from({7})), (JObject::from({8}), JObject::from({9})), (JObject::from({10}), JObject::from({11})), (JObject::from({12}), JObject::from({13})), (JObject::from({14}), JObject::from({15})), (JObject::from({16}), JObject::from({17})), (JObject::from({18}), JObject::from({19}))])?" }
+      - { sig: "entry(java.lang.Object,java.lang.Object)", rust: "jrt::util::collections::map_entry(JObject::from({0}), JObject::from({1}))?" }
+      - { sig: "copyOf(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Immutable, {&0})?" }
 
   - class: java.util.Collections
     methods:
-      - { sig: "sort(java.util.List)", rust: "jrt::util::misc::sort({&0}, &JObject::null())" }
-      - { sig: "sort(java.util.List,java.util.Comparator)", rust: "jrt::util::misc::sort({&0}, {&1})" }
-      - { sig: "reverse(java.util.List)", rust: "jrt::util::misc::reverse({&0})" }
-      - { sig: "swap(java.util.List,int,int)", rust: "jrt::util::misc::swap({&0}, {1}, {2})" }
-      - { sig: "shuffle(java.util.List,java.util.Random)", rust: "jrt::util::misc::shuffle({&0}, {&1})" }
-      - { sig: "max(java.util.Collection)", rust: "jrt::util::misc::max({&0}, &JObject::null())" }
-      - { sig: "max(java.util.Collection,java.util.Comparator)", rust: "jrt::util::misc::max({&0}, {&1})" }
-      - { sig: "min(java.util.Collection)", rust: "jrt::util::misc::min({&0}, &JObject::null())" }
-      - { sig: "min(java.util.Collection,java.util.Comparator)", rust: "jrt::util::misc::min({&0}, {&1})" }
-      - { sig: "frequency(java.util.Collection,java.lang.Object)", rust: "jrt::util::misc::frequency({&0}, {1})" }
-      - { sig: "nCopies(int,java.lang.Object)", rust: "jrt::util::misc::n_copies(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "emptyList()", rust: "jrt::util::misc::empty_list()" }
-      - { sig: "emptySet()", rust: "jrt::util::misc::set_of(&JArray::<JObject>::from_vec(Vec::new()))" }
-      - { sig: "emptyMap()", rust: "jrt::util::collections::map_of(Vec::new())" }
-      - { sig: "unmodifiableList(java.util.List)", rust: "jrt::util::misc::unmodifiable_list({&0})" }
-      - { sig: "unmodifiableCollection(java.util.Collection)", rust: "jrt::util::misc::unmodifiable_list({&0})" }
-      - { sig: "unmodifiableSet(java.util.Set)", rust: "jrt::util::misc::set_copy_of({&0})" }
-      - { sig: "unmodifiableMap(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Immutable, {&0})" }
-      - { sig: "singletonList(java.lang.Object)", rust: "jrt::util::misc::singleton_list({0})" }
-      - { sig: "addAll(java.util.Collection,java.lang.Object[])", rust: "jrt::util::misc::add_all_items({&0}, {&1})" }
-      - { sig: "binarySearch(java.util.List,java.lang.Object)", rust: "jrt::util::misc::binary_search({&0}, {1}, &JObject::null())" }
+      - { sig: "sort(java.util.List)", rust: "jrt::util::misc::sort({&0}, &JObject::null())?" }
+      - { sig: "sort(java.util.List,java.util.Comparator)", rust: "jrt::util::misc::sort({&0}, {&1})?" }
+      - { sig: "reverse(java.util.List)", rust: "jrt::util::misc::reverse({&0})?" }
+      - { sig: "swap(java.util.List,int,int)", rust: "jrt::util::misc::swap({&0}, {1}, {2})?" }
+      - { sig: "shuffle(java.util.List,java.util.Random)", rust: "jrt::util::misc::shuffle({&0}, {&1})?" }
+      - { sig: "max(java.util.Collection)", rust: "jrt::util::misc::max({&0}, &JObject::null())?" }
+      - { sig: "max(java.util.Collection,java.util.Comparator)", rust: "jrt::util::misc::max({&0}, {&1})?" }
+      - { sig: "min(java.util.Collection)", rust: "jrt::util::misc::min({&0}, &JObject::null())?" }
+      - { sig: "min(java.util.Collection,java.util.Comparator)", rust: "jrt::util::misc::min({&0}, {&1})?" }
+      - { sig: "frequency(java.util.Collection,java.lang.Object)", rust: "jrt::util::misc::frequency({&0}, {1})?" }
+      - { sig: "nCopies(int,java.lang.Object)", rust: "jrt::util::misc::n_copies({0}, JObject::from({1}))?" }
+      - { sig: "emptyList()", rust: "jrt::util::misc::empty_list()?" }
+      - { sig: "emptySet()", rust: "jrt::util::misc::set_of(&JArray::<JObject>::from_vec(Vec::new()))?" }
+      - { sig: "emptyMap()", rust: "jrt::util::collections::map_of(Vec::new())?" }
+      - { sig: "unmodifiableList(java.util.List)", rust: "jrt::util::misc::unmodifiable_list({&0})?" }
+      - { sig: "unmodifiableCollection(java.util.Collection)", rust: "jrt::util::misc::unmodifiable_list({&0})?" }
+      - { sig: "unmodifiableSet(java.util.Set)", rust: "jrt::util::misc::set_copy_of({&0})?" }
+      - { sig: "unmodifiableMap(java.util.Map)", rust: "jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Immutable, {&0})?" }
+      - { sig: "singletonList(java.lang.Object)", rust: "jrt::util::misc::singleton_list({0})?" }
+      - { sig: "addAll(java.util.Collection,java.lang.Object[])", rust: "jrt::util::misc::add_all_items({&0}, {&1})?" }
+      - { sig: "binarySearch(java.util.List,java.lang.Object)", rust: "jrt::util::misc::binary_search({&0}, {1}, &JObject::null())?" }
       - { sig: "reverseOrder()", rust: "jrt::util::functional::reverse_order()" }
-      - { sig: "reverseOrder(java.util.Comparator)", rust: "jrt::util::functional::reversed({&0})" }
+      - { sig: "reverseOrder(java.util.Comparator)", rust: "jrt::util::functional::reversed({&0})?" }
 
   - class: java.util.Objects
     methods:
-      - { sig: "equals(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::objects_equals(JObject::from({0}), JObject::from({1}))" }
-      - { sig: "hashCode(java.lang.Object)", rust: "jrt::util::misc::objects_hash_code({0})" }
-      - { sig: "hash(java.lang.Object[])", rust: "jrt::util::misc::objects_hash({&0})" }
-      - { sig: "toString(java.lang.Object)", rust: "jrt::util::misc::objects_to_string({0})" }
+      - { sig: "equals(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::objects_equals(JObject::from({0}), JObject::from({1}))?" }
+      - { sig: "hashCode(java.lang.Object)", rust: "jrt::util::misc::objects_hash_code({0})?" }
+      - { sig: "hash(java.lang.Object[])", rust: "jrt::util::misc::objects_hash({&0})?" }
+      - { sig: "toString(java.lang.Object)", rust: "jrt::util::misc::objects_to_string({0})?" }
       - { sig: "isNull(java.lang.Object)", rust: "JObject::from({0}).is_null()" }
       - { sig: "nonNull(java.lang.Object)", rust: "(!JObject::from({0}).is_null())" }
-      - { sig: "requireNonNull(java.lang.Object)", rust: "jrt::util::misc::require_non_null({0}, &JString::null())" }
-      - { sig: "requireNonNull(java.lang.Object,java.lang.String)", rust: "jrt::util::misc::require_non_null({0}, {&1})" }
-      - { sig: "requireNonNullElse(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::require_non_null_else(JObject::from({0}), JObject::from({1}))" }
+      - { sig: "requireNonNull(java.lang.Object)", rust: "jrt::util::misc::require_non_null({0}, &JString::null())?" }
+      - { sig: "requireNonNull(java.lang.Object,java.lang.String)", rust: "jrt::util::misc::require_non_null({0}, {&1})?" }
+      - { sig: "requireNonNullElse(java.lang.Object,java.lang.Object)", rust: "jrt::util::misc::require_non_null_else(JObject::from({0}), JObject::from({1}))?" }
 
   - class: java.util.Comparator
     methods:
-      - { sig: "compare(java.lang.Object,java.lang.Object)", rust: "jrt::util::functional::compare({&this}, {0}, {1})" }
-      - { sig: "reversed()", rust: "jrt::util::functional::reversed({&this})" }
-      - { sig: "thenComparing(java.util.Comparator)", rust: "jrt::util::functional::then_comparing({&this}, {&0})" }
-      - { sig: "thenComparing(java.util.function.Function)", rust: "jrt::util::functional::then_comparing_key({&this}, {&0})" }
-      - { sig: "thenComparingInt(java.util.function.ToIntFunction)", rust: "jrt::util::functional::then_comparing({&this}, &jrt::util::functional::comparing_number({&0}, \"applyAsInt\"))" }
+      - { sig: "compare(java.lang.Object,java.lang.Object)", rust: "jrt::util::functional::compare({&this}, {0}, {1})?" }
+      - { sig: "reversed()", rust: "jrt::util::functional::reversed({&this})?" }
+      - { sig: "thenComparing(java.util.Comparator)", rust: "jrt::util::functional::then_comparing({&this}, {&0})?" }
+      - { sig: "thenComparing(java.util.function.Function)", rust: "jrt::util::functional::then_comparing_key({&this}, {&0})?" }
+      - { sig: "thenComparingInt(java.util.function.ToIntFunction)", rust: "jrt::util::functional::then_comparing({&this}, &jrt::util::functional::comparing_number({&0}, \"applyAsInt\")?)?" }
       - { sig: "naturalOrder()", rust: "jrt::util::functional::natural_order()" }
       - { sig: "reverseOrder()", rust: "jrt::util::functional::reverse_order()" }
-      - { sig: "comparing(java.util.function.Function)", rust: "jrt::util::functional::comparing({&0})" }
-      - { sig: "comparing(java.util.function.Function,java.util.Comparator)", rust: "jrt::util::functional::comparing_with({&0}, {&1})" }
-      - { sig: "comparingInt(java.util.function.ToIntFunction)", rust: "jrt::util::functional::comparing_number({&0}, \"applyAsInt\")" }
-      - { sig: "comparingLong(java.util.function.ToLongFunction)", rust: "jrt::util::functional::comparing_number({&0}, \"applyAsLong\")" }
-      - { sig: "comparingDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::functional::comparing_number({&0}, \"applyAsDouble\")" }
+      - { sig: "comparing(java.util.function.Function)", rust: "jrt::util::functional::comparing({&0})?" }
+      - { sig: "comparing(java.util.function.Function,java.util.Comparator)", rust: "jrt::util::functional::comparing_with({&0}, {&1})?" }
+      - { sig: "comparingInt(java.util.function.ToIntFunction)", rust: "jrt::util::functional::comparing_number({&0}, \"applyAsInt\")?" }
+      - { sig: "comparingLong(java.util.function.ToLongFunction)", rust: "jrt::util::functional::comparing_number({&0}, \"applyAsLong\")?" }
+      - { sig: "comparingDouble(java.util.function.ToDoubleFunction)", rust: "jrt::util::functional::comparing_number({&0}, \"applyAsDouble\")?" }
 
   - class: java.util.Map.Entry
     methods:
@@ -297,65 +297,65 @@ classes:
   - class: java.util.function.Function
     methods:
       - { sig: "identity()", rust: "jrt::util::functional::identity()" }
-      - { sig: "andThen(java.util.function.Function)", rust: "jrt::util::functional::and_then({&this}, {&0})" }
-      - { sig: "compose(java.util.function.Function)", rust: "jrt::util::functional::compose({&this}, {&0})" }
+      - { sig: "andThen(java.util.function.Function)", rust: "jrt::util::functional::and_then({&this}, {&0})?" }
+      - { sig: "compose(java.util.function.Function)", rust: "jrt::util::functional::compose({&this}, {&0})?" }
 
   - class: java.util.function.Predicate
     methods:
-      - { sig: "negate()", rust: "jrt::util::functional::negate({&this})" }
-      - { sig: "and(java.util.function.Predicate)", rust: "jrt::util::functional::and({&this}, {&0})" }
-      - { sig: "or(java.util.function.Predicate)", rust: "jrt::util::functional::or({&this}, {&0})" }
+      - { sig: "negate()", rust: "jrt::util::functional::negate({&this})?" }
+      - { sig: "and(java.util.function.Predicate)", rust: "jrt::util::functional::and({&this}, {&0})?" }
+      - { sig: "or(java.util.function.Predicate)", rust: "jrt::util::functional::or({&this}, {&0})?" }
 
   - class: java.util.Arrays
     methods:
-      - { sig: "sort(int[])", rust: "jrt::util::arrays::sort({&0})" }
-      - { sig: "sort(long[])", rust: "jrt::util::arrays::sort({&0})" }
-      - { sig: "sort(short[])", rust: "jrt::util::arrays::sort({&0})" }
-      - { sig: "sort(byte[])", rust: "jrt::util::arrays::sort({&0})" }
-      - { sig: "sort(char[])", rust: "jrt::util::arrays::sort({&0})" }
-      - { sig: "sort(double[])", rust: "jrt::util::arrays::sort_f64({&0})" }
-      - { sig: "sort(float[])", rust: "jrt::util::arrays::sort_f32({&0})" }
-      - { sig: "sort(int[],int,int)", rust: "jrt::util::arrays::sort_range({&0}, {1}, {2})" }
-      - { sig: "sort(long[],int,int)", rust: "jrt::util::arrays::sort_range({&0}, {1}, {2})" }
-      - { sig: "sort(java.lang.Object[])", rust: "jrt::util::arrays::sort_objects({&0}, &JObject::null())" }
-      - { sig: "sort(java.lang.Object[],java.util.Comparator)", rust: "jrt::util::arrays::sort_objects({&0}, {&1})" }
-      - { sig: "sort(java.lang.Object[],int,int,java.util.Comparator)", rust: "jrt::util::arrays::sort_objects_range({&0}, {1}, {2}, {&3})" }
-      - { sig: "fill(int[],int)", rust: "jrt::util::arrays::fill({&0}, {1})" }
-      - { sig: "fill(long[],long)", rust: "jrt::util::arrays::fill({&0}, {1})" }
-      - { sig: "fill(double[],double)", rust: "jrt::util::arrays::fill({&0}, {1})" }
-      - { sig: "fill(boolean[],boolean)", rust: "jrt::util::arrays::fill({&0}, {1})" }
-      - { sig: "fill(char[],char)", rust: "jrt::util::arrays::fill({&0}, {1})" }
-      - { sig: "fill(java.lang.Object[],java.lang.Object)", rust: "jrt::util::arrays::fill({&0}, {1})" }
-      - { sig: "fill(int[],int,int,int)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})" }
-      - { sig: "fill(long[],int,int,long)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})" }
-      - { sig: "fill(boolean[],int,int,boolean)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})" }
-      - { sig: "fill(char[],int,int,char)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})" }
-      - { sig: "toString(int[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(long[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(double[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(float[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(short[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(byte[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(boolean[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "toString(char[])", rust: "jrt::util::arrays::to_string_chars({&0})" }
-      - { sig: "toString(java.lang.Object[])", rust: "jrt::util::arrays::to_string({&0})" }
-      - { sig: "deepToString(java.lang.Object[])", rust: "jrt::util::arrays::deep_to_string({&0})" }
-      - { sig: "copyOf(int[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
-      - { sig: "copyOf(long[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
-      - { sig: "copyOf(double[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
-      - { sig: "copyOf(char[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
-      - { sig: "copyOf(boolean[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
-      - { sig: "copyOf(java.lang.Object[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})" }
-      - { sig: "copyOfRange(int[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})" }
-      - { sig: "copyOfRange(long[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})" }
-      - { sig: "copyOfRange(char[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})" }
-      - { sig: "copyOfRange(java.lang.Object[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})" }
+      - { sig: "sort(int[])", rust: "jrt::util::arrays::sort({&0})?" }
+      - { sig: "sort(long[])", rust: "jrt::util::arrays::sort({&0})?" }
+      - { sig: "sort(short[])", rust: "jrt::util::arrays::sort({&0})?" }
+      - { sig: "sort(byte[])", rust: "jrt::util::arrays::sort({&0})?" }
+      - { sig: "sort(char[])", rust: "jrt::util::arrays::sort({&0})?" }
+      - { sig: "sort(double[])", rust: "jrt::util::arrays::sort_f64({&0})?" }
+      - { sig: "sort(float[])", rust: "jrt::util::arrays::sort_f32({&0})?" }
+      - { sig: "sort(int[],int,int)", rust: "jrt::util::arrays::sort_range({&0}, {1}, {2})?" }
+      - { sig: "sort(long[],int,int)", rust: "jrt::util::arrays::sort_range({&0}, {1}, {2})?" }
+      - { sig: "sort(java.lang.Object[])", rust: "jrt::util::arrays::sort_objects({&0}, &JObject::null())?" }
+      - { sig: "sort(java.lang.Object[],java.util.Comparator)", rust: "jrt::util::arrays::sort_objects({&0}, {&1})?" }
+      - { sig: "sort(java.lang.Object[],int,int,java.util.Comparator)", rust: "jrt::util::arrays::sort_objects_range({&0}, {1}, {2}, {&3})?" }
+      - { sig: "fill(int[],int)", rust: "jrt::util::arrays::fill({&0}, {1})?" }
+      - { sig: "fill(long[],long)", rust: "jrt::util::arrays::fill({&0}, {1})?" }
+      - { sig: "fill(double[],double)", rust: "jrt::util::arrays::fill({&0}, {1})?" }
+      - { sig: "fill(boolean[],boolean)", rust: "jrt::util::arrays::fill({&0}, {1})?" }
+      - { sig: "fill(char[],char)", rust: "jrt::util::arrays::fill({&0}, {1})?" }
+      - { sig: "fill(java.lang.Object[],java.lang.Object)", rust: "jrt::util::arrays::fill({&0}, {1})?" }
+      - { sig: "fill(int[],int,int,int)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})?" }
+      - { sig: "fill(long[],int,int,long)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})?" }
+      - { sig: "fill(boolean[],int,int,boolean)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})?" }
+      - { sig: "fill(char[],int,int,char)", rust: "jrt::util::arrays::fill_range({&0}, {1}, {2}, {3})?" }
+      - { sig: "toString(int[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(long[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(double[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(float[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(short[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(byte[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(boolean[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "toString(char[])", rust: "jrt::util::arrays::to_string_chars({&0})?" }
+      - { sig: "toString(java.lang.Object[])", rust: "jrt::util::arrays::to_string({&0})?" }
+      - { sig: "deepToString(java.lang.Object[])", rust: "jrt::util::arrays::deep_to_string({&0})?" }
+      - { sig: "copyOf(int[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})?" }
+      - { sig: "copyOf(long[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})?" }
+      - { sig: "copyOf(double[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})?" }
+      - { sig: "copyOf(char[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})?" }
+      - { sig: "copyOf(boolean[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})?" }
+      - { sig: "copyOf(java.lang.Object[],int)", rust: "jrt::util::arrays::copy_of({&0}, {1})?" }
+      - { sig: "copyOfRange(int[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})?" }
+      - { sig: "copyOfRange(long[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})?" }
+      - { sig: "copyOfRange(char[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})?" }
+      - { sig: "copyOfRange(java.lang.Object[],int,int)", rust: "jrt::util::arrays::copy_of_range({&0}, {1}, {2})?" }
       - { sig: "equals(int[],int[])", rust: "jrt::util::arrays::equals({&0}, {&1})" }
       - { sig: "equals(long[],long[])", rust: "jrt::util::arrays::equals({&0}, {&1})" }
       - { sig: "equals(char[],char[])", rust: "jrt::util::arrays::equals({&0}, {&1})" }
       - { sig: "equals(boolean[],boolean[])", rust: "jrt::util::arrays::equals({&0}, {&1})" }
-      - { sig: "hashCode(int[])", rust: "jrt::util::arrays::hash_code({&0})" }
-      - { sig: "hashCode(long[])", rust: "jrt::util::arrays::hash_code({&0})" }
-      - { sig: "hashCode(char[])", rust: "jrt::util::arrays::hash_code({&0})" }
-      - { sig: "hashCode(java.lang.Object[])", rust: "jrt::util::arrays::hash_code({&0})" }
-      - { sig: "asList(java.lang.Object[])", rust: "jrt::util::misc::as_list({&0})" }
+      - { sig: "hashCode(int[])", rust: "jrt::util::arrays::hash_code({&0})?" }
+      - { sig: "hashCode(long[])", rust: "jrt::util::arrays::hash_code({&0})?" }
+      - { sig: "hashCode(char[])", rust: "jrt::util::arrays::hash_code({&0})?" }
+      - { sig: "hashCode(java.lang.Object[])", rust: "jrt::util::arrays::hash_code({&0})?" }
+      - { sig: "asList(java.lang.Object[])", rust: "jrt::util::misc::as_list({&0})?" }

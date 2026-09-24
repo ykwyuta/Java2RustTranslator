@@ -30,21 +30,21 @@ impl Loops {
 
     pub(crate) fn __init(this: &JObject) {}
 
-    pub fn sum(values: JArray<i32>) -> i32 {
+    pub fn sum(values: JArray<i32>) -> JResult<i32> {
         let mut total: i32 = 0;
         {
             let __j2r_arr0: JArray<i32> = values.clone();
             let mut __j2r_i0: i32 = 0;
-            while __j2r_i0 < __j2r_arr0.length() {
-                let v: i32 = __j2r_arr0.get(__j2r_i0);
+            while __j2r_i0 < __j2r_arr0.length()? {
+                let v: i32 = __j2r_arr0.get(__j2r_i0)?;
                 total = total.wrapping_add(v);
                 __j2r_i0 = __j2r_i0.wrapping_add(1);
             }
         }
-        total
+        Ok(total)
     }
 
-    pub fn main(args: JArray<JString>) {
+    pub fn main(args: JArray<JString>) -> JResult<()> {
         {
             let mut i: i32 = 0;
             while i < 3 {
@@ -70,7 +70,8 @@ impl Loops {
                 break;
             }
         }
-        jrt::io::system_out().println(&Loops::sum(JArray::from_vec(vec![1, 2, 3])).wrapping_add(k));
+        jrt::io::system_out().println(&Loops::sum(JArray::from_vec(vec![1, 2, 3]))?.wrapping_add(k));
+        Ok(())
     }
 }
 

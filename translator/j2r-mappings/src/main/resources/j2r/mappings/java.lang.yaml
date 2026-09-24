@@ -8,33 +8,33 @@ classes:
   - class: java.lang.String
     rustType: JString
     methods:
-      - { sig: "length()", rust: "{this}.length()" }
-      - { sig: "isEmpty()", rust: "{this}.is_empty()" }
-      - { sig: "isBlank()", rust: "{this}.is_blank()" }
-      - { sig: "charAt(int)", rust: "{this}.char_at({0})" }
-      - { sig: "equals(java.lang.Object)", rust: "{this}.equals({&0})" }
-      - { sig: "equalsIgnoreCase(java.lang.String)", rust: "{this}.equals_ignore_case({&0})" }
-      - { sig: "compareTo(java.lang.String)", rust: "{this}.compare_to({&0})" }
-      - { sig: "hashCode()", rust: "{this}.hash_code()" }
-      - { sig: "substring(int)", rust: "{this}.substring({0})" }
-      - { sig: "substring(int,int)", rust: "{this}.substring_range({0}, {1})" }
-      - { sig: "indexOf(java.lang.String)", rust: "{this}.index_of({&0})" }
-      - { sig: "indexOf(java.lang.String,int)", rust: "{this}.index_of_from({&0}, {1})" }
-      - { sig: "indexOf(int)", rust: "{this}.index_of_char({0})" }
-      - { sig: "lastIndexOf(java.lang.String)", rust: "{this}.last_index_of({&0})" }
-      - { sig: "lastIndexOf(int)", rust: "{this}.last_index_of_char({0})" }
-      - { sig: "contains(java.lang.CharSequence)", rust: "{this}.contains({&0})" }
-      - { sig: "startsWith(java.lang.String)", rust: "{this}.starts_with({&0})" }
-      - { sig: "endsWith(java.lang.String)", rust: "{this}.ends_with({&0})" }
-      - { sig: "toUpperCase()", rust: "{this}.to_upper_case()" }
-      - { sig: "toLowerCase()", rust: "{this}.to_lower_case()" }
-      - { sig: "trim()", rust: "{this}.trim()" }
-      - { sig: "strip()", rust: "{this}.strip()" }
-      - { sig: "concat(java.lang.String)", rust: "{this}.concat({&0})" }
-      - { sig: "replace(char,char)", rust: "{this}.replace_char({0}, {1})" }
-      - { sig: "replace(java.lang.CharSequence,java.lang.CharSequence)", rust: "{this}.replace({&0}, {&1})" }
-      - { sig: "repeat(int)", rust: "{this}.repeat({0})" }
-      - { sig: "toCharArray()", rust: "{this}.to_char_array()" }
+      - { sig: "length()", rust: "{this}.length()?" }
+      - { sig: "isEmpty()", rust: "{this}.is_empty()?" }
+      - { sig: "isBlank()", rust: "{this}.is_blank()?" }
+      - { sig: "charAt(int)", rust: "{this}.char_at({0})?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.equals({&0})?" }
+      - { sig: "equalsIgnoreCase(java.lang.String)", rust: "{this}.equals_ignore_case({&0})?" }
+      - { sig: "compareTo(java.lang.String)", rust: "{this}.compare_to({&0})?" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }
+      - { sig: "substring(int)", rust: "{this}.substring({0})?" }
+      - { sig: "substring(int,int)", rust: "{this}.substring_range({0}, {1})?" }
+      - { sig: "indexOf(java.lang.String)", rust: "{this}.index_of({&0})?" }
+      - { sig: "indexOf(java.lang.String,int)", rust: "{this}.index_of_from({&0}, {1})?" }
+      - { sig: "indexOf(int)", rust: "{this}.index_of_char({0})?" }
+      - { sig: "lastIndexOf(java.lang.String)", rust: "{this}.last_index_of({&0})?" }
+      - { sig: "lastIndexOf(int)", rust: "{this}.last_index_of_char({0})?" }
+      - { sig: "contains(java.lang.CharSequence)", rust: "{this}.contains({&0})?" }
+      - { sig: "startsWith(java.lang.String)", rust: "{this}.starts_with({&0})?" }
+      - { sig: "endsWith(java.lang.String)", rust: "{this}.ends_with({&0})?" }
+      - { sig: "toUpperCase()", rust: "{this}.to_upper_case()?" }
+      - { sig: "toLowerCase()", rust: "{this}.to_lower_case()?" }
+      - { sig: "trim()", rust: "{this}.trim()?" }
+      - { sig: "strip()", rust: "{this}.strip()?" }
+      - { sig: "concat(java.lang.String)", rust: "{this}.concat({&0})?" }
+      - { sig: "replace(char,char)", rust: "{this}.replace_char({0}, {1})?" }
+      - { sig: "replace(java.lang.CharSequence,java.lang.CharSequence)", rust: "{this}.replace({&0}, {&1})?" }
+      - { sig: "repeat(int)", rust: "{this}.repeat({0})?" }
+      - { sig: "toCharArray()", rust: "{this}.to_char_array()?" }
       - { sig: "toString()", rust: "{this}.clone()" }
       - { sig: "valueOf(int)", rust: "JString::value_of({s0})" }
       - { sig: "valueOf(long)", rust: "JString::value_of({s0})" }
@@ -42,24 +42,24 @@ classes:
       - { sig: "valueOf(float)", rust: "JString::value_of({s0})" }
       - { sig: "valueOf(boolean)", rust: "JString::value_of({s0})" }
       - { sig: "valueOf(char)", rust: "JString::value_of({s0})" }
-      - { sig: "valueOf(char[])", rust: "JString::from_chars({&0})" }
-      - { sig: "valueOf(java.lang.Object)", rust: "jrt::util::misc::objects_to_string({0})" }
-      - { sig: "format(java.lang.String,java.lang.Object[])", rust: "jrt::lang::format::format({&0}, {&1})" }
-      - { sig: "formatted(java.lang.Object[])", rust: "jrt::lang::format::format({&this}, {&0})" }
-      - { sig: "join(java.lang.CharSequence,java.lang.CharSequence[])", rust: "JString::join_array({&0}, {&1})" }
-      - { sig: "join(java.lang.CharSequence,java.lang.Iterable)", rust: "JString::join({&0}, {&1})" }
-      - { sig: "split(java.lang.String)", rust: "{this}.split({&0})" }
-      - { sig: "compareToIgnoreCase(java.lang.String)", rust: "{this}.compare_to_ignore_case({&0})" }
+      - { sig: "valueOf(char[])", rust: "JString::from_chars({&0})?" }
+      - { sig: "valueOf(java.lang.Object)", rust: "jrt::util::misc::objects_to_string({0})?" }
+      - { sig: "format(java.lang.String,java.lang.Object[])", rust: "jrt::lang::format::format({&0}, {&1})?" }
+      - { sig: "formatted(java.lang.Object[])", rust: "jrt::lang::format::format({&this}, {&0})?" }
+      - { sig: "join(java.lang.CharSequence,java.lang.CharSequence[])", rust: "JString::join_array({&0}, {&1})?" }
+      - { sig: "join(java.lang.CharSequence,java.lang.Iterable)", rust: "JString::join({&0}, {&1})?" }
+      - { sig: "split(java.lang.String)", rust: "{this}.split({&0})?" }
+      - { sig: "compareToIgnoreCase(java.lang.String)", rust: "{this}.compare_to_ignore_case({&0})?" }
     constructors:
-      - { sig: "<init>(char[])", rust: "JString::from_chars({&0})" }
+      - { sig: "<init>(char[])", rust: "JString::from_chars({&0})?" }
       - { sig: "<init>(java.lang.String)", rust: "{0}" }
 
   - class: java.lang.StringBuilder
     rustType: jrt::lang::StringBuilder
     constructors:
       - { sig: "<init>()", rust: "jrt::lang::StringBuilder::new()" }
-      - { sig: "<init>(int)", rust: "jrt::lang::StringBuilder::with_capacity({0})" }
-      - { sig: "<init>(java.lang.String)", rust: "jrt::lang::StringBuilder::from_str({&0})" }
+      - { sig: "<init>(int)", rust: "jrt::lang::StringBuilder::with_capacity({0})?" }
+      - { sig: "<init>(java.lang.String)", rust: "jrt::lang::StringBuilder::from_str({&0})?" }
     methods:
       - { sig: "append(java.lang.String)", rust: "{this}.append({s0})" }
       - { sig: "append(int)", rust: "{this}.append({s0})" }
@@ -71,14 +71,14 @@ classes:
       - { sig: "append(java.lang.CharSequence)", rust: "{this}.append({s0})" }
       - { sig: "append(java.lang.Object)", rust: "{this}.append({s0})" }
       - { sig: "append(java.lang.StringBuffer)", rust: "{this}.append({s0})" }
-      - { sig: "insert(int,java.lang.String)", rust: "{this}.insert({0}, {s1})" }
-      - { sig: "insert(int,int)", rust: "{this}.insert({0}, {s1})" }
-      - { sig: "insert(int,char)", rust: "{this}.insert({0}, {s1})" }
+      - { sig: "insert(int,java.lang.String)", rust: "{this}.insert({0}, {s1})?" }
+      - { sig: "insert(int,int)", rust: "{this}.insert({0}, {s1})?" }
+      - { sig: "insert(int,char)", rust: "{this}.insert({0}, {s1})?" }
       - { sig: "length()", rust: "{this}.length()" }
-      - { sig: "charAt(int)", rust: "{this}.char_at({0})" }
-      - { sig: "setCharAt(int,char)", rust: "{this}.set_char_at({0}, {1})" }
-      - { sig: "deleteCharAt(int)", rust: "{this}.delete_char_at({0})" }
-      - { sig: "setLength(int)", rust: "{this}.set_length({0})" }
+      - { sig: "charAt(int)", rust: "{this}.char_at({0})?" }
+      - { sig: "setCharAt(int,char)", rust: "{this}.set_char_at({0}, {1})?" }
+      - { sig: "deleteCharAt(int)", rust: "{this}.delete_char_at({0})?" }
+      - { sig: "setLength(int)", rust: "{this}.set_length({0})?" }
       - { sig: "reverse()", rust: "{this}.reverse()" }
       - { sig: "toString()", rust: "{this}.to_jstring()" }
 
@@ -93,7 +93,7 @@ classes:
       - { sig: "exit(int)", rust: "jrt::rt::exit({0})" }
       - { sig: "identityHashCode(java.lang.Object)", rust: "jrt::util::misc::identity_hash_code(&JObject::from({0}))" }
       - { sig: "lineSeparator()", rust: "jstr!(\"\\n\")" }
-      - { sig: "arraycopy(java.lang.Object,int,java.lang.Object,int,int)", rust: "jrt::array::arraycopy({&0}, {1}, {&2}, {3}, {4})" }
+      - { sig: "arraycopy(java.lang.Object,int,java.lang.Object,int,int)", rust: "jrt::array::arraycopy({&0}, {1}, {&2}, {3}, {4})?" }
 
   - class: java.lang.Math
     methods:
@@ -125,15 +125,15 @@ classes:
       - { sig: "signum(double)", rust: "jrt::lang::math::signum_f64({0})" }
       - { sig: "round(double)", rust: "jrt::lang::math::round_f64({0})" }
       - { sig: "round(float)", rust: "jrt::lang::math::round_f32({0})" }
-      - { sig: "floorDiv(int,int)", rust: "jrt::lang::math::floor_div_i32({0}, {1})" }
-      - { sig: "floorMod(int,int)", rust: "jrt::lang::math::floor_mod_i32({0}, {1})" }
-      - { sig: "floorDiv(long,long)", rust: "jrt::lang::math::floor_div_i64({0}, {1})" }
-      - { sig: "floorMod(long,long)", rust: "jrt::lang::math::floor_mod_i64({0}, {1})" }
+      - { sig: "floorDiv(int,int)", rust: "jrt::lang::math::floor_div_i32({0}, {1})?" }
+      - { sig: "floorMod(int,int)", rust: "jrt::lang::math::floor_mod_i32({0}, {1})?" }
+      - { sig: "floorDiv(long,long)", rust: "jrt::lang::math::floor_div_i64({0}, {1})?" }
+      - { sig: "floorMod(long,long)", rust: "jrt::lang::math::floor_mod_i64({0}, {1})?" }
 
   - class: java.lang.Integer
     methods:
-      - { sig: "parseInt(java.lang.String)", rust: "jrt::lang::number::parse_int({&0})" }
-      - { sig: "parseInt(java.lang.String,int)", rust: "jrt::lang::number::parse_int_radix({&0}, {1})" }
+      - { sig: "parseInt(java.lang.String)", rust: "jrt::lang::number::parse_int({&0})?" }
+      - { sig: "parseInt(java.lang.String,int)", rust: "jrt::lang::number::parse_int_radix({&0}, {1})?" }
       - { sig: "toString(int)", rust: "JString::value_of({s0})" }
       - { sig: "toBinaryString(int)", rust: "jrt::lang::number::to_binary_string_i32({0})" }
       - { sig: "toHexString(int)", rust: "jrt::lang::number::to_hex_string_i32({0})" }
@@ -151,7 +151,7 @@ classes:
 
   - class: java.lang.Long
     methods:
-      - { sig: "parseLong(java.lang.String)", rust: "jrt::lang::number::parse_long({&0})" }
+      - { sig: "parseLong(java.lang.String)", rust: "jrt::lang::number::parse_long({&0})?" }
       - { sig: "toString(long)", rust: "JString::value_of({s0})" }
       - { sig: "toBinaryString(long)", rust: "jrt::lang::number::to_binary_string_i64({0})" }
       - { sig: "toHexString(long)", rust: "jrt::lang::number::to_hex_string_i64({0})" }
@@ -163,7 +163,7 @@ classes:
 
   - class: java.lang.Double
     methods:
-      - { sig: "parseDouble(java.lang.String)", rust: "jrt::lang::number::parse_double({&0})" }
+      - { sig: "parseDouble(java.lang.String)", rust: "jrt::lang::number::parse_double({&0})?" }
       - { sig: "toString(double)", rust: "JString::value_of({s0})" }
       - { sig: "isNaN(double)", rust: "{0}.is_nan()" }
       - { sig: "isInfinite(double)", rust: "{0}.is_infinite()" }
@@ -190,65 +190,65 @@ classes:
 
   - class: java.lang.Object
     methods:
-      - { sig: "getClass()", rust: "jrt::util::misc::class_of({&this})" }
-      - { sig: "toString()", rust: "{this}.to_jstring()" }
-      - { sig: "hashCode()", rust: "{this}.hash_code()" }
-      - { sig: "equals(java.lang.Object)", rust: "{this}.equals(&JObject::from({0}))" }
+      - { sig: "getClass()", rust: "jrt::util::misc::class_of({&this})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
+      - { sig: "hashCode()", rust: "{this}.hash_code()?" }
+      - { sig: "equals(java.lang.Object)", rust: "{this}.equals(&JObject::from({0}))?" }
 
   - class: java.lang.Class
     methods:
-      - { sig: "getName()", rust: "jrt::util::misc::class_get_name({&this})" }
-      - { sig: "getSimpleName()", rust: "jrt::util::misc::class_get_simple_name({&this})" }
+      - { sig: "getName()", rust: "jrt::util::misc::class_get_name({&this})?" }
+      - { sig: "getSimpleName()", rust: "jrt::util::misc::class_get_simple_name({&this})?" }
 
   - class: java.lang.Enum
     methods:
-      - { sig: "ordinal()", rust: "jrt::lang::enums::ordinal({&this})" }
-      - { sig: "name()", rust: "jrt::lang::enums::name({&this})" }
-      - { sig: "compareTo(java.lang.Enum)", rust: "jrt::lang::enums::compare({&this}, {&0})" }
+      - { sig: "ordinal()", rust: "jrt::lang::enums::ordinal({&this})?" }
+      - { sig: "name()", rust: "jrt::lang::enums::name({&this})?" }
+      - { sig: "compareTo(java.lang.Enum)", rust: "jrt::lang::enums::compare({&this}, {&0})?" }
 
   - class: [java.lang.Throwable, java.lang.Exception, java.lang.RuntimeException, java.lang.Error]
     methods:
-      - { sig: "getMessage()", rust: "jrt::lang::throwable::get_message({&this})" }
-      - { sig: "getLocalizedMessage()", rust: "jrt::lang::throwable::get_message({&this})" }
-      - { sig: "getCause()", rust: "jrt::lang::throwable::get_cause({&this})" }
-      - { sig: "initCause(java.lang.Throwable)", rust: "jrt::lang::throwable::init_cause({&this}, {0})" }
-      - { sig: "addSuppressed(java.lang.Throwable)", rust: "jrt::lang::throwable::add_suppressed({&this}, {0})" }
-      - { sig: "getSuppressed()", rust: "jrt::lang::throwable::get_suppressed({&this})" }
-      - { sig: "printStackTrace()", rust: "jrt::lang::throwable::print_stack_trace({&this})" }
-      - { sig: "toString()", rust: "{this}.to_jstring()" }
+      - { sig: "getMessage()", rust: "jrt::lang::throwable::get_message({&this})?" }
+      - { sig: "getLocalizedMessage()", rust: "jrt::lang::throwable::get_message({&this})?" }
+      - { sig: "getCause()", rust: "jrt::lang::throwable::get_cause({&this})?" }
+      - { sig: "initCause(java.lang.Throwable)", rust: "jrt::lang::throwable::init_cause({&this}, {0})?" }
+      - { sig: "addSuppressed(java.lang.Throwable)", rust: "jrt::lang::throwable::add_suppressed({&this}, {0})?" }
+      - { sig: "getSuppressed()", rust: "jrt::lang::throwable::get_suppressed({&this})?" }
+      - { sig: "printStackTrace()", rust: "jrt::lang::throwable::print_stack_trace({&this})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }
 
   - class: [java.lang.Number, java.lang.Integer, java.lang.Long, java.lang.Double, java.lang.Float, java.lang.Short, java.lang.Byte]
     methods:
-      - { sig: "intValue()", rust: "jrt::lang::boxed::number_i32({&this})" }
-      - { sig: "longValue()", rust: "jrt::lang::boxed::number_i64({&this})" }
-      - { sig: "doubleValue()", rust: "jrt::lang::boxed::number_f64({&this})" }
-      - { sig: "floatValue()", rust: "(jrt::lang::boxed::number_f64({&this}) as f32)" }
-      - { sig: "shortValue()", rust: "(jrt::lang::boxed::number_i32({&this}) as i16)" }
-      - { sig: "byteValue()", rust: "(jrt::lang::boxed::number_i32({&this}) as i8)" }
+      - { sig: "intValue()", rust: "jrt::lang::boxed::number_i32({&this})?" }
+      - { sig: "longValue()", rust: "jrt::lang::boxed::number_i64({&this})?" }
+      - { sig: "doubleValue()", rust: "jrt::lang::boxed::number_f64({&this})?" }
+      - { sig: "floatValue()", rust: "(jrt::lang::boxed::number_f64({&this})? as f32)" }
+      - { sig: "shortValue()", rust: "(jrt::lang::boxed::number_i32({&this})? as i16)" }
+      - { sig: "byteValue()", rust: "(jrt::lang::boxed::number_i32({&this})? as i8)" }
 
   - class: [java.lang.Integer, java.lang.Long, java.lang.Double, java.lang.Float, java.lang.Short, java.lang.Byte, java.lang.Character, java.lang.Boolean]
     methods:
-      - { sig: "compareTo(java.lang.Integer)", rust: "{this}.compare_to({&0})" }
-      - { sig: "compareTo(java.lang.Long)", rust: "{this}.compare_to({&0})" }
-      - { sig: "compareTo(java.lang.Double)", rust: "{this}.compare_to({&0})" }
-      - { sig: "compareTo(java.lang.Character)", rust: "{this}.compare_to({&0})" }
-      - { sig: "compareTo(java.lang.Boolean)", rust: "{this}.compare_to({&0})" }
-      - { sig: "booleanValue()", rust: "{this}.unbox_bool()" }
-      - { sig: "charValue()", rust: "{this}.unbox_u16()" }
+      - { sig: "compareTo(java.lang.Integer)", rust: "{this}.compare_to({&0})?" }
+      - { sig: "compareTo(java.lang.Long)", rust: "{this}.compare_to({&0})?" }
+      - { sig: "compareTo(java.lang.Double)", rust: "{this}.compare_to({&0})?" }
+      - { sig: "compareTo(java.lang.Character)", rust: "{this}.compare_to({&0})?" }
+      - { sig: "compareTo(java.lang.Boolean)", rust: "{this}.compare_to({&0})?" }
+      - { sig: "booleanValue()", rust: "{this}.unbox_bool()?" }
+      - { sig: "charValue()", rust: "{this}.unbox_u16()?" }
 
   - class: java.lang.Integer
     methods:
       - { sig: "valueOf(int)", rust: "jrt::box_i32({0})" }
-      - { sig: "valueOf(java.lang.String)", rust: "jrt::box_i32(jrt::lang::number::parse_int({&0}))" }
+      - { sig: "valueOf(java.lang.String)", rust: "jrt::box_i32(jrt::lang::number::parse_int({&0})?)" }
       - { sig: "hashCode(int)", rust: "{0}" }
   - class: java.lang.Long
     methods:
       - { sig: "valueOf(long)", rust: "jrt::box_i64({0})" }
-      - { sig: "valueOf(java.lang.String)", rust: "jrt::box_i64(jrt::lang::number::parse_long({&0}))" }
+      - { sig: "valueOf(java.lang.String)", rust: "jrt::box_i64(jrt::lang::number::parse_long({&0})?)" }
   - class: java.lang.Double
     methods:
       - { sig: "valueOf(double)", rust: "jrt::box_f64({0})" }
-      - { sig: "valueOf(java.lang.String)", rust: "jrt::box_f64(jrt::lang::number::parse_double({&0}))" }
+      - { sig: "valueOf(java.lang.String)", rust: "jrt::box_f64(jrt::lang::number::parse_double({&0})?)" }
   - class: java.lang.Boolean
     methods:
       - { sig: "valueOf(boolean)", rust: "jrt::box_bool({0})" }
@@ -258,10 +258,10 @@ classes:
 
   - class: java.lang.Comparable
     methods:
-      - { sig: "compareTo(java.lang.Object)", rust: "{this}.compare_to(&JObject::from({0}))" }
+      - { sig: "compareTo(java.lang.Object)", rust: "{this}.compare_to(&JObject::from({0}))?" }
 
   - class: java.lang.CharSequence
     methods:
-      - { sig: "length()", rust: "{this}.to_jstring().length()" }
-      - { sig: "charAt(int)", rust: "{this}.to_jstring().char_at({0})" }
-      - { sig: "toString()", rust: "{this}.to_jstring()" }
+      - { sig: "length()", rust: "{this}.to_jstring()?.length()?" }
+      - { sig: "charAt(int)", rust: "{this}.to_jstring()?.char_at({0})?" }
+      - { sig: "toString()", rust: "{this}.to_jstring()?" }

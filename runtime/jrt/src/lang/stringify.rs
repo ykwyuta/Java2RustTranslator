@@ -1,8 +1,11 @@
 //! Java の文字列変換（`"" + x`、`String.valueOf(x)`、`println(x)`）。
 
 use crate::lang::string::JString;
+use crate::object::JObject;
+use crate::rt::JResult;
 
-/// Java の文字列変換規則で自分自身を文字列に追記できる型。
+/// Java の文字列変換規則で自分自身を文字列に追記できる型（プリミティブ型・String・char・配列など、
+/// ユーザーのコードを実行しない型）。参照型（`JObject`）は toString() が例外を送出しうるので [`JToString`] を使う。
 pub trait JStringify {
     fn append_to(&self, out: &mut String);
 
@@ -12,6 +15,36 @@ pub trait JStringify {
         self.append_to(&mut s);
         out.extend(s.encode_utf16());
     }
+}
+
+/// Java の文字列変換（参照型を含む）。`JObject` は toString() を呼ぶので例外を送出しうる。
+pub trait JToString {
+    fn append_java(&self, out: &mut String) -> JResult<()>;
+}
+
+impl<T: JStringify + ?Sized> JToString for T {
+    fn append_java(&self, out: &mut String) -> JResult<()> {
+        self.append_to(out);
+        Ok(())
+    }
+}
+
+impl JToString for JObject {
+    fn append_java(&self, out: &mut String) -> JResult<()> {
+        if self.is_null() {
+            out.push_str("null");
+        } else {
+            out.push_str(self.to_jstring()?.as_str_or_null());
+        }
+        Ok(())
+    }
+}
+
+/// Java の文字列変換の結果。
+pub fn to_java_string<T: JToString + ?Sized>(v: &T) -> JResult<String> {
+    let mut s = String::new();
+    v.append_java(&mut s)?;
+    Ok(s)
 }
 
 /// Java の `char`（UTF-16 コード単位）。Rust 側では `u16` で保持し、文字列化の時だけこの型で包む。
@@ -46,11 +79,7 @@ impl JStringify for str {
 
 impl JStringify for JString {
     fn append_to(&self, out: &mut String) {
-        if self.is_null() {
-            out.push_str("null")
-        } else {
-            out.push_str(self.as_str())
-        }
+        out.push_str(self.as_str_or_null())
     }
 }
 

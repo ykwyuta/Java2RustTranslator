@@ -2,7 +2,7 @@
 
 use crate::lang::string::JString;
 use crate::lang::stringify::JStringify;
-use crate::rt::throw;
+use crate::rt::{throw, JResult};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -17,25 +17,26 @@ impl StringBuilder {
     }
 
     /// `new StringBuilder(int capacity)`。
-    pub fn with_capacity(capacity: i32) -> StringBuilder {
+    pub fn with_capacity(capacity: i32) -> JResult<StringBuilder> {
         if capacity < 0 {
-            throw("java.lang.NegativeArraySizeException", Some(&capacity.to_string()));
+            return throw("java.lang.NegativeArraySizeException", Some(&capacity.to_string()));
         }
-        StringBuilder(Rc::new(RefCell::new(Vec::with_capacity(capacity as usize))))
+        Ok(StringBuilder(Rc::new(RefCell::new(Vec::with_capacity(capacity as usize)))))
     }
 
     /// `new StringBuilder(String)`。
-    pub fn from_str(s: &JString) -> StringBuilder {
-        StringBuilder(Rc::new(RefCell::new(s.as_str().encode_utf16().collect())))
+    pub fn from_str(s: &JString) -> JResult<StringBuilder> {
+        Ok(StringBuilder(Rc::new(RefCell::new(s.as_str()?.encode_utf16().collect()))))
     }
 
-    fn check_index(&self, index: i32, len: usize) {
+    fn check_index(&self, index: i32, len: usize) -> JResult<()> {
         if index < 0 || index as usize >= len {
-            throw(
+            return throw(
                 "java.lang.StringIndexOutOfBoundsException",
                 Some(&format!("index {index},length {len}")),
             );
         }
+        Ok(())
     }
 
     /// `append(x)`。Java と同じく自分自身を返す。
@@ -47,10 +48,10 @@ impl StringBuilder {
     }
 
     /// `insert(offset, x)`。
-    pub fn insert<T: JStringify + ?Sized>(&self, offset: i32, v: &T) -> StringBuilder {
+    pub fn insert<T: JStringify + ?Sized>(&self, offset: i32, v: &T) -> JResult<StringBuilder> {
         let len = self.0.borrow().len();
         if offset < 0 || offset as usize > len {
-            throw("java.lang.StringIndexOutOfBoundsException", Some(&format!("offset {offset}, length {len}")));
+            return throw("java.lang.StringIndexOutOfBoundsException", Some(&format!("offset {offset}, length {len}")));
         }
         let mut units = Vec::new();
         v.append_utf16(&mut units);
@@ -59,37 +60,39 @@ impl StringBuilder {
         b.extend(units);
         b.extend(tail);
         drop(b);
-        self.clone()
+        Ok(self.clone())
     }
 
     pub fn length(&self) -> i32 {
         self.0.borrow().len() as i32
     }
 
-    pub fn char_at(&self, index: i32) -> u16 {
+    pub fn char_at(&self, index: i32) -> JResult<u16> {
         let b = self.0.borrow();
-        self.check_index(index, b.len());
-        b[index as usize]
+        self.check_index(index, b.len())?;
+        Ok(b[index as usize])
     }
 
-    pub fn set_char_at(&self, index: i32, c: u16) {
+    pub fn set_char_at(&self, index: i32, c: u16) -> JResult<()> {
         let len = self.0.borrow().len();
-        self.check_index(index, len);
+        self.check_index(index, len)?;
         self.0.borrow_mut()[index as usize] = c;
+        Ok(())
     }
 
-    pub fn delete_char_at(&self, index: i32) -> StringBuilder {
+    pub fn delete_char_at(&self, index: i32) -> JResult<StringBuilder> {
         let len = self.0.borrow().len();
-        self.check_index(index, len);
+        self.check_index(index, len)?;
         self.0.borrow_mut().remove(index as usize);
-        self.clone()
+        Ok(self.clone())
     }
 
-    pub fn set_length(&self, new_len: i32) {
+    pub fn set_length(&self, new_len: i32) -> JResult<()> {
         if new_len < 0 {
-            throw("java.lang.StringIndexOutOfBoundsException", Some(&format!("String index out of range: {new_len}")));
+            return throw("java.lang.StringIndexOutOfBoundsException", Some(&format!("String index out of range: {new_len}")));
         }
         self.0.borrow_mut().resize(new_len as usize, 0);
+        Ok(())
     }
 
     /// `reverse()`（サロゲートペアは保つ）。

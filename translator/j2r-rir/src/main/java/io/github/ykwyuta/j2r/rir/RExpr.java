@@ -101,6 +101,9 @@ public sealed interface RExpr {
 
     record FieldInit(String name, RExpr value) {}
 
+    /** 例外（Err）の伝播 {@code expr?}。 */
+    record Try(RExpr expr) implements RExpr {}
+
     /** 添字 {@code receiver[index]}。 */
     record Index(RExpr receiver, int index) implements RExpr {}
 

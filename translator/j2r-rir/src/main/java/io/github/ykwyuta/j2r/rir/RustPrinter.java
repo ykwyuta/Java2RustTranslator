@@ -288,6 +288,7 @@ public final class RustPrinter {
             case RExpr.Closure c -> P_JUMP;
             case RExpr.Field f -> P_POSTFIX;
             case RExpr.Index i -> P_POSTFIX;
+            case RExpr.Try t -> P_POSTFIX;
             case RExpr.IfLet i -> P_BLOCKLIKE;
             case RExpr.StructLit sl -> P_ATOM;
             case RExpr.Array a -> P_ATOM;
@@ -536,6 +537,10 @@ public final class RustPrinter {
                 indent--;
                 newline();
                 out.append('}');
+            }
+            case RExpr.Try t -> {
+                expr(t.expr(), P_POSTFIX);
+                out.append('?');
             }
             case RExpr.Index i -> {
                 expr(i.receiver(), P_POSTFIX);

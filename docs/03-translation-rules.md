@@ -17,7 +17,7 @@
 > | 内部・匿名・ローカルクラス | 外側のクラスのモジュールの入れ子の型。外側のインスタンスは `__outer`、捕捉したローカル変数は `__cap_名前` フィールド |
 > | ボクシング | `jrt::box_i32(x)` など（`Integer` のキャッシュも Java と同じ）/ `o.unbox_i32()` |
 > | ジェネリクス | 消去して `JObject`。javac が挿入する検査キャストに相当する `checkcast` を入れる |
-> | 例外 | `jrt::throw_obj(e)`（パニック）と `jrt::try_block(|| ...)`。`return` / `break` / `continue` は `jrt::Flow` で try の外へ運ぶ |
+> | 例外 | 送出しうるメソッドは `JResult<T>` を返し、`?` で伝える（§5）。try は `jrt::try_block(|| -> JResult<Flow<R>> {..})`。`return` / `break` / `continue` は `jrt::Flow` で try の外へ運ぶ |
 > | ラムダ・メソッド参照 | `jrt::lambda(&["インタフェース名"], move |args| ...)`。呼び出しは `invoke("メソッド名", &[..])` |
 > | 可変長引数 | 呼び出し側で配列にまとめる |
 
@@ -170,37 +170,62 @@ impl AnimalApi for Dog {
 
 ## 5. 例外
 
-> **実装状況**: 例外は `jrt` のパニック（`resume_unwind`）で送出し、`jrt::try_block` で捕捉する。catch は
-> `instance_of` で型を調べ、合わなければ送出し直す。finally は正常終了・`return`・`break`・`continue`・例外のすべての経路で実行する。
-> try-with-resources は JLS 14.20.3 のとおり try/catch/finally に展開し、`close()` の例外は suppressed に加える。
-> 未捕捉の例外は `jrt::run_main` が Java と同じ `Exception in thread "main" X: msg` を標準エラーに出し、終了コード 1 で終わる。
-> 以下の `Result` 方式（例外フロー解析によるパニックの除去）は未実装。
+Java の例外は Rust の `Result` で伝える。パニックは Java の例外には使わない（変換できなかったコードの `todo!()` と、
+ランタイムの内部エラーだけ）。
 
 ### 5.1 基本方式
-- 例外は `jrt::Throwable`（`Ref<dyn ThrowableApi>`）値。ユーザ定義例外クラスも通常のクラス規則で生成し、
-  `ThrowableApi` を実装させる。
-- 例外フロー解析で「送出しうる」と判定されたメソッドは `Result<R, jrt::Throwable>`（別名 `jrt::JResult<R>`）を返す。
-  checked / unchecked の区別はしない（Rust の型としては同一）。
-- `throw e;` → `return Err(e.into());`
-- 呼び出し → `callee(...)?`
-- `try { A } catch (IOException e) { B } finally { C }` →
+- 例外は `JObject`（`Throwable` のサブクラスのオブジェクト）。ユーザ定義例外クラスも通常のクラス規則で生成し、
+  ルートの構造体に `jrt::lang::throwable::Throwable`（メッセージ・原因・suppressed）を持たせる。
+- 例外を送出しうるメソッドは `JResult<T>`（= `Result<T, JObject>`）を返す。checked / unchecked の区別はしない。
+  送出しえないメソッドは素の `T` を返す（下の「例外フロー解析」）。
+- `throw e;` → `return jrt::throw_obj(e);`（e が null なら NullPointerException）。`throw new X(..)` は `return Err(..)`。
+- 送出しうるメソッドの呼び出し → `callee(...)?`。`return v` → `return Ok(v)`。
+- `try { A } catch (IOException e) { B } finally { C }` → 本体を `JResult<Flow<R>>` を返すクロージャにする
+  （クロージャの中の `?` はクロージャが受け止める）。`return` / `break` / `continue` は `jrt::Flow` で外へ運ぶ:
   ```rust
-  let __r: JResult<()> = (|| -> JResult<()> { A; Ok(()) })();
-  let __r = match __r {
-      Err(ex) if jrt::is_instance::<IOException>(&ex) => { let e = ex; (|| -> JResult<()> { B; Ok(()) })() }
-      other => other,
-  };
-  { C }
-  __r?;
+  let __t0 = jrt::try_block(|| -> JResult<jrt::Flow<R>> {
+      match jrt::try_block(|| -> JResult<jrt::Flow<R>> { A; Ok(jrt::Flow::Normal) }) {
+          Ok(__f) => Ok(__f),
+          Err(__e) => {
+              if __e.instance_of("java.io.IOException") { let e = __e; B; Ok(jrt::Flow::Normal) }
+              else { return Err(__e); }
+          }
+      }
+  });
+  C;
+  match __t0 {
+      Ok(jrt::Flow::Return(__v)) => return Ok(__v),
+      Ok(_) => {}
+      Err(__e) => return Err(__e),
+  }
   ```
-  （実際はクロージャではなくラベル付きブロック + 制御フロー変数に展開し、`return`/`break`/`continue` を
-  try 本体から正しく伝播させる。）
+- try-with-resources は JLS 14.20.3 のとおり try/catch/finally に展開し、`close()` の例外は本体の例外の suppressed に加える。
+- 未捕捉の例外は `jrt::run_main` が Java と同じ `Exception in thread "main" X: msg`（`Caused by:` / `Suppressed:` を含む）
+  を標準エラーに出し、終了コード 1 で終わる（スタックトレースの行は出ない）。
 
 ### 5.2 ランタイム例外
-- NPE・配列境界外・ゼロ除算・`ClassCastException` 等も既定では `Err` として返す（catch で捕捉可能にするため）。
-- `--runtime-exceptions=panic` を指定すると、これらをパニックにして `Result` を減らす（高速・簡潔だが catch 不可）。
-  catch ブロックがこれらの型を捕捉している場合は、指定に関わらずそのメソッドは `Result` 方式に戻す。
-- `Error`（`OutOfMemoryError`, `StackOverflowError`）は再現しない（Rust ではプロセス中断）。
+- NPE・配列の範囲外・ゼロ除算・`ClassCastException`・`NegativeArraySizeException`・数値の解析失敗なども `Err` として返すので、
+  Java と同じく catch で捕捉できる。`jrt` の操作は例外を送出しうるものが `JResult` を返す
+  （`a.get(i)?`、`jrt::num::div_i32(a, b)?`、`x.nn()?`（null 検査）、`o.unbox_i32()?`、`o.checkcast("C")?` など）。
+- 0 でない定数での整数の除算（`x / 2`）は例外にならないので `wrapping_div` にする。
+- ユーザーのコードを実行する JDK の処理（`toString` / `equals` / `hashCode` / `compareTo`、比較関数・ラムダを受け取るコレクションの
+  操作、文字列連結での参照型の文字列化）も `JResult` を返し、ユーザーのコードの例外をそのまま伝える。
+- static 初期化（static フィールドの初期化子・static 初期化ブロック・enum 定数の生成）で起きた例外は、Java の未捕捉の
+  `ExceptionInInitializerError` と同じ表示をして終了する（static フィールドは最初に使われたときに初期化するので、
+  呼び出し元へ伝えられない。`ExceptionInInitializerError` の catch は再現しない）。
+- `StackOverflowError` / `OutOfMemoryError` は再現しない（Rust ではプロセスが異常終了する）。
+
+### 5.3 例外フロー解析
+どのメソッドが `JResult` を返すかは、lowering の結果から固定点で求める（`j2r-lowering` の `Throwing`）。
+
+1. 最初はどのメソッドも例外を送出しないと仮定して、プログラム全体を変換する。
+2. 関数の本体（try のクロージャの外）に `?` や `return Err(..)` を生成したのに `JResult` を返さない関数があれば、
+   そのメソッドを「送出しうる」集合に加えて、もう一度変換する。
+3. 加えるものがなくなったら終わり（集合は単調に増えるので、呼び出しの深さ程度の回数で止まる）。
+
+オーバーライドの関係にあるメソッド（とそれが上書きする JDK のメソッド）は、振り分け関数から同じ形で呼ぶため 1 つの系列として扱い、
+系列のどれかが送出しうるなら系列のすべてが `JResult` を返す。`impl jrt::Object` の `to_jstring` などは常に `JResult` を返し、
+上書きしたメソッドが `JResult` を返さなければ `Ok(..)` で包む。ラムダの本体は常に `JResult<JObject>` を返す。
 
 ## 6. 文字列
 

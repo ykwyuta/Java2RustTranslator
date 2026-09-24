@@ -1,42 +1,54 @@
 //! java.lang.Integer / Long / Double / Boolean の static メソッド。
 
 use crate::lang::string::JString;
-use crate::rt::throw;
+use crate::rt::{throw, JResult};
 
-fn number_format(s: &JString) -> ! {
-    throw("java.lang.NumberFormatException", Some(&format!("For input string: \"{}\"", s.as_str())))
-}
-
-/// `Integer.parseInt(String)`。
-pub fn parse_int(s: &JString) -> i32 {
-    s.as_str().parse::<i32>().unwrap_or_else(|_| number_format(s))
-}
-
-/// `Integer.parseInt(String, int radix)`。
-pub fn parse_int_radix(s: &JString, radix: i32) -> i32 {
-    i32::from_str_radix(s.as_str(), radix as u32).unwrap_or_else(|_| number_format(s))
-}
-
-/// `Long.parseLong(String)`。
-pub fn parse_long(s: &JString) -> i64 {
-    s.as_str().parse::<i64>().unwrap_or_else(|_| number_format(s))
-}
-
-/// `Double.parseDouble(String)`（前後の空白を許す）。
-pub fn parse_double(s: &JString) -> f64 {
-    let t = s.as_str().trim_matches(|c: char| c <= ' ');
-    let t = t.strip_suffix(['d', 'D', 'f', 'F']).unwrap_or(t);
-    match t {
-        "NaN" => f64::NAN,
-        "Infinity" | "+Infinity" => f64::INFINITY,
-        "-Infinity" => f64::NEG_INFINITY,
-        _ => t.parse::<f64>().unwrap_or_else(|_| number_format(s)),
+fn number_format<T>(s: &JString) -> JResult<T> {
+    match s.opt_str() {
+        Some(v) => throw("java.lang.NumberFormatException", Some(&format!("For input string: \"{v}\""))),
+        None => throw("java.lang.NumberFormatException", Some("Cannot parse null string: null")),
     }
 }
 
-/// `Boolean.parseBoolean(String)`。
+/// `Integer.parseInt(String)`。
+pub fn parse_int(s: &JString) -> JResult<i32> {
+    match s.opt_str().map(str::parse::<i32>) {
+        Some(Ok(v)) => Ok(v),
+        _ => number_format(s),
+    }
+}
+
+/// `Integer.parseInt(String, int radix)`。
+pub fn parse_int_radix(s: &JString, radix: i32) -> JResult<i32> {
+    match s.opt_str().map(|v| i32::from_str_radix(v, radix as u32)) {
+        Some(Ok(v)) => Ok(v),
+        _ => number_format(s),
+    }
+}
+
+/// `Long.parseLong(String)`。
+pub fn parse_long(s: &JString) -> JResult<i64> {
+    match s.opt_str().map(str::parse::<i64>) {
+        Some(Ok(v)) => Ok(v),
+        _ => number_format(s),
+    }
+}
+
+/// `Double.parseDouble(String)`（前後の空白を許す）。
+pub fn parse_double(s: &JString) -> JResult<f64> {
+    let t = s.as_str()?.trim_matches(|c: char| c <= ' ');
+    let t = t.strip_suffix(['d', 'D', 'f', 'F']).unwrap_or(t);
+    match t {
+        "NaN" => Ok(f64::NAN),
+        "Infinity" | "+Infinity" => Ok(f64::INFINITY),
+        "-Infinity" => Ok(f64::NEG_INFINITY),
+        _ => t.parse::<f64>().or_else(|_| number_format(s)),
+    }
+}
+
+/// `Boolean.parseBoolean(String)`（null は false）。
 pub fn parse_boolean(s: &JString) -> bool {
-    s.as_str().eq_ignore_ascii_case("true")
+    s.opt_str().is_some_and(|v| v.eq_ignore_ascii_case("true"))
 }
 
 /// `Integer.toBinaryString(int)`。

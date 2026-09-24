@@ -7,13 +7,13 @@
 | M0 基盤 | **完了**: Gradle マルチプロジェクト、javac → JIR、RIR とプリンタ、Cargo プロジェクト出力、テストハーネス、CI、Gradle プラグイン |
 | M1 手続き的サブセット | **完了**: fall-through する switch、switch 式、`String.format` / `printf`、可変長引数、ボクシングを含む |
 | M2 オブジェクト指向 | **ほぼ完了**（S0 表現のみ）: クラス・継承・インタフェース・enum・record・内部 / 匿名 / ローカルクラス・null・`instanceof` パターン |
-| M3 例外・ジェネリクス・ラムダ | **一部完了**: try/catch/finally・try-with-resources（パニックによる送出。`Result` 化は未着手）、ジェネリクス（消去）、ラムダ・メソッド参照、主なコレクション。JUnit の変換は未着手 |
+| M3 例外・ジェネリクス・ラムダ | **ほぼ完了**: 例外は `Result` で伝える（送出しうるメソッドは固定点の例外フロー解析で求める。ランタイム例外も catch できる）、try/catch/finally・try-with-resources、ジェネリクス（消去）、ラムダ・メソッド参照、主なコレクション。JUnit の変換は未着手 |
 | M4 以降 | 未着手 |
 
-E2E テスト 16 件（`tests/e2e`）がすべて JVM と一致する。
+E2E テスト 17 件（`tests/e2e`）がすべて JVM と一致する。
 
 M2・M3 の残り: 本体付きの enum 定数、record パターン、JDK クラス（例外以外）の継承、ストリーム API、
-例外フロー解析による `Result` 化、JUnit テストの変換。
+JUnit テストの変換。
 
 各マイルストーンの完了条件は「該当カテゴリの **差分実行テスト（tests/e2e）がすべて通り、生成物が
 `cargo check` で警告なし**」とする。

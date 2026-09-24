@@ -44,6 +44,10 @@ final class FnLowerer {
     private final Set<String> mutableLocals;
     /** try 文を含む関数では、初期化子のないローカル変数を既定値で初期化する（クロージャに捕捉されるため）。 */
     private final boolean defaultInitLocals;
+    /** この関数が JResult を返すか（例外を送出しうるメソッド。ラムダの本体は常に JResult）。 */
+    private final boolean throwing;
+    /** 関数の本体（try のクロージャの外）で ? や return Err(..) を生成したか（JResult を返す必要がある）。 */
+    private boolean fallible;
 
     private final Deque<RustFrame> frames = new ArrayDeque<>();
     private final Deque<JavaTarget> targets = new ArrayDeque<>();
@@ -54,11 +58,12 @@ final class FnLowerer {
     private int tryDepth;
 
     FnLowerer(LowerContext cx, ProgramIndex.TypeInfo owner, Imports imp, JType returnType, boolean lambdaBody,
-              List<Decl.Param> params, Stmt body) {
+              List<Decl.Param> params, Stmt body, boolean throwing) {
         this.cx = cx;
         this.owner = owner;
         this.imp = imp;
-        this.conv = new Conversions(cx, imp);
+        this.throwing = throwing || lambdaBody;
+        this.conv = new Conversions(cx, imp, this::markFallible);
         this.returnType = returnType;
         this.lambdaBody = lambdaBody;
         this.flowType = lambdaBody ? new RType("JObject") : cx.types().rust(returnType);
@@ -68,6 +73,33 @@ final class FnLowerer {
 
     Conversions conversions() {
         return conv;
+    }
+
+    /** 関数の本体で例外を送出しうる操作（? / return Err）を生成したか。 */
+    boolean fallible() {
+        return fallible;
+    }
+
+    /** 例外を関数の外へ伝える操作を生成した（try のクロージャの中なら、そのクロージャが受け止める）。 */
+    private void markFallible() {
+        if (tryDepth == 0) {
+            fallible = true;
+        }
+    }
+
+    private RExpr tryOp(RExpr e) {
+        return conv.tryOp(e);
+    }
+
+    /** {@code return Err(..)} など、例外を送出する式（型は !）。 */
+    private RExpr raise(RExpr result) {
+        markFallible();
+        return new RExpr.Return(result);
+    }
+
+    /** {@code return jrt::throw("クラス", None)}。 */
+    private RExpr raiseJdk(String exceptionClass) {
+        return raise(new RExpr.Call(new RExpr.Path("jrt::throw"), List.of(new RExpr.Lit("\"" + exceptionClass + "\""), new RExpr.Path("None"))));
     }
 
     boolean isMutable(String javaName) {
@@ -96,9 +128,16 @@ final class FnLowerer {
             // Java では値を返すメソッドの末尾には到達しない（コンパイラが保証する）が、try の後など Rust が
             // それを判断できない場合があるので明示する。
             boolean returnsValue = !(returnType instanceof JType.Void);
-            if (returnsValue && !lambdaBody && (n == 0 || !(stmts.get(n - 1) instanceof Stmt.Return || stmts.get(n - 1) instanceof Stmt.Throw))) {
+            boolean endsWithExit = n > 0 && (stmts.get(n - 1) instanceof Stmt.Return || stmts.get(n - 1) instanceof Stmt.Throw);
+            if (returnsValue && !lambdaBody && !endsWithExit) {
                 tail = new RExpr.Macro("unreachable", List.of());
+            } else if (!returnsValue && throwing && !lambdaBody && !endsWithExit) {
+                tail = Conversions.ok(new RExpr.Lit("()"));
             }
+            return new RExpr.Block(out, tail, null, false);
+        }
+        if (throwing && !lambdaBody) {
+            tail = Conversions.ok(tail);
         }
         return new RExpr.Block(out, tail, null, false);
     }
@@ -247,8 +286,14 @@ final class FnLowerer {
             case Stmt.Break b -> out.add(new RStmt.ExprStmt(breakExpr(b), true));
             case Stmt.Continue c -> out.add(new RStmt.ExprStmt(continueExpr(c), true));
             case Stmt.Yield y -> out.add(new RStmt.ExprStmt(yieldExpr(y), true));
-            case Stmt.Throw t -> out.add(new RStmt.ExprStmt(new RExpr.Call(new RExpr.Path("jrt::throw_obj"),
-                    List.of(conv.toObject(value(t.exception()), t.exception().type()))), true));
+            case Stmt.Throw t -> {
+                RExpr exc = conv.toObject(value(t.exception()), t.exception().type());
+                // new で作った例外は null にならないので、そのまま Err にする（null なら throw_obj が NPE にする）。
+                RExpr result = t.exception() instanceof Expr.New
+                        ? new RExpr.Call(new RExpr.Path("Err"), List.of(exc))
+                        : new RExpr.Call(new RExpr.Path("jrt::throw_obj"), List.of(exc));
+                out.add(new RStmt.ExprStmt(raise(result), true));
+            }
             case Stmt.Try t -> tryStmt(t, out);
             case Stmt.ForEach fe -> out.add(new RStmt.ExprStmt(todo("enhanced for over " + fe.iterable().type().javaName()), true));
             case Stmt.Unsupported u -> out.add(new RStmt.ExprStmt(todo(u.description()), true));
@@ -266,8 +311,11 @@ final class FnLowerer {
         RExpr value = v != null ? v : lambdaBody ? new RExpr.Call(new RExpr.Path("JObject::null"), List.of()) : null;
         if (tryDepth > 0) {
             tries.peek().returns = true;
-            return new RExpr.Return(new RExpr.Call(new RExpr.Path("jrt::Flow::Return"),
-                    List.of(value == null ? new RExpr.Lit("()") : value)));
+            return new RExpr.Return(Conversions.ok(new RExpr.Call(new RExpr.Path("jrt::Flow::Return"),
+                    List.of(value == null ? new RExpr.Lit("()") : value))));
+        }
+        if (throwing) {
+            return new RExpr.Return(Conversions.ok(value == null ? new RExpr.Lit("()") : value));
         }
         return new RExpr.Return(value);
     }
@@ -443,8 +491,8 @@ final class FnLowerer {
             TryCtx t = tries.peek();
             Map<RustFrame, Integer> ids = asBreak ? t.breaks : t.continues;
             int id = ids.computeIfAbsent(frame, k -> t.next++);
-            return new RExpr.Return(new RExpr.Call(new RExpr.Path(asBreak ? "jrt::Flow::Break" : "jrt::Flow::Continue"),
-                    List.of(new RExpr.Lit(Integer.toString(id)))));
+            return new RExpr.Return(Conversions.ok(new RExpr.Call(new RExpr.Path(asBreak ? "jrt::Flow::Break" : "jrt::Flow::Continue"),
+                    List.of(new RExpr.Lit(Integer.toString(id))))));
         }
         String label = labelFor(frame);
         return asBreak ? new RExpr.Break(label, null) : new RExpr.Continue(label);
@@ -471,7 +519,8 @@ final class FnLowerer {
     // ---------------------------------------------------------------- try / catch / finally
 
     /**
-     * try 文。本体（と finally がある場合は catch 節も）をクロージャにして {@code jrt::try_block} で実行する。
+     * try 文。本体（と finally がある場合は catch 節も）を {@code JResult<Flow<R>>} を返すクロージャにして
+     * {@code jrt::try_block} で実行する。本体の中の {@code ?} / {@code return Err(..)} はクロージャが受け止める。
      * クロージャから外への return / break / continue は Flow で伝え、try の後で実行する。
      */
     private void tryStmt(Stmt.Try t, List<RStmt> out) {
@@ -503,14 +552,14 @@ final class FnLowerer {
         RExpr protectedCall = tryCall;
         if (catchArm != null) {
             // try { try { body } catch { ... } } finally { ... }
-            List<RExpr.Arm> inner = List.of(new RExpr.Arm("Ok(__f)", new RExpr.Path("__f")), catchArm);
+            List<RExpr.Arm> inner = List.of(new RExpr.Arm("Ok(__f)", Conversions.ok(new RExpr.Path("__f"))), catchArm);
             tries.push(ctx);
             tryDepth++;
             RExpr.Block outerBody = new RExpr.Block(List.of(), new RExpr.Match(tryCall, inner), null, false);
             tryDepth--;
             tries.pop();
             protectedCall = new RExpr.Call(new RExpr.Path("jrt::try_block"), List.of(
-                    new RExpr.Closure(false, List.of(), new RType("jrt::Flow<" + flowType.text() + ">"), outerBody)));
+                    new RExpr.Closure(false, List.of(), flowResultType(), outerBody)));
         }
         List<RStmt> stmts = new ArrayList<>();
         stmts.add(new RStmt.Let(r, false, null, protectedCall));
@@ -518,16 +567,26 @@ final class FnLowerer {
         stmts.addAll(block(t.finallyBlock()).stmts());
         List<RExpr.Arm> arms = new ArrayList<>(flowArms(ctx, "Ok"));
         arms.add(new RExpr.Arm("Ok(_)", RExpr.Block.of(List.of())));
-        arms.add(new RExpr.Arm("Err(__e)", new RExpr.Call(new RExpr.Path("jrt::throw_obj"), List.of(new RExpr.Path("__e")))));
+        arms.add(new RExpr.Arm("Err(__e)", raise(new RExpr.Call(new RExpr.Path("Err"), List.of(new RExpr.Path("__e"))))));
         stmts.add(new RStmt.ExprStmt(new RExpr.Match(new RExpr.Path(r), arms), false));
         out.add(new RStmt.ExprStmt(RExpr.Block.of(stmts), false));
     }
 
-    /** {@code || -> jrt::Flow<R> { body; jrt::Flow::Normal }}。 */
+    /** try のクロージャの戻り値型 {@code JResult<jrt::Flow<R>>}。 */
+    private RType flowResultType() {
+        return new RType("JResult<jrt::Flow<" + flowType.text() + ">>");
+    }
+
+    /** {@code Ok(jrt::Flow::Normal)}。 */
+    private static RExpr flowNormal() {
+        return Conversions.ok(new RExpr.Path("jrt::Flow::Normal"));
+    }
+
+    /** {@code || -> JResult<jrt::Flow<R>> { body; Ok(jrt::Flow::Normal) }}。 */
     private RExpr flowClosure(RExpr.Block body) {
         List<RStmt> stmts = new ArrayList<>(body.stmts());
-        RExpr.Block b = new RExpr.Block(stmts, new RExpr.Path("jrt::Flow::Normal"), null, false);
-        return new RExpr.Closure(false, List.of(), new RType("jrt::Flow<" + flowType.text() + ">"), b);
+        RExpr.Block b = new RExpr.Block(stmts, flowNormal(), null, false);
+        return new RExpr.Closure(false, List.of(), flowResultType(), b);
     }
 
     /** try の後で、クロージャから伝えられた return / break / continue を実行する match の腕。 */
@@ -544,15 +603,13 @@ final class FnLowerer {
     }
 
     /**
-     * catch 節の連鎖: {@code if __e.instance_of("A") { let e = __e; ... } else { jrt::throw_obj(__e) }}。
-     * inClosure なら、クロージャの戻り値として Flow::Normal で終える。
+     * catch 節の連鎖: {@code if __e.instance_of("A") { let e = __e; ... } else { return Err(__e); }}。
+     * inClosure なら、クロージャの戻り値として Ok(Flow::Normal) で終える。
      */
     private RExpr catchChain(List<Stmt.Catch> catches, boolean inClosure) {
-        RExpr chain = new RExpr.Block(List.of(new RStmt.ExprStmt(
-                new RExpr.Call(new RExpr.Path("jrt::throw_obj"), List.of(new RExpr.Path("__e"))), !inClosure)), null, null, false);
-        if (inClosure) {
-            chain = new RExpr.Block(List.of(), new RExpr.Call(new RExpr.Path("jrt::throw_obj"), List.of(new RExpr.Path("__e"))), null, false);
-        }
+        boolean catchesAll = catches.stream().anyMatch(c -> c.types().contains("java.lang.Throwable"));
+        RExpr chain = catchesAll ? null : RExpr.Block.of(List.of(new RStmt.ExprStmt(
+                raise(new RExpr.Call(new RExpr.Path("Err"), List.of(new RExpr.Path("__e")))), true)));
         for (int i = catches.size() - 1; i >= 0; i--) {
             Stmt.Catch c = catches.get(i);
             RExpr cond = null;
@@ -563,9 +620,8 @@ final class FnLowerer {
             List<RStmt> stmts = new ArrayList<>();
             stmts.add(new RStmt.Let(Naming.valueName(c.var()), false, new RType("JObject"), new RExpr.Path("__e")));
             stmts.addAll(block(c.body()).stmts());
-            RExpr.Block then = inClosure ? new RExpr.Block(stmts, new RExpr.Path("jrt::Flow::Normal"), null, false) : RExpr.Block.of(stmts);
-            boolean catchesAll = c.types().contains("java.lang.Throwable");
-            if (catchesAll) {
+            RExpr.Block then = inClosure ? new RExpr.Block(stmts, flowNormal(), null, false) : RExpr.Block.of(stmts);
+            if (c.types().contains("java.lang.Throwable") || chain == null) {
                 chain = then;
             } else {
                 chain = new RExpr.If(cond, then, chain);
@@ -655,10 +711,10 @@ final class FnLowerer {
     private RExpr matchScrutinee(Expr selector) {
         JType t = selector.type();
         if (JType.isString(t)) {
-            return new RExpr.MethodCall(ref(selector), "as_str", List.of());
+            return tryOp(new RExpr.MethodCall(ref(selector), "as_str", List.of()));
         }
         if (t instanceof JType.ClassType) {
-            return new RExpr.Call(new RExpr.Path("jrt::lang::enums::ordinal"), List.of(borrow(selector)));
+            return tryOp(new RExpr.Call(new RExpr.Path("jrt::lang::enums::ordinal"), List.of(borrow(selector))));
         }
         return value(selector);
     }
@@ -714,8 +770,8 @@ final class FnLowerer {
         return block(stmts);
     }
 
-    private static RExpr matchException() {
-        return new RExpr.Call(new RExpr.Path("jrt::throw"), List.of(new RExpr.Lit("\"java.lang.MatchException\""), new RExpr.Path("None")));
+    private RExpr matchException() {
+        return raiseJdk("java.lang.MatchException");
     }
 
     /** fall-through のある switch（文）: 入口の番号を求め、番号以上の本体を順に実行する。 */
@@ -762,7 +818,7 @@ final class FnLowerer {
         RExpr isNull = new RExpr.MethodCall(sel, "is_null", List.of());
         if (!hasNullCase && !(selType instanceof JType.Primitive)) {
             stmts.add(new RStmt.ExprStmt(new RExpr.If(isNull, RExpr.Block.of(List.of(new RStmt.ExprStmt(
-                    new RExpr.Call(new RExpr.Path("jrt::throw"), List.of(new RExpr.Lit("\"java.lang.NullPointerException\""), new RExpr.Path("None"))), true))), null), false));
+                    raiseJdk("java.lang.NullPointerException"), true))), null), false));
         }
         Group defaultGroup = null;
         for (Group g : groups) {
@@ -783,13 +839,13 @@ final class FnLowerer {
                         }
                         if (tp.binding() != null) {
                             bind.add(new RStmt.ExprStmt(new RExpr.Assign(new RExpr.Path(Naming.valueName(tp.binding())), "=",
-                                    conv.convert(new RExpr.MethodCall(sel, "clone", List.of()), selType, tp.type(), true)), true));
+                                    conv.convert(new RExpr.MethodCall(sel, "clone", List.of()), selType, tp.type(), false)), true));
                         }
                     }
-                    case Stmt.EnumLabel e -> test = new RExpr.Binary("==", new RExpr.Call(new RExpr.Path("jrt::lang::enums::ordinal"),
-                            List.of(new RExpr.Unary("&", sel))), new RExpr.Lit(Integer.toString(e.ordinal())));
-                    default -> test = new RExpr.MethodCall(sel, "equals", List.of(new RExpr.Unary("&",
-                            conv.toObject(literalFor(label), labelType(label)))));
+                    case Stmt.EnumLabel e -> test = new RExpr.Binary("==", tryOp(new RExpr.Call(new RExpr.Path("jrt::lang::enums::ordinal"),
+                            List.of(new RExpr.Unary("&", sel)))), new RExpr.Lit(Integer.toString(e.ordinal())));
+                    default -> test = tryOp(new RExpr.MethodCall(sel, "equals", List.of(new RExpr.Unary("&",
+                            conv.toObject(literalFor(label), labelType(label))))));
                 }
                 cond = cond == null ? test : new RExpr.Binary("||", cond, test);
             }
@@ -944,10 +1000,10 @@ final class FnLowerer {
                     yield new Place.Invalid("field " + f.owner() + "." + f.name(), f.type());
                 }
                 RExpr obj = objRef(f.receiver());
-                if (hoist && !(f.receiver() instanceof Expr.This t && t.outerLevels() == 0) && !(f.receiver() instanceof Expr.Local)) {
+                if (hoist && !(f.receiver() instanceof Expr.This) && !(f.receiver() instanceof Expr.Local)) {
                     String t = temp();
                     pre.add(new RStmt.Let(t, false, null, value(f.receiver())));
-                    obj = new RExpr.Unary("&", new RExpr.Path(t));
+                    obj = tryOp(new RExpr.MethodCall(new RExpr.Path(t), "nn", List.of()));
                 }
                 yield new Place.Field(obj, imp.type(fi.owner()), fi.rustName(), fi.type());
             }
@@ -980,7 +1036,7 @@ final class FnLowerer {
                     : new RExpr.MethodCall(new RExpr.Path(l.name()), "clone", List.of());
             case Place.Static s -> withClinit(s.clinit(), staticRead(s.path(), s.type()));
             case Place.Field f -> fieldRead(f.obj(), f.struct(), f.field(), f.type());
-            case Place.ArrayElem a -> new RExpr.MethodCall(a.array(), "get", List.of(a.index()));
+            case Place.ArrayElem a -> tryOp(new RExpr.MethodCall(a.array(), "get", List.of(a.index())));
             case Place.Invalid i -> todo(i.reason());
         };
     }
@@ -989,18 +1045,26 @@ final class FnLowerer {
         return switch (p) {
             case Place.Local l -> new RExpr.Assign(new RExpr.Path(l.name()), "=", v);
             case Place.Static s -> {
+                // 値の式（? や return を含みうる）は with のクロージャの外で評価する。
+                List<RStmt> pre = new ArrayList<>();
+                RExpr value = v;
+                if (!isSimple(v)) {
+                    pre.add(new RStmt.Let("__v", false, null, v));
+                    value = new RExpr.Path("__v");
+                }
                 RExpr c = new RExpr.Path("c");
                 RExpr body = TypeMapper.isCopy(s.type())
-                        ? new RExpr.MethodCall(c, "set", List.of(v))
-                        : new RExpr.Assign(new RExpr.Unary("*", new RExpr.MethodCall(c, "borrow_mut", List.of())), "=", v);
-                yield withClinit(s.clinit(), new RExpr.MethodCall(new RExpr.Path(s.path()), "with", List.of(RExpr.Closure.of(List.of("c"), body))));
+                        ? new RExpr.MethodCall(c, "set", List.of(value))
+                        : new RExpr.Assign(new RExpr.Unary("*", new RExpr.MethodCall(c, "borrow_mut", List.of())), "=", value);
+                RExpr store = withClinit(s.clinit(), new RExpr.MethodCall(new RExpr.Path(s.path()), "with", List.of(RExpr.Closure.of(List.of("c"), body))));
+                yield pre.isEmpty() ? store : new RExpr.Block(pre, store, null, true);
             }
             case Place.Field f -> {
                 RExpr cell = new RExpr.Field(new RExpr.Call(new RExpr.Path(f.struct() + "::of"), List.of(f.obj())), f.field());
                 yield TypeMapper.isCopy(f.type()) ? new RExpr.MethodCall(cell, "set", List.of(v))
                         : new RExpr.Assign(new RExpr.Unary("*", new RExpr.MethodCall(cell, "borrow_mut", List.of())), "=", v);
             }
-            case Place.ArrayElem a -> new RExpr.MethodCall(a.array(), "set", List.of(a.index(), v));
+            case Place.ArrayElem a -> tryOp(new RExpr.MethodCall(a.array(), "set", List.of(a.index(), v)));
             case Place.Invalid i -> {
                 cx.diags().report(DiagnosticCode.UNSUPPORTED_SYNTAX, SourcePos.UNKNOWN, i.reason());
                 yield todo(i.reason());
@@ -1085,9 +1149,12 @@ final class FnLowerer {
         return new RExpr.Unary("&", ref(e));
     }
 
-    /** Struct::of(...) に渡す &JObject。 */
+    /** Struct::of(...) に渡す &JObject（this 以外は null なら NullPointerException）。 */
     private RExpr objRef(Expr e) {
-        return borrow(e);
+        if (e instanceof Expr.This) {
+            return borrow(e);
+        }
+        return tryOp(new RExpr.MethodCall(ref(e), "nn", List.of()));
     }
 
     private RExpr expr(Expr e, boolean byRef) {
@@ -1141,8 +1208,8 @@ final class FnLowerer {
             case Expr.Lambda l -> lambda(l);
             case Expr.SwitchExpr se -> switchExpr(se);
             case Expr.NewArray na -> newArray(na);
-            case Expr.ArrayAccess a -> new RExpr.MethodCall(ref(a.array()), "get", List.of(value(a.index())));
-            case Expr.ArrayLength a -> new RExpr.MethodCall(ref(a.array()), "length", List.of());
+            case Expr.ArrayAccess a -> tryOp(new RExpr.MethodCall(ref(a.array()), "get", List.of(value(a.index()))));
+            case Expr.ArrayLength a -> tryOp(new RExpr.MethodCall(ref(a.array()), "length", List.of()));
             case Expr.StringConcat sc -> {
                 List<RExpr> parts = new ArrayList<>();
                 for (Expr p : sc.parts()) {
@@ -1197,7 +1264,16 @@ final class FnLowerer {
         if (JType.isPrimitive(p.type(), JType.Kind.CHAR)) {
             return new RExpr.Call(new RExpr.Path("JChar"), List.of(value(p)));
         }
+        if (cx.types().kind(p.type()) == TypeMapper.Kind.OBJECT) {
+            // 参照型は toString() を呼ぶ（例外を送出しうる）。
+            return stringOf(p);
+        }
         return ref(p);
+    }
+
+    /** {@code jrt::string_of(&x)?}（参照型の文字列化。null は "null"）。 */
+    private RExpr stringOf(Expr p) {
+        return tryOp(new RExpr.Call(new RExpr.Path("jrt::string_of"), List.of(borrow(p))));
     }
 
     private RExpr literal(Expr.Literal l, boolean suffix) {
@@ -1292,8 +1368,12 @@ final class FnLowerer {
                     return new RExpr.MethodCall(Conversions.withSuffix(l, t), m, List.of(r));
                 }
                 case DIV, REM -> {
+                    if (rightJir instanceof Expr.Literal lit && lit.value() instanceof Number n && n.longValue() != 0) {
+                        // 0 でない定数での除算は例外にならない（MIN / -1 も wrapping_div が Java と同じ結果になる）。
+                        return new RExpr.MethodCall(Conversions.withSuffix(l, t), op == BinaryOp.DIV ? "wrapping_div" : "wrapping_rem", List.of(r));
+                    }
                     String fn = "jrt::num::" + (op == BinaryOp.DIV ? "div" : "rem") + (isLong ? "_i64" : "_i32");
-                    return new RExpr.Call(new RExpr.Path(fn), List.of(l, r));
+                    return tryOp(new RExpr.Call(new RExpr.Path(fn), List.of(l, r)));
                 }
                 case SHL, SHR -> {
                     return new RExpr.MethodCall(Conversions.withSuffix(l, t), op == BinaryOp.SHL ? "wrapping_shl" : "wrapping_shr",
@@ -1378,7 +1458,7 @@ final class FnLowerer {
                 ? new RExpr.MethodCall(new RExpr.Path(t), "instance_of", List.of(new RExpr.Lit("\"" + target + "\"")))
                 : new RExpr.Unary("!", new RExpr.MethodCall(new RExpr.Path(t), "is_null", List.of()));
         RExpr assign = new RExpr.Assign(new RExpr.Path(Naming.valueName(io.binding())), "=",
-                conv.convert(new RExpr.MethodCall(new RExpr.Path(t), "clone", List.of()), from, io.target(), true));
+                conv.convert(new RExpr.MethodCall(new RExpr.Path(t), "clone", List.of()), from, io.target(), false));
         RExpr cond = new RExpr.If(test, new RExpr.Block(List.of(new RStmt.ExprStmt(assign, true)), new RExpr.Lit("true"), null, false),
                 new RExpr.Block(List.of(), new RExpr.Lit("false"), null, false));
         return new RExpr.Block(List.of(new RStmt.Let(t, false, null, value(io.expr()))), cond, null, false);
@@ -1396,13 +1476,13 @@ final class FnLowerer {
         // java.lang.Object のメソッド（toString / equals / hashCode）は、上書きを含めて Object トレイト経由で呼ぶ。
         if (recv != null && !c.superCall() && cx.types().kind(recv.type()) == TypeMapper.Kind.OBJECT) {
             if (isObjectMethod(r, "toString", 0)) {
-                return new RExpr.MethodCall(ref(recv), "to_jstring", List.of());
+                return tryOp(new RExpr.MethodCall(ref(recv), "to_jstring", List.of()));
             }
             if (isObjectMethod(r, "hashCode", 0)) {
-                return new RExpr.MethodCall(ref(recv), "hash_code", List.of());
+                return tryOp(new RExpr.MethodCall(ref(recv), "hash_code", List.of()));
             }
             if (isObjectMethod(r, "equals", 1) && r.paramTypes().get(0).equals(JType.OBJECT)) {
-                return new RExpr.MethodCall(ref(recv), "equals", List.of(new RExpr.Unary("&", conv.toObject(value(c.args().get(0)), c.args().get(0).type()))));
+                return tryOp(new RExpr.MethodCall(ref(recv), "equals", List.of(new RExpr.Unary("&", conv.toObject(value(c.args().get(0)), c.args().get(0).type())))));
             }
         }
         ProgramIndex.MethodInfo mi = cx.index().method(r.key());
@@ -1415,7 +1495,7 @@ final class FnLowerer {
                 return new RExpr.Call(new RExpr.Path(imp.type(ownerType) + "::values"), List.of());
             }
             if (r.name().equals("valueOf") && r.paramTypes().size() == 1) {
-                return new RExpr.Call(new RExpr.Path(imp.type(ownerType) + "::value_of"), List.of(value(c.args().get(0))));
+                return tryOp(new RExpr.Call(new RExpr.Path(imp.type(ownerType) + "::value_of"), List.of(value(c.args().get(0)))));
             }
         }
         if (c.superCall() && recv != null) {
@@ -1438,8 +1518,8 @@ final class FnLowerer {
             for (Expr a : c.args()) {
                 boxed.add(conv.toObject(value(a), a.type()));
             }
-            RExpr inv = new RExpr.MethodCall(ref(recv), "invoke", List.of(new RExpr.Lit("\"" + r.name() + "\""),
-                    new RExpr.Unary("&", new RExpr.Array(boxed))));
+            RExpr inv = tryOp(new RExpr.MethodCall(ref(recv), "invoke", List.of(new RExpr.Lit("\"" + r.name() + "\""),
+                    new RExpr.Unary("&", new RExpr.Array(boxed)))));
             return conv.fromObject(inv, r.returnType());
         }
         cx.diags().report(DiagnosticCode.UNSUPPORTED_API, c.pos(), "no mapping for " + r.owner() + "#" + sig);
@@ -1459,9 +1539,7 @@ final class FnLowerer {
         MethodRef r = c.method();
         RExpr self = new RExpr.Path("this");
         if (isObjectMethod(r, "toString", 0)) {
-            return new RExpr.Call(new RExpr.Path("jrt::object::default_to_string"), List.of(
-                    new RExpr.MethodCall(self, "class_name", List.of()),
-                    new RExpr.Call(new RExpr.Path("jrt::util::misc::identity_hash_code"), List.of(self))));
+            return new RExpr.Call(new RExpr.Path("jrt::object::default_to_string_of"), List.of(self));
         }
         if (isObjectMethod(r, "hashCode", 0)) {
             return new RExpr.Call(new RExpr.Path("jrt::util::misc::identity_hash_code"), List.of(self));
@@ -1484,12 +1562,12 @@ final class FnLowerer {
             args.add(value(a));
         }
         if (r.isStatic()) {
-            return new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + mi.decl().rustName()), args);
+            return maybeTry(new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + mi.decl().rustName()), args), mi.decl());
         }
         Expr recv = c.receiver();
         RExpr recvRef = recv instanceof Expr.This t && t.outerLevels() == 0 ? new RExpr.Path("this")
                 : c.superCall() ? new RExpr.Path("this")
-                : new RExpr.MethodCall(ref(recv), "nn", List.of());
+                : tryOp(new RExpr.MethodCall(ref(recv), "nn", List.of()));
         List<RExpr> all = new ArrayList<>();
         all.add(recvRef);
         all.addAll(args);
@@ -1501,13 +1579,18 @@ final class FnLowerer {
             return conv.callImpl(impl, r, all);
         }
         if (cx.hierarchy().needsDispatch(mi)) {
-            return new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + mi.decl().rustName()), all);
+            return maybeTry(new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + mi.decl().rustName()), all), mi.decl());
         }
         ProgramIndex.MethodInfo impl = cx.hierarchy().targets(r).stream().findFirst().orElse(mi);
         if (impl == null) {
             impl = mi;
         }
         return conv.callImpl(impl, r, all);
+    }
+
+    /** 呼び先のプログラムのメソッド・コンストラクタが JResult を返すなら {@code call?}。 */
+    private RExpr maybeTry(RExpr call, Decl.MethodDecl callee) {
+        return cx.throwing().isThrowing(callee) ? tryOp(call) : call;
     }
 
     /**
@@ -1542,7 +1625,7 @@ final class FnLowerer {
             for (Expr a : n.args()) {
                 args.add(value(a));
             }
-            return new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + mi.decl().rustName()), args);
+            return maybeTry(new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + mi.decl().rustName()), args), mi.decl());
         }
         if (n.jdkThrowable()) {
             return newThrowable(ctor, n.args(), n.pos());
@@ -1571,7 +1654,7 @@ final class FnLowerer {
             return new RExpr.Call(new RExpr.Path("jrt::lang::throwable::new_throwable"), List.of(cls, value(args.get(0)), value(args.get(1))));
         }
         if (ps.size() == 1) {
-            return new RExpr.Call(new RExpr.Path("jrt::lang::throwable::new_throwable_with_cause"), List.of(cls, value(args.get(0))));
+            return tryOp(new RExpr.Call(new RExpr.Path("jrt::lang::throwable::new_throwable_with_cause"), List.of(cls, value(args.get(0)))));
         }
         cx.diags().report(DiagnosticCode.UNSUPPORTED_API, pos, "constructor " + ctor.owner() + ctor.signature());
         return todo("new " + ctor.owner());
@@ -1593,7 +1676,7 @@ final class FnLowerer {
             for (Expr a : c.args()) {
                 args.add(value(a));
             }
-            return new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + initName(mi.decl().rustName())), args);
+            return maybeTry(new RExpr.Call(new RExpr.Path(imp.type(mi.owner()) + "::" + initName(mi.decl().rustName())), args), mi.decl());
         }
         if (c.isSuper()) {
             // JDK の例外クラスのコンストラクタ（Throwable の状態を初期化する）。
@@ -1611,7 +1694,7 @@ final class FnLowerer {
                 return new RExpr.Call(new RExpr.Path(init), List.of(self, value(c.args().get(0)), value(c.args().get(1))));
             }
             if (ps.size() == 1) {
-                return new RExpr.Call(new RExpr.Path("jrt::lang::throwable::Throwable::init_cause_only"), List.of(self, value(c.args().get(0))));
+                return tryOp(new RExpr.Call(new RExpr.Path("jrt::lang::throwable::Throwable::init_cause_only"), List.of(self, value(c.args().get(0)))));
             }
         }
         cx.diags().report(DiagnosticCode.UNSUPPORTED_OOP, c.pos(), "constructor call to " + ctor.owner() + ctor.signature());
@@ -1651,10 +1734,12 @@ final class FnLowerer {
         for (int i = 0; i < dims.size(); i++) {
             leaf = ((JType.ArrayType) leaf).component();
         }
+        // 各段は JResult（負の長さは NegativeArraySizeException）。内側の段はクロージャの戻り値としてそのまま返す。
         RExpr inner = new RExpr.Call(new RExpr.Path("JArray::<" + cx.types().text(leaf) + ">::new"), List.of(dims.get(dims.size() - 1)));
         for (int i = dims.size() - 2; i >= 0; i--) {
             inner = new RExpr.Call(new RExpr.Path("JArray::new_with"), List.of(dims.get(i), RExpr.Closure.of(List.of("_"), inner)));
         }
+        inner = tryOp(inner);
         return pre.isEmpty() ? inner : new RExpr.Block(pre, inner, null, true);
     }
 
@@ -1699,7 +1784,7 @@ final class FnLowerer {
             captures.add(new RStmt.Let("__this", false, null, new RExpr.MethodCall(new RExpr.Path("this"), "clone", List.of())));
         }
         JType ret = l.sam().returnType();
-        FnLowerer inner = new FnLowerer(cx, owner, imp, ret, true, l.params(), l.body());
+        FnLowerer inner = new FnLowerer(cx, owner, imp, ret, true, l.params(), l.body(), true);
         List<RStmt> body = new ArrayList<>();
         if (usesThis[0]) {
             body.add(new RStmt.Let("this", false, null, new RExpr.Unary("&", new RExpr.Path("__this"))));
@@ -1707,16 +1792,14 @@ final class FnLowerer {
         for (int i = 0; i < l.params().size(); i++) {
             Decl.Param p = l.params().get(i);
             RExpr arg = new RExpr.MethodCall(new RExpr.Index(new RExpr.Path("__args"), i), "clone", List.of());
-            body.add(new RStmt.Let(Naming.valueName(p.name()), inner.isMutable(p.name()), cx.types().rust(p.type()), conv.fromObject(arg, p.type())));
+            body.add(new RStmt.Let(Naming.valueName(p.name()), inner.isMutable(p.name()), cx.types().rust(p.type()),
+                    inner.conversions().fromObject(arg, p.type())));
         }
         RExpr.Block lowered = inner.body(l.body().stmts(), false);
         body.addAll(lowered.stmts());
-        RExpr tail = ret instanceof JType.Void || !endsWithJump(l.body().stmts())
-                ? new RExpr.Call(new RExpr.Path("JObject::null"), List.of()) : null;
-        if (tail != null && !(ret instanceof JType.Void) && endsWithJump(l.body().stmts())) {
-            tail = null;
-        }
-        RExpr closure = new RExpr.Closure(true, List.of("__args: &[JObject]"), new RType("JObject"),
+        RExpr tail = endsWithJump(l.body().stmts()) ? null
+                : Conversions.ok(new RExpr.Call(new RExpr.Path("JObject::null"), List.of()));
+        RExpr closure = new RExpr.Closure(true, List.of("__args: &[JObject]"), new RType("JResult<JObject>"),
                 new RExpr.Block(body, tail, null, false));
         List<RExpr> names = new ArrayList<>();
         for (String i : l.interfaces()) {
@@ -1808,8 +1891,31 @@ final class FnLowerer {
             last = m.end();
         }
         parts.add(template.substring(last));
+        if (hasTry(template)) {
+            markFallible();
+        }
         RExpr result = new RExpr.Template(parts);
         return pre.isEmpty() ? result : new RExpr.Block(pre, result, null, true);
+    }
+
+    /** テンプレートが（文字列リテラルの外に）{@code ?} を含むか（例外を送出しうる JDK の API）。 */
+    static boolean hasTry(String template) {
+        boolean inString = false;
+        for (int i = 0; i < template.length(); i++) {
+            char c = template.charAt(i);
+            if (inString) {
+                if (c == '\\') {
+                    i++;
+                } else if (c == '"') {
+                    inString = false;
+                }
+            } else if (c == '"') {
+                inString = true;
+            } else if (c == '?') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** String / 配列から参照型への暗黙の変換を取り除く（JDK のメソッドの引数用）。 */
@@ -1837,6 +1943,9 @@ final class FnLowerer {
         }
         if (JType.isPrimitive(arg.type(), JType.Kind.CHAR)) {
             return new RExpr.Unary("&", new RExpr.Call(new RExpr.Path("JChar"), List.of(value(arg))));
+        }
+        if (cx.types().kind(arg.type()) == TypeMapper.Kind.OBJECT) {
+            return new RExpr.Unary("&", stringOf(arg));
         }
         return borrow(arg);
     }

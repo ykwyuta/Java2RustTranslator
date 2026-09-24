@@ -2,7 +2,7 @@
 
 use crate::io::InputStream;
 use crate::lang::string::JString;
-use crate::rt::throw;
+use crate::rt::{throw, JResult};
 use std::cell::RefCell;
 use std::io::BufRead;
 use std::rc::Rc;
@@ -87,11 +87,11 @@ impl State {
     }
 }
 
-fn no_such_element() -> ! {
+fn no_such_element<T>() -> JResult<T> {
     throw("java.util.NoSuchElementException", None)
 }
 
-fn input_mismatch(token: &str) -> ! {
+fn input_mismatch<T>(token: &str) -> JResult<T> {
     throw("java.util.InputMismatchException", Some(&format!("For input string: \"{token}\"")))
 }
 
@@ -102,48 +102,60 @@ impl Scanner {
     }
 
     /// `next()`。
-    pub fn next(&self) -> JString {
-        JString::from(self.0.borrow_mut().next_token().unwrap_or_else(|| no_such_element()))
+    pub fn next(&self) -> JResult<JString> {
+        let t = self.0.borrow_mut().next_token();
+        match t {
+            Some(t) => Ok(JString::from(t)),
+            None => no_such_element(),
+        }
+    }
+
+    fn token(&self) -> JResult<String> {
+        let t = self.0.borrow_mut().next_token();
+        match t {
+            Some(t) => Ok(t),
+            None => no_such_element(),
+        }
     }
 
     /// `nextInt()`。
-    pub fn next_int(&self) -> i32 {
-        let t = self.0.borrow_mut().next_token().unwrap_or_else(|| no_such_element());
-        t.parse().unwrap_or_else(|_| input_mismatch(&t))
+    pub fn next_int(&self) -> JResult<i32> {
+        let t = self.token()?;
+        t.parse().or_else(|_| input_mismatch(&t))
     }
 
     /// `nextLong()`。
-    pub fn next_long(&self) -> i64 {
-        let t = self.0.borrow_mut().next_token().unwrap_or_else(|| no_such_element());
-        t.parse().unwrap_or_else(|_| input_mismatch(&t))
+    pub fn next_long(&self) -> JResult<i64> {
+        let t = self.token()?;
+        t.parse().or_else(|_| input_mismatch(&t))
     }
 
     /// `nextDouble()`。
-    pub fn next_double(&self) -> f64 {
-        let t = self.0.borrow_mut().next_token().unwrap_or_else(|| no_such_element());
-        t.parse().unwrap_or_else(|_| input_mismatch(&t))
+    pub fn next_double(&self) -> JResult<f64> {
+        let t = self.token()?;
+        t.parse().or_else(|_| input_mismatch(&t))
     }
 
     /// `nextBoolean()`。
-    pub fn next_boolean(&self) -> bool {
-        let t = self.0.borrow_mut().next_token().unwrap_or_else(|| no_such_element());
+    pub fn next_boolean(&self) -> JResult<bool> {
+        let t = self.token()?;
         match t.to_ascii_lowercase().as_str() {
-            "true" => true,
-            "false" => false,
+            "true" => Ok(true),
+            "false" => Ok(false),
             _ => input_mismatch(&t),
         }
     }
 
     /// `nextLine()`: 現在の行の残りを返し、次の行へ進む。
-    pub fn next_line(&self) -> JString {
+    pub fn next_line(&self) -> JResult<JString> {
         let mut st = self.0.borrow_mut();
         if !st.fill_line() {
             drop(st);
-            throw("java.util.NoSuchElementException", Some("No line found"));
+            return throw("java.util.NoSuchElementException", Some("No line found"));
         }
-        let line = st.line.take().unwrap();
+        let line = st.line.take().unwrap_or_default();
         let rest = line[st.pos..].to_string();
-        JString::from(rest)
+        Ok(JString::from(rest))
     }
 
     /// `hasNext()`。

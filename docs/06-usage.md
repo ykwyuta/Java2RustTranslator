@@ -106,7 +106,7 @@ cd out && cargo run
 | 型 | プリミティブ型、`String`、配列（多次元を含む）、`null`、ボクシング（`Integer` 等。`Integer.valueOf` のキャッシュも Java と同じ）、ジェネリクス（消去して変換）、`List` / `ArrayList` / `LinkedList` / `ArrayDeque` / `Map` / `HashMap` / `LinkedHashMap` / `TreeMap` / `Set` / `HashSet` / `LinkedHashSet` / `TreeSet` / `PriorityQueue` / `Iterator` / `Map.Entry`、`Random`、`StringBuilder`、`Scanner` | 上記以外のコレクション、ストリーム API |
 | 演算 | Java と同じ意味の四則演算・剰余・シフト・ビット演算・比較・キャスト（オーバーフロー、ゼロ除算の例外、`MIN / -1` など）、`instanceof`（型パターンを含む）、参照の `==` | — |
 | 文 | if / while / do-while / for / 拡張 for（配列・`Iterable`）/ ラベル付き break・continue / switch 文（`->` 形式、fall-through する `:` 形式、int・char・String・enum）/ switch 式（`yield`）/ 型パターン・`case null`・ガード（`when`） | record パターン |
-| 例外 | `throw`、try / catch（複数の型・マルチキャッチ）/ finally、try-with-resources（suppressed を含む）、ユーザ定義例外クラス、`getMessage` / `getCause` / `printStackTrace`（スタックトレースの行は出ない）、実行時例外（NPE・配列の範囲外・ゼロ除算・`ClassCastException`・数値の解析失敗など）。未捕捉なら Java と同じ表示で終了コード 1 | — |
+| 例外 | Rust の `Result` で伝える（パニックは使わない）。`throw`、try / catch（複数の型・マルチキャッチ）/ finally、try-with-resources（suppressed を含む）、ユーザ定義例外クラス、`getMessage` / `getCause` / `getSuppressed` / `printStackTrace`（スタックトレースの行は出ない）、実行時例外（NPE・配列の範囲外・ゼロ除算・`ClassCastException`・数値の解析失敗など）の catch、ラムダ・比較関数・`toString` などから JDK の処理を通って伝わる例外。未捕捉なら Java と同じ表示で終了コード 1 | `ExceptionInInitializerError` の catch、`StackOverflowError` |
 | ラムダ | ラムダ式・メソッド参照（static・インスタンス・`this::`・`Type::instanceMethod`・`new`）、ユーザ定義の関数型インタフェース、`Runnable` / `Supplier` / `Consumer` / `Function` / `BiFunction` / `Predicate` / `UnaryOperator` / `BinaryOperator` / `Comparator`（`comparing` / `thenComparing` / `reversed` など） | — |
 | 文字列 | 連結、`String` の主なメソッド、`String.format` / `printf`（`%d` `%s` `%f` `%x` `%c` `%b` `%e` `%n` `%%`、幅・精度・フラグ）、`String.join` / `split`（単純な正規表現）、可変長引数 | 完全な正規表現 |
 | JDK API | `System.out` / `System.err` / `System.in`、`Math`、`Objects`、`Collections`、`Arrays`、ボックス型の static メソッド、`Object` のメソッド（一覧は `translator/j2r-mappings/src/main/resources/j2r/mappings/*.yaml`） | 上記以外（YAML にマッピングを追加すれば使える） |
@@ -117,6 +117,8 @@ cd out && cargo run
   （static 初期化ブロックは最初のアクセスの前に一度だけ実行する）。
 - マルチスレッドは未対応（static フィールドはスレッドごとに持つ）。
 - `Object.hashCode()` の既定値（識別ハッシュ）とそれを使う `toString()` の値は JVM と異なる。
+- NullPointerException の詳細メッセージ（JDK 14 以降の `Cannot invoke "..." because "..." is null`）は再現しない（メッセージは null）。
+- static 初期化で起きた例外は、未捕捉の `ExceptionInInitializerError` と同じ表示をして終了する（catch できない）。
 - 出力は常に UTF-8（Java はプラットフォームの文字コードに従う）。
 
 ## 6. 独自の API マッピングを追加する
@@ -134,6 +136,8 @@ classes:
 プレースホルダ: `{this}`（レシーバ）、`{0}`（引数の値）、`{&0}`（引数への参照）、`{s0}`（文字列化する引数）。
 シグネチャは消去後の型の完全修飾名で書く（例: `indexOf(java.lang.String,int)`）。テンプレート全体は
 関数呼び出し・メソッド呼び出し・パス、または括弧で囲んだ式にする。
+呼ぶ関数が例外を送出しうる（`jrt::JResult<T>` を返す）なら、テンプレートに `?` を付ける
+（例: `"my_crate::parse({&0})?"`）。`?` を含むテンプレートを使ったメソッドは、例外を送出しうるメソッドとして変換される。
 
 ## 7. Maven について
 

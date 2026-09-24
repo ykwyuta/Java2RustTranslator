@@ -10,7 +10,11 @@ thread_local! {
 
 /// 標準出力のバッファを書き出す（終了時・未捕捉例外時・System.err への出力前に呼ぶ）。
 pub fn flush_stdout() {
-    let _ = STDOUT.try_with(|o| o.borrow_mut().flush());
+    let _ = STDOUT.try_with(|o| {
+        if let Ok(mut o) = o.try_borrow_mut() {
+            let _ = o.flush();
+        }
+    });
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -67,12 +71,13 @@ impl PrintStream {
     }
 
     /// `print(char[])` / `println(char[])`。
-    pub fn print_chars(&self, chars: &crate::JArray<u16>, newline: bool) {
-        let mut s = String::from_utf16_lossy(&chars.to_vec());
+    pub fn print_chars(&self, chars: &crate::JArray<u16>, newline: bool) -> crate::JResult<()> {
+        let mut s = String::from_utf16_lossy(&chars.to_vec()?);
         if newline {
             s.push('\n');
         }
         self.write_str(&s);
+        Ok(())
     }
 
     /// `flush()`。

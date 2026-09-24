@@ -4,7 +4,9 @@
 use jrt::prelude::*;
 
 thread_local! {
-    pub static NAMES: std::cell::RefCell<JArray<JString>> = std::cell::RefCell::new(JArray::<JString>::new(3));
+    pub static NAMES: std::cell::RefCell<JArray<JString>> = std::cell::RefCell::new(jrt::rt::static_init(|| -> JResult<JArray<JString>> {
+        JArray::<JString>::new(3)
+    }));
 }
 
 thread_local! {
@@ -46,38 +48,39 @@ impl Mixed {
         Mixed::of(this).value.get()
     }
 
-    pub fn try_it(s: JString) -> i32 {
-        match jrt::try_block(|| -> jrt::Flow<i32> {
-            return jrt::Flow::Return(jrt::lang::number::parse_int(&s));
-            jrt::Flow::Normal
+    pub fn try_it(s: JString) -> JResult<i32> {
+        match jrt::try_block(|| -> JResult<jrt::Flow<i32>> {
+            return Ok(jrt::Flow::Return(jrt::lang::number::parse_int(&s)?));
+            Ok(jrt::Flow::Normal)
         }) {
-            Ok(jrt::Flow::Return(__v)) => return __v,
+            Ok(jrt::Flow::Return(__v)) => return Ok(__v),
             Ok(_) => {}
             Err(__e) => {
                 if __e.instance_of("java.lang.NumberFormatException") {
                     let e: JObject = __e;
-                    return -1;
+                    return Ok(-1);
                 } else {
-                    jrt::throw_obj(__e);
+                    return Err(__e);
                 }
             }
         }
         unreachable!()
     }
 
-    pub fn main(args: JArray<JString>) {
+    pub fn main(args: JArray<JString>) -> JResult<()> {
         let list: JObject = jrt::util::collections::new_list(jrt::util::collections::ListKind::ArrayList);
-        list.add(jrt::box_i32(1));
+        list.add(jrt::box_i32(1))?;
         let boxed: JObject = jrt::box_i32(5);
         let m: JObject = Mixed::new(3);
-        jrt::io::system_out().println(&Mixed::get(m.nn()).wrapping_add(list.size()).wrapping_add(boxed.clone().unbox_i32()));
-        jrt::io::system_out().println(&jrt::lang::format::format(&jstr!("%d"), &JArray::from_vec(vec![jrt::box_i32(3)])));
+        jrt::io::system_out().println(&Mixed::get(m.nn()?).wrapping_add(list.size()?).wrapping_add(boxed.clone().unbox_i32()?));
+        jrt::io::system_out().println(&jrt::lang::format::format(&jstr!("%d"), &JArray::from_vec(vec![jrt::box_i32(3)]))?);
         let s: JString = JString::null();
-        let r: JObject = jrt::lambda(&["java.lang.Runnable"], move |__args: &[JObject]| -> JObject {
+        let r: JObject = jrt::lambda(&["java.lang.Runnable"], move |__args: &[JObject]| -> JResult<JObject> {
             jrt::io::system_out().println("x");
-            JObject::null()
+            Ok(JObject::null())
         });
-        jrt::io::system_out().println(&Mixed::try_it(jstr!("12")).wrapping_add(NAMES.with(|c| c.borrow().clone()).length()));
+        jrt::io::system_out().println(&Mixed::try_it(jstr!("12"))?.wrapping_add(NAMES.with(|c| c.borrow().clone()).length()?));
+        Ok(())
     }
 }
 

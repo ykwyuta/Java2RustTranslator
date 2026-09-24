@@ -43,27 +43,27 @@ pub fn round_f32(a: f32) -> i32 {
 }
 
 /// `Math.floorDiv(int, int)`。
-pub fn floor_div_i32(a: i32, b: i32) -> i32 {
-    let q = crate::num::div_i32(a, b);
-    if a.wrapping_rem(b) != 0 && (a ^ b) < 0 { q.wrapping_sub(1) } else { q }
+pub fn floor_div_i32(a: i32, b: i32) -> crate::JResult<i32> {
+    let q = crate::num::div_i32(a, b)?;
+    Ok(if a.wrapping_rem(b) != 0 && (a ^ b) < 0 { q.wrapping_sub(1) } else { q })
 }
 
 /// `Math.floorMod(int, int)`。
-pub fn floor_mod_i32(a: i32, b: i32) -> i32 {
-    let m = crate::num::rem_i32(a, b);
-    if m != 0 && (m ^ b) < 0 { m.wrapping_add(b) } else { m }
+pub fn floor_mod_i32(a: i32, b: i32) -> crate::JResult<i32> {
+    let m = crate::num::rem_i32(a, b)?;
+    Ok(if m != 0 && (m ^ b) < 0 { m.wrapping_add(b) } else { m })
 }
 
 /// `Math.floorDiv(long, long)`。
-pub fn floor_div_i64(a: i64, b: i64) -> i64 {
-    let q = crate::num::div_i64(a, b);
-    if a.wrapping_rem(b) != 0 && (a ^ b) < 0 { q.wrapping_sub(1) } else { q }
+pub fn floor_div_i64(a: i64, b: i64) -> crate::JResult<i64> {
+    let q = crate::num::div_i64(a, b)?;
+    Ok(if a.wrapping_rem(b) != 0 && (a ^ b) < 0 { q.wrapping_sub(1) } else { q })
 }
 
 /// `Math.floorMod(long, long)`。
-pub fn floor_mod_i64(a: i64, b: i64) -> i64 {
-    let m = crate::num::rem_i64(a, b);
-    if m != 0 && (m ^ b) < 0 { m.wrapping_add(b) } else { m }
+pub fn floor_mod_i64(a: i64, b: i64) -> crate::JResult<i64> {
+    let m = crate::num::rem_i64(a, b)?;
+    Ok(if m != 0 && (m ^ b) < 0 { m.wrapping_add(b) } else { m })
 }
 
 /// `Math.signum(double)`。

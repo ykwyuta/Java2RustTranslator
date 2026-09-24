@@ -47,7 +47,7 @@ Java2RustTranslator/
 │       │   ├── lib.rs               # prelude, jstr! / jconcat! マクロ
 │       │   ├── num.rs               # Java の意味の整数除算・剰余
 │       │   ├── array.rs             # JArray<T>（共有・固定長・境界検査）、arraycopy
-│       │   ├── rt.rs                # run_main、未捕捉例外（パニック）の表示と終了コード、exit
+│       │   ├── rt.rs                # JResult・例外の送出と try、run_main（未捕捉例外の表示と終了コード）、exit
 │       │   ├── io.rs                # System.out / System.err / System.in
 │       │   ├── lang/                # JString, JChar, JStringify, StringBuilder, Math, Integer/Double 等, Character
 │       │   └── util/                # Arrays, Scanner

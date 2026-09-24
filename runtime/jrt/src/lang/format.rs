@@ -7,14 +7,14 @@
 use crate::array::JArray;
 use crate::lang::boxed::{JByte, JCharacter, JDouble, JFloat, JInteger, JLong, JShort};
 use crate::lang::string::JString;
-use crate::lang::stringify::{JChar, JStringify};
+use crate::lang::stringify::JChar;
 use crate::object::JObject;
-use crate::rt::throw;
+use crate::rt::{throw, JResult};
 
 /// `String.format(fmt, args...)`。
-pub fn format(fmt: &JString, args: &JArray<JObject>) -> JString {
-    let args = if args.is_null() { Vec::new() } else { args.to_vec() };
-    JString::from(format_str(fmt.as_str(), &args))
+pub fn format(fmt: &JString, args: &JArray<JObject>) -> JResult<JString> {
+    let args = if args.is_null() { Vec::new() } else { args.to_vec()? };
+    Ok(JString::from(format_str(fmt.as_str()?, &args)?))
 }
 
 #[derive(Default)]
@@ -30,11 +30,11 @@ struct Spec {
     precision: Option<usize>,
 }
 
-fn illegal(msg: String) -> ! {
+fn illegal<T>(msg: String) -> JResult<T> {
     throw("java.util.IllegalFormatException", Some(&msg))
 }
 
-pub fn format_str(fmt: &str, args: &[JObject]) -> String {
+pub fn format_str(fmt: &str, args: &[JObject]) -> JResult<String> {
     let chars: Vec<char> = fmt.chars().collect();
     let mut out = String::new();
     let mut i = 0;
@@ -88,7 +88,7 @@ pub fn format_str(fmt: &str, args: &[JObject]) -> String {
             spec.precision = Some(chars[ps..i].iter().collect::<String>().parse().unwrap_or(0));
         }
         if i >= chars.len() {
-            illegal(format!("Format specifier '%{}'", chars[start..].iter().collect::<String>()));
+            return illegal(format!("Format specifier '%{}'", chars[start..].iter().collect::<String>()));
         }
         let conv = chars[i];
         i += 1;
@@ -109,12 +109,12 @@ pub fn format_str(fmt: &str, args: &[JObject]) -> String {
         };
         let arg = match args.get(idx) {
             Some(a) => a.clone(),
-            None => throw("java.util.MissingFormatArgumentException", Some(&format!("Format specifier '%{conv}'"))),
+            None => return throw("java.util.MissingFormatArgumentException", Some(&format!("Format specifier '%{conv}'"))),
         };
-        let text = convert(conv, &spec, &arg);
+        let text = convert(conv, &spec, &arg)?;
         out.push_str(&pad(&spec, text));
     }
-    out
+    Ok(out)
 }
 
 fn pad(spec: &Spec, s: String) -> String {
@@ -131,10 +131,8 @@ fn pad(spec: &Spec, s: String) -> String {
     }
 }
 
-fn stringify(o: &JObject) -> String {
-    let mut s = String::new();
-    o.append_to(&mut s);
-    s
+fn stringify(o: &JObject) -> JResult<String> {
+    crate::lang::stringify::to_java_string(o)
 }
 
 enum Num {
@@ -165,17 +163,17 @@ fn number(o: &JObject) -> Num {
     Num::None
 }
 
-fn mismatch(conv: char, o: &JObject) -> ! {
+fn mismatch<T>(conv: char, o: &JObject) -> JResult<T> {
     throw(
         "java.util.IllegalFormatConversionException",
-        Some(&format!("{conv} != {}", o.class_name())),
+        Some(&format!("{conv} != {}", o.class_name()?)),
     )
 }
 
-fn convert(conv: char, spec: &Spec, arg: &JObject) -> String {
-    match conv {
+fn convert(conv: char, spec: &Spec, arg: &JObject) -> JResult<String> {
+    Ok(match conv {
         's' | 'S' => {
-            let mut s = stringify(arg);
+            let mut s = stringify(arg)?;
             if let Some(p) = spec.precision {
                 s = s.chars().take(p).collect();
             }
@@ -196,26 +194,26 @@ fn convert(conv: char, spec: &Spec, arg: &JObject) -> String {
             if conv == 'B' { s.to_uppercase() } else { s }
         }
         'h' | 'H' => {
-            let s = if arg.is_null() { "null".to_string() } else { format!("{:x}", arg.hash_code() as u32) };
+            let s = if arg.is_null() { "null".to_string() } else { format!("{:x}", arg.hash_code()? as u32) };
             if conv == 'H' { s.to_uppercase() } else { s }
         }
         'c' | 'C' => {
             if arg.is_null() {
-                return "null".to_string();
+                return Ok("null".to_string());
             }
             let s = if let Some(c) = arg.downcast_ref::<JCharacter>() {
                 JString::value_of(&JChar(c.value)).to_string()
             } else if let Num::Int(v, _) = number(arg) {
                 char::from_u32(v as u32).map(|c| c.to_string()).unwrap_or_default()
             } else {
-                mismatch(conv, arg)
+                return mismatch(conv, arg);
             };
             if conv == 'C' { s.to_uppercase() } else { s }
         }
         'd' => match number(arg) {
             Num::Int(v, _) => integer(spec, v as i128),
             _ if arg.is_null() => "null".to_string(),
-            _ => mismatch(conv, arg),
+            _ => return mismatch(conv, arg),
         },
         'x' | 'X' | 'o' => match number(arg) {
             Num::Int(v, bits) => {
@@ -230,19 +228,19 @@ fn convert(conv: char, spec: &Spec, arg: &JObject) -> String {
                 zero_pad(spec, s, false)
             }
             _ if arg.is_null() => "null".to_string(),
-            _ => mismatch(conv, arg),
+            _ => return mismatch(conv, arg),
         },
         'f' | 'e' | 'E' | 'g' | 'G' => {
             let v = match number(arg) {
                 Num::Float(v) => v,
-                Num::Int(..) => mismatch(conv, arg),
-                Num::None if arg.is_null() => return "null".to_string(),
-                Num::None => mismatch(conv, arg),
+                Num::Int(..) => return mismatch(conv, arg),
+                Num::None if arg.is_null() => return Ok("null".to_string()),
+                Num::None => return mismatch(conv, arg),
             };
             floating(conv, spec, v)
         }
-        _ => throw("java.util.UnknownFormatConversionException", Some(&format!("Conversion = '{conv}'"))),
-    }
+        _ => return throw("java.util.UnknownFormatConversionException", Some(&format!("Conversion = '{conv}'"))),
+    })
 }
 
 fn group(digits: &str) -> String {
