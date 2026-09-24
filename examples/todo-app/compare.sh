@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Spring Boot 版と Rust 版をそれぞれ空のデータベースで起動し、compare.py で応答を比べる。
+# Spring Boot 版と Rust 版（j2r が生成）をそれぞれ空のデータベースで起動し、compare.py で応答を比べる。
 #
 #   PG_ADMIN_URL  データベースを作り直せる接続 URL（既定: postgres://todo:todo@localhost:5432/postgres。CREATEDB 権限が必要）
 #   SPRING_PORT / RUST_PORT  起動するポート（既定: 18080 / 18081）
@@ -29,8 +29,9 @@ DATABASE_URL="jdbc:postgresql://$PG_HOST:$PG_PORT/todo_compare_spring" DATABASE_
 DATABASE_PASSWORD="$PG_PASSWORD" PORT=$SPRING_PORT \
     java -jar spring-boot/build/libs/todo-spring-boot-0.0.1-SNAPSHOT.jar > spring-boot/build/compare.log 2>&1 &
 pids+=($!)
-(cd rust && DATABASE_URL="postgres://$PG_USER:$PG_PASSWORD@$PG_HOST:$PG_PORT/todo_compare_rust" PORT=$RUST_PORT \
-    exec target/release/todo > target/compare.log 2>&1) &
+# Rust 版（j2r が生成）も Spring 版と同じ環境変数（application.yml のプレースホルダ）で設定する。
+(cd rust && DATABASE_URL="jdbc:postgresql://$PG_HOST:$PG_PORT/todo_compare_rust" DATABASE_USERNAME="$PG_USER" \
+    DATABASE_PASSWORD="$PG_PASSWORD" PORT=$RUST_PORT exec target/release/todo > target/compare.log 2>&1) &
 pids+=($!)
 
 for port in "$SPRING_PORT" "$RUST_PORT"; do

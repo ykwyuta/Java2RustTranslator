@@ -6,4 +6,6 @@ dependencies {
     api(project(":j2r-jir"))
     api(project(":j2r-rir"))
     api(project(":j2r-common"))
+    // application.yml を読む
+    implementation(libs.snakeyaml.engine)
 }

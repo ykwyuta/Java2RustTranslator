@@ -80,12 +80,22 @@ public final class Translator {
                 options.crateName(), diags);
         Path root = options.outputDir();
         try {
-            CargoProjectWriter.deleteRecursively(root.resolve("src"));
-            CargoProjectWriter.deleteRecursively(root.resolve("migrations"));
+            // Cargo.toml の「# j2r:keep」の行から後ろ（手で書いたテストの dev-dependencies など）は残す。
+            String keep = "";
+            Path cargoToml = root.resolve("Cargo.toml");
+            if (Files.exists(cargoToml)) {
+                String old = Files.readString(cargoToml, StandardCharsets.UTF_8);
+                int i = old.indexOf("\n# j2r:keep");
+                keep = i < 0 ? "" : old.substring(i);
+            }
+            for (String dir : List.of("src", "migrations", "templates", "static")) {
+                CargoProjectWriter.deleteRecursively(root.resolve(dir));
+            }
             for (SpringTranslator.GeneratedFile g : generated) {
                 Path p = root.resolve(g.path());
                 Files.createDirectories(p.getParent());
-                Files.writeString(p, g.content(), StandardCharsets.UTF_8);
+                String content = g.path().equals("Cargo.toml") ? g.content() + keep : g.content();
+                Files.writeString(p, content, StandardCharsets.UTF_8);
             }
         } catch (IOException e) {
             throw new UncheckedIOException(e);

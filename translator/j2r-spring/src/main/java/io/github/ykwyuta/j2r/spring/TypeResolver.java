@@ -140,6 +140,8 @@ final class TypeResolver {
                 case ENUM -> new RT.Named(rustName, List.of(use), true, RT.Named.Kind.ENUM, name);
                 case RECORD -> new RT.Named(rustName, List.of(use), isCopy(decl), RT.Named.Kind.RECORD, name);
                 case ENTITY -> new RT.Named(rustName, List.of(use), false, RT.Named.Kind.ENTITY, name);
+                case FORM -> new RT.Named(rustName, List.of(use), false, RT.Named.Kind.FORM, name);
+                case SERVICE -> new RT.Named(rustName, List.of(use), false, RT.Named.Kind.SERVICE, name);
                 case EXCEPTION -> new RT.ErrorValue();
                 default -> new RT.Unknown(name);
             };

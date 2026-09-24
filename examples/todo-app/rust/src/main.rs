@@ -1,22 +1,18 @@
-//! TodoApplication.java（@SpringBootApplication の main）に相当する。
+//! Translated from `TodoApplication` (@SpringBootApplication) by Java2RustTranslator.
 
-use todo::{AppConfig, AppState, app};
+use todo::config::AppConfig;
+use todo::{AppState, Beans, app, connect};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| "info,todo=debug".into()),
-        )
+        .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .init();
-
-    let config = AppConfig::load()?;
-    let pool = todo::connect(&config).await?;
-    let state = AppState::new(pool);
-
+    let config = AppConfig::load();
+    let pool = connect(&config).await?;
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", config.port)).await?;
     tracing::info!("listening on http://{}", listener.local_addr()?);
-    axum::serve(listener, app(state)).await?;
+    axum::serve(listener, app(AppState::new(pool, Beans::new()))).await?;
     Ok(())
 }

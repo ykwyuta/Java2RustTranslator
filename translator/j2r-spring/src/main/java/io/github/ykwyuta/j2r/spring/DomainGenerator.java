@@ -36,7 +36,7 @@ final class DomainGenerator {
         List<RItem> items = new ArrayList<>();
         switch (model.role(t.qualifiedName())) {
             case ENUM -> enumItems(t, name, imports, items);
-            case RECORD, ENTITY -> structItems(t, name, imports, items);
+            case RECORD, ENTITY, FORM -> structItems(t, name, imports, items);
             default -> throw new IllegalArgumentException(t.qualifiedName());
         }
         List<RItem> all = new ArrayList<>(imports.items());
@@ -87,6 +87,9 @@ final class DomainGenerator {
             if (m.isConstructor() && !m.params().isEmpty() && !record) {
                 tr.report(m.pos(), t.simpleName() + ": constructors with parameters are not supported yet (use the setters)");
             }
+        }
+        if (tr.model().is(t.qualifiedName(), SpringModel.Role.FORM)) {
+            methods.addAll(new FormGenerator(tr).methods(t, imports));
         }
         if (!methods.isEmpty()) {
             items.add(new RItem.Impl(List.of(), name, methods));

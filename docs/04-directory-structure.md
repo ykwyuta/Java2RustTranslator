@@ -68,7 +68,7 @@ Java2RustTranslator/
 │
 ├── examples/
 │   ├── hello-gradle/                # Gradle プラグインの利用例（./gradlew translateToRust cargoRun）
-│   └── todo-app/                    # Spring Boot → Rust の移行例（spring-boot/・rust/（Web 層）・rust-core/（j2r が生成））
+│   └── todo-app/                    # Spring Boot → Rust の移行例（spring-boot/ と、j2r が生成した rust/）
 │
 └── .github/workflows/ci.yml         # cargo test + gradle build（単体・ゴールデン・E2E）+ 利用例の実行
 ```

@@ -186,10 +186,14 @@ classes:
 ## 9. Spring Boot + MyBatis のアプリを変換する（--framework spring）
 
 `--framework spring`（Gradle プラグインでは `framework.set("spring")`）を指定すると、jrt の上に変換する代わりに、
-Spring Boot + MyBatis のアプリの **`@Mapper`（+ Mapper XML）・`@Service`・それらが使うクラス / record / enum / 例外**を、
-sqlx を使う Rust のライブラリ crate に変換する。Web 層（`@Controller` など）と設定クラスは変換しない。
+Spring Boot + Spring MVC + MyBatis + Thymeleaf のアプリ全体を、axum + sqlx + askama の Rust のアプリ（crate）に変換する。
+`@Controller`・フォーム（Bean Validation）・`@ControllerAdvice`・Thymeleaf のテンプレート・`@Configuration` の `@Bean`・
+`application.yml`・`messages.properties`・`@Service`・`@Mapper`（+ Mapper XML）・それらが使うクラス / record / enum / 例外が対象。
+
+- リソース（`src/main/resources`）を `--resources` で渡す（Gradle プラグインは自動で渡す）。
+- 出力先の `src`・`templates`・`static`・`migrations` は毎回作り直す。`Cargo.toml` の `# j2r:keep` の行より後ろと `tests/` は残る。
 
 - 型検査に Spring・MyBatis の jar が要るので、コンパイルクラスパスを渡す（Gradle プラグインは自動で渡す）。
 - 参照型の null は JSpecify の `@Nullable`（`@NullMarked` のパッケージ）で決める。`@Nullable` の型が `Option<T>` になる。
 - 変換規則・変換する範囲・未対応の機能は [07-spring-to-rust.md](07-spring-to-rust.md) の §3・§7。
-- 利用例: [examples/todo-app](../examples/todo-app)（`spring-boot/` で `./gradlew translateToRust` を実行すると `rust-core/` を作り直す）。
+- 利用例: [examples/todo-app](../examples/todo-app)（`spring-boot/` で `./gradlew translateToRust` を実行すると `rust/` を作り直す）。

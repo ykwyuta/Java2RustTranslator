@@ -53,8 +53,39 @@ final class BodyLowerer {
     /** 関数の最後の値の扱い。 */
     enum Tail { VALUE, COMMIT }
 
+    /**
+     * 変換の一部を置き換えるフック（コントローラの Model・RedirectAttributes・ビュー名の return など）。
+     * null を返す・false を返すと通常どおり変換する。
+     */
+    interface Hooks {
+        default boolean stmt(Stmt s, Ctx ctx, List<RStmt> out) {
+            return false;
+        }
+
+        default RV call(Expr.Call c, Ctx ctx) {
+            return null;
+        }
+
+        default RV fieldAccess(Expr.FieldAccess fa, Ctx ctx) {
+            return null;
+        }
+
+        /** return の値（Ok などで包んだ関数の戻り値そのもの）。 */
+        default RExpr returnValue(Expr value, Ctx ctx) {
+            return null;
+        }
+
+        default void enterBlock() {
+        }
+
+        default void exitBlock() {
+        }
+    }
+
     /** 1 つの関数の変換の状態。 */
     static final class Ctx {
+        /** 変換の一部を置き換えるフック（なければ null）。 */
+        Hooks hooks;
         final Decl.TypeDecl owner;
         final boolean hasSelf;
         final RT ret;
@@ -157,6 +188,9 @@ final class BodyLowerer {
 
     private RExpr.Block block(List<Stmt> stmts, Ctx ctx, boolean fnBody) {
         ctx.scopes.push(new HashMap<>());
+        if (ctx.hooks != null) {
+            ctx.hooks.enterBlock();
+        }
         List<RStmt> out = new ArrayList<>();
         RExpr tail = null;
         for (int i = 0; i < stmts.size(); i++) {
@@ -177,7 +211,16 @@ final class BodyLowerer {
         if (fnBody && tail == null && !terminates(stmts)) {
             tail = finishVoid(ctx, out);
         }
+        if (ctx.hooks != null) {
+            ctx.hooks.exitBlock();
+        }
         ctx.scopes.pop();
+        // let x = e; x  →  e
+        if (tail instanceof RExpr.Path p && !out.isEmpty() && out.get(out.size() - 1) instanceof RStmt.Let let && !let.mut()
+                && let.name().equals(p.path()) && let.init() != null) {
+            tail = let.init();
+            out.remove(out.size() - 1);
+        }
         return new RExpr.Block(out, tail, null, false);
     }
 
@@ -187,7 +230,7 @@ final class BodyLowerer {
      */
     private int defaultWithSetters(List<Stmt> stmts, int i) {
         if (!(stmts.get(i) instanceof Stmt.LocalVar lv) || !(lv.init() instanceof Expr.New n) || !n.args().isEmpty()
-                || model.role(n.constructor().owner()) != SpringModel.Role.ENTITY) {
+                || !isEntityLike(model.role(n.constructor().owner()))) {
             return 0;
         }
         int count = 0;
@@ -238,6 +281,12 @@ final class BodyLowerer {
     private RExpr finalReturn(Stmt.Return r, Ctx ctx, List<RStmt> out) {
         if (r.value() == null) {
             return finishVoid(ctx, out);
+        }
+        if (ctx.hooks != null) {
+            RExpr hooked = ctx.hooks.returnValue(r.value(), ctx);
+            if (hooked != null) {
+                return hooked;
+            }
         }
         RV v = expr(r.value(), ctx);
         if (ctx.tail == Tail.COMMIT) {
@@ -292,6 +341,16 @@ final class BodyLowerer {
     // ================================================================== 文
 
     private void stmt(Stmt s, Ctx ctx, List<RStmt> out) {
+        if (ctx.hooks != null && ctx.hooks.stmt(s, ctx, out)) {
+            return;
+        }
+        if (ctx.hooks != null && s instanceof Stmt.Return r && r.value() != null) {
+            RExpr hooked = ctx.hooks.returnValue(r.value(), ctx);
+            if (hooked != null) {
+                out.add(new RStmt.ExprStmt(new RExpr.Return(hooked), true));
+                return;
+            }
+        }
         switch (s) {
             case Stmt.Block b -> out.add(new RStmt.ExprStmt(block(b.stmts(), ctx, false), false));
             case Stmt.LocalVar lv -> localVar(lv, ctx, out);
@@ -346,13 +405,41 @@ final class BodyLowerer {
             if (check.key().startsWith("l:") && !check.key().contains(".")) {
                 // ローカル変数は Some の中身を取り出して同じ名前で束縛し直す（元の Option は使えなくなるので移動してよい）。
                 String name = check.key().substring(2);
-                out.add(new RStmt.LetElse("Some(" + check.binding() + ")", check.raw().expr(), orElse));
+                if (isReturnNone(orElse, ctx)) {
+                    out.add(new RStmt.Let(check.binding(), false, null, new RExpr.Try(check.raw().expr())));
+                } else {
+                    out.add(new RStmt.LetElse("Some(" + check.binding() + ")", check.raw().expr(), orElse));
+                }
                 ctx.declare(name, check.binding(), ((RT.Opt) check.raw().type()).inner());
             } else {
-                out.add(new RStmt.LetElse("Some(" + check.binding() + ")", check.view().expr(), orElse));
+                if (isReturnNone(orElse, ctx)) {
+                    out.add(new RStmt.Let(check.binding(), false, null, new RExpr.Try(check.view().expr())));
+                } else {
+                    out.add(new RStmt.LetElse("Some(" + check.binding() + ")", check.view().expr(), orElse));
+                }
                 bind(check, ctx);
             }
             return;
+        }
+        // if (x == null || rest) return ...;  →  let Some(x) = x else { return ...; }; if rest { return ...; }
+        if (i.elseStmt() == null && terminates(List.of(i.thenStmt())) && i.condition() instanceof Expr.Binary b && b.op() == BinaryOp.OR) {
+            List<Expr> chain = new ArrayList<>();
+            flatten(b, BinaryOp.OR, chain);
+            Map<String, Integer> savedUses = new HashMap<>(ctx.uses);
+            NullCheck first = nullCheck(chain.get(0), ctx);
+            if (first != null && first.isNull()) {
+                Expr rest = chain.get(1);
+                for (int k = 2; k < chain.size(); k++) {
+                    rest = new Expr.Binary(BinaryOp.OR, rest, chain.get(k), JType.BOOLEAN, JType.BOOLEAN, rest.pos());
+                }
+                ifStmt(new Stmt.If(chain.get(0), i.thenStmt(), null, i.pos()), restoreUses(ctx, savedUses), out);
+                ifStmt(new Stmt.If(rest, i.thenStmt(), null, i.pos()), ctx, out);
+                return;
+            }
+            if (first != null) {
+                ctx.uses.clear();
+                ctx.uses.putAll(savedUses);
+            }
         }
         // if (x != null) { ... }  →  if let Some(x) = x { ... }
         if (check != null && !check.isNull()) {
@@ -369,6 +456,19 @@ final class BodyLowerer {
         RExpr.Block then = block(stmts(i.thenStmt()), ctx, false);
         RExpr orElse = i.elseStmt() == null ? null : elseBranch(i.elseStmt(), ctx);
         out.add(new RStmt.ExprStmt(new RExpr.If(cond, then, orElse), false));
+    }
+
+    /** {@code { return None; }}（Option を返す関数なら let-else の代わりに ? を使える）。 */
+    private static boolean isReturnNone(RExpr.Block b, Ctx ctx) {
+        return !ctx.fallible && ctx.ret instanceof RT.Opt && b.tail() == null && b.stmts().size() == 1
+                && b.stmts().get(0) instanceof RStmt.ExprStmt es && es.expr() instanceof RExpr.Return r
+                && r.value() instanceof RExpr.Path p && p.path().equals("None");
+    }
+
+    private static Ctx restoreUses(Ctx ctx, Map<String, Integer> saved) {
+        ctx.uses.clear();
+        ctx.uses.putAll(saved);
+        return ctx;
     }
 
     private RExpr elseBranch(Stmt s, Ctx ctx) {
@@ -659,6 +759,12 @@ final class BodyLowerer {
     }
 
     private RV fieldAccess(Expr.FieldAccess fa, Ctx ctx) {
+        if (ctx.hooks != null) {
+            RV hooked = ctx.hooks.fieldAccess(fa, ctx);
+            if (hooked != null) {
+                return hooked;
+            }
+        }
         RV recv = expr(fa.receiver(), ctx);
         RT t = types.field(fa.owner(), fa.name());
         if (t == null) {
@@ -786,6 +892,17 @@ final class BodyLowerer {
             }
             RV none = expr(whenNone, ctx);
             RT t = unify(some.type(), none.type());
+            if (some.expr() instanceof RExpr.Path p && p.path().equals(check.binding()) && none.type().copy()
+                    && (none.expr() instanceof RExpr.Lit || none.expr() instanceof RExpr.Path)) {
+                // x == null ? default : x  →  x.unwrap_or(default)
+                RExpr d = coerce(none, some.type());
+                return RV.of(new RExpr.MethodCall(check.view().expr(), "unwrap_or", List.of(d)), some.type());
+            }
+            if (none.type().copy() && (none.expr() instanceof RExpr.Lit || none.expr() instanceof RExpr.Path) && sameType(some.type(), t)) {
+                // x == null ? default : f(x)  →  x.map_or(default, |x| f(x))
+                return RV.of(new RExpr.MethodCall(check.view().expr(), "map_or", List.of(coerce(none, t),
+                        RExpr.Closure.of(List.of(check.binding()), coerce(some, t)))), t);
+            }
             RExpr.Block then = inline(coerce(some, t));
             RExpr.Block orElse = inline(coerce(none, t));
             return RV.of(new RExpr.IfLet("Some(" + check.binding() + ")", check.view().expr(), then, orElse), t);
@@ -924,6 +1041,12 @@ final class BodyLowerer {
     // ================================================================== 呼び出し
 
     private RV call(Expr.Call c, Ctx ctx) {
+        if (ctx.hooks != null) {
+            RV hooked = ctx.hooks.call(c, ctx);
+            if (hooked != null) {
+                return hooked;
+            }
+        }
         MethodRef m = c.method();
         String key = m.key();
         if (plans.mapperFns.containsKey(key)) {
@@ -983,7 +1106,8 @@ final class BodyLowerer {
         MethodRef m = c.method();
         List<RExpr> args = new ArrayList<>();
         String name = plan.rustName();
-        if (plan.needsConn()) {
+        boolean external = !m.owner().equals(ctx.owner.qualifiedName());
+        if (plan.needsConn() && !external) {
             if (ctx.conn == null || plan.helperName() == null) {
                 return RV.of(unsupported(c.pos(), "call to " + m.name() + " needs a database connection"), plan.ret());
             }
@@ -1036,7 +1160,7 @@ final class BodyLowerer {
             }
             return RV.of(new RExpr.StructLit(t.text(imports), fields), t);
         }
-        if (role == SpringModel.Role.ENTITY && n.args().isEmpty()) {
+        if (isEntityLike(role) && n.args().isEmpty()) {
             return RV.of(new RExpr.Call(new RExpr.Path(t.text(imports) + "::default"), List.of()), t);
         }
         return RV.of(unsupported(n.pos(), "new " + owner), t);
@@ -1168,6 +1292,11 @@ final class BodyLowerer {
     }
 
     // ================================================================== 補助
+
+    /** getter / setter のある普通のクラス（エンティティ・フォーム）。 */
+    static boolean isEntityLike(SpringModel.Role role) {
+        return role == SpringModel.Role.ENTITY || role == SpringModel.Role.FORM;
+    }
 
     RExpr unsupported(SourcePos pos, String what) {
         diags.report(DiagnosticCode.SPRING_UNSUPPORTED, pos, what + " is not supported yet");

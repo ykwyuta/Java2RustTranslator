@@ -1,9 +1,11 @@
-//! HomeController.java に相当する。
+//! Translated from `HomeController` (HomeController.java) by Java2RustTranslator.
 
 use axum::response::Response;
 
-use super::redirect;
+use crate::app::AppError;
+use crate::spring_web::redirect;
 
-pub async fn home() -> Response {
-    redirect("/todos")
+/// `GET /`
+pub async fn home() -> Result<Response, AppError> {
+    Ok(redirect("/todos", &[]))
 }

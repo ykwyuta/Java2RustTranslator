@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Library - Books</title>
+    <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<nav>
+    <a href="/books">Books</a>
+    {% if let Some(notice) = notice %}<p class="notice">{{ notice }}</p>{% endif %}
+</nav>
+<form action="/books" method="get">
+    <input type="search" name="keyword" value="{% if let Some(value) = keyword %}{{ value }}{% endif %}">
+    <label><input type="checkbox" name="inStock" value="true"> in stock</label>
+</form>
+{% if !(summary.is_empty()) %}<p>
+    <span>{{ summary.books }}</span> books,
+    <span>{{ summary.total_stock }}</span> in stock
+</p>{% endif %}
+{% if !(books.is_empty()) %}<table>
+    {% for book in books %}<tr class="{% if book.is_available() %}available{% else %}empty{% endif %}{% if (loop.index % 2 == 1) %} odd{% endif %}">
+        <td>{{ loop.index }}</td>
+        <td><a href="/books/{{ book.id }}">{{ book.title }}</a></td>
+        <td>{% if let Some(value2) = book.author.present() %}{{ value2 }}{% else %}unknown{% endif %}</td>
+        <td>{{ book.stock }}</td>
+    </tr>{% endfor %}
+</table>{% endif %}
+{% if books.is_empty() %}<p>No books{% if keyword.is_some() %}<span> for {% if let Some(value3) = keyword %}{{ value3 }}{% endif %}</span>{% endif %}.</p>{% endif %}
+<a href="/books/new">Add</a>
+</body>
+</html>

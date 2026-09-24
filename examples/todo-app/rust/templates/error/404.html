@@ -1,7 +1,19 @@
-{% extends "base.html" %}
-{% block title %}見つかりません{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>見つかりません | Todo</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="/todos">Todo</a>
+</header>
+<main class="container">
     <h1>404 Not Found</h1>
-    <p>{% if let Some(message) = message %}{{ message }}{% else %}ページが見つかりませんでした{% endif %}</p>
+    <p>{% if let Some(value) = message.present() %}{{ value }}{% else %}ページが見つかりませんでした{% endif %}</p>
     <a class="button" href="/todos">一覧に戻る</a>
-{% endblock %}
+</main>
+</body>
+</html>

@@ -121,9 +121,7 @@ impl BookService {
     }
 
     fn normalize(&self, keyword: Option<&str>) -> Option<String> {
-        let Some(keyword) = keyword else {
-            return None;
-        };
+        let keyword = keyword?;
         let s = keyword.trim().to_string();
         if s.is_empty() {
             None

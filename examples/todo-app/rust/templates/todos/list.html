@@ -1,9 +1,17 @@
-{% extends "base.html" %}
-{% block title %}一覧{% endblock %}
-{% block content %}
-    {%- if let Some(message) = message %}
-    <div class="flash">{{ message }}</div>
-    {%- endif %}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>一覧 | Todo</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="/todos">Todo</a>
+</header>
+<main class="container">
+    {% if let Some(message) = message %}<div class="flash">{{ message }}</div>{% endif %}
 
     <div class="toolbar">
         <nav class="filters">
@@ -22,33 +30,21 @@
         <a class="button primary" href="/todos/new">新規作成</a>
     </div>
 
-    {% if todos.is_empty() -%}
-    <p class="empty">Todo はありません</p>
-    {%- else -%}
-    <ul class="todo-list">
-        {%- for todo in todos %}
-        <li class="todo{% if todo.done %} done{% else if todo.is_overdue(*today) %} overdue{% endif %}">
+    {% if todos.is_empty() %}<p class="empty">Todo はありません</p>{% endif %}
+
+    {% if !(todos.is_empty()) %}<ul class="todo-list">
+        {% for todo in todos %}<li class="todo{% if todo.done %} done{% else %}{% if todo.is_overdue(*today) %} overdue{% endif %}{% endif %}">
             <form action="/todos/{{ todo.id }}/toggle" method="post" class="inline">
                 <input type="hidden" name="filter" value="{{ filter }}">
-                {%- if todo.done %}
-                <button type="submit" class="check" title="未完了に戻す">✔</button>
-                {%- else %}
-                <button type="submit" class="check" title="完了にする"></button>
-                {%- endif %}
+                <button type="submit" class="check" title="{% if todo.done %}未完了に戻す{% else %}完了にする{% endif %}">{% if todo.done %}✔{% else %}{% endif %}</button>
             </form>
             <div class="body">
                 <span class="title">{{ todo.title }}</span>
-                {%- if let Some(description) = todo.description %}
-                <p class="description">{{ description }}</p>
-                {%- endif %}
-                {%- if let Some(due_date) = todo.due_date %}
-                <span class="due">
+                {% if let Some(description) = todo.description %}<p class="description">{{ description }}</p>{% endif %}
+                {% if let Some(due_date) = todo.due_date %}<span class="due">
                     期限: <span>{{ due_date.format("%Y/%m/%d") }}</span>
-                    {%- if todo.is_overdue(*today) %}
-                    <span class="badge">期限切れ</span>
-                    {%- endif %}
-                </span>
-                {%- endif %}
+                    {% if todo.is_overdue(*today) %}<span class="badge">期限切れ</span>{% endif %}
+                </span>{% endif %}
             </div>
             <div class="actions">
                 <a class="button" href="/todos/{{ todo.id }}/edit">編集</a>
@@ -57,15 +53,13 @@
                     <button type="submit" class="danger">削除</button>
                 </form>
             </div>
-        </li>
-        {%- endfor %}
-    </ul>
-    {%- endif %}
+        </li>{% endfor %}
+    </ul>{% endif %}
 
-    {%- if summary.completed > 0 %}
-    <form action="/todos/completed/delete" method="post" class="footer"
+    {% if summary.completed > 0 %}<form action="/todos/completed/delete" method="post" class="footer"
           onsubmit="return confirm('完了済みの Todo をすべて削除しますか？');">
         <button type="submit" class="danger">完了済みを削除</button>
-    </form>
-    {%- endif %}
-{% endblock %}
+    </form>{% endif %}
+</main>
+</body>
+</html>

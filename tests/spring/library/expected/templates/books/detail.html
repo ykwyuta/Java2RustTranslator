@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Library - {{ book.title }}</title>
+    <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<nav>
+    <a href="/books">Books</a>
+    {% if let Some(notice) = notice %}<p class="notice">{{ notice }}</p>{% endif %}
+</nav>
+<h1>{{ label }}</h1>
+<dl>
+    <dt>Author</dt>
+    <dd>{% if let Some(value) = book.author.present() %}{{ value }}{% else %}(unknown){% endif %}</dd>
+    <dt>Stock</dt>
+    <dd>{{ book.stock }} copies</dd>
+</dl>
+{% if !(book.archived) %}<form action="/books/{{ book.id }}/archive" method="post">
+    <button type="submit">Archive</button>
+</form>{% endif %}
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:fragment="head(title)">
+    <meta charset="UTF-8">
+    <title th:text="'Library - ' + ${title}">Library</title>
+    <link rel="stylesheet" th:href="@{/app.css}">
+</head>
+<body>
+<nav th:fragment="nav">
+    <a th:href="@{/books}">Books</a>
+    <p th:if="${notice}" class="notice" th:text="${notice}">notice</p>
+</nav>
+</body>
+</html>

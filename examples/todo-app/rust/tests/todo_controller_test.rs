@@ -1,6 +1,8 @@
 //! TodoControllerTest.java に相当する結合テスト。
 //!
-//! #[sqlx::test] がテストごとに空のデータベースを作り、todo_core::MIGRATOR（schema.sql）を流してから PgPool を渡す。
+//! テスト対象のアプリ（src/）は j2r が Spring Boot 版から生成したもの。このテストは手で書いたもので、作り直しても残る。
+//!
+//! #[sqlx::test] がテストごとに空のデータベースを作り、todo::MIGRATOR（schema.sql）を流してから PgPool を渡す。
 //! 接続先は環境変数 DATABASE_URL（例: postgres://todo:todo@localhost:5432/todo。CREATEDB 権限が必要）。
 
 use std::sync::Arc;
@@ -12,10 +14,10 @@ use axum::http::{Request, StatusCode};
 use chrono::NaiveDate;
 use http_body_util::BodyExt;
 use sqlx::PgPool;
-use todo::{AppState, app};
-use todo_core::clock::FixedClock;
-use todo_core::domain::TodoFilter;
-use todo_core::service::TodoService;
+use todo::clock::FixedClock;
+use todo::domain::TodoFilter;
+use todo::service::TodoService;
+use todo::{AppState, Beans, app};
 use tower::ServiceExt;
 
 /// テスト用の固定時計（2026-09-24 12:00）。
@@ -42,7 +44,7 @@ struct Page {
 
 impl Client {
     fn new(pool: PgPool) -> (Self, TodoService) {
-        let state = AppState::with_clock(pool, Arc::new(fixed_clock()));
+        let state = AppState::new(pool, Beans { clock: Arc::new(fixed_clock()) });
         let service = state.todo_service.clone();
         (
             Self {
@@ -105,7 +107,7 @@ fn urlencode(value: &str) -> String {
         .collect()
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn create_and_list(pool: PgPool) {
     let (mut client, _) = Client::new(pool);
 
@@ -136,7 +138,7 @@ async fn create_and_list(pool: PgPool) {
     assert!(!page.body.contains("を追加しました"));
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn validation_errors_rerender_the_form(pool: PgPool) {
     let (mut client, _) = Client::new(pool);
 
@@ -152,7 +154,7 @@ async fn validation_errors_rerender_the_form(pool: PgPool) {
     assert!(page.body.contains(r#"value="not-a-date""#));
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn toggle_and_filter(pool: PgPool) {
     let (mut client, service) = Client::new(pool);
     let done = service.create("完了するもの", None, None).await.unwrap();
@@ -174,7 +176,7 @@ async fn toggle_and_filter(pool: PgPool) {
     assert!(!page.body.contains("残すもの"));
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn search_by_keyword(pool: PgPool) {
     let (mut client, service) = Client::new(pool);
     service.create("Rust を勉強する", None, None).await.unwrap();
@@ -185,7 +187,7 @@ async fn search_by_keyword(pool: PgPool) {
     assert!(!page.body.contains("掃除"));
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn overdue_todo_is_marked(pool: PgPool) {
     let (mut client, service) = Client::new(pool);
     let yesterday = NaiveDate::from_ymd_opt(2026, 9, 23);
@@ -199,7 +201,7 @@ async fn overdue_todo_is_marked(pool: PgPool) {
     assert!(page.body.contains("期限切れ</span>"));
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn update_and_delete(pool: PgPool) {
     let (mut client, service) = Client::new(pool);
     let todo = service.create("旧タイトル", None, None).await.unwrap();
@@ -239,7 +241,7 @@ async fn update_and_delete(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrator = "todo_core::MIGRATOR")]
+#[sqlx::test(migrator = "todo::MIGRATOR")]
 async fn unknown_todo_is_404(pool: PgPool) {
     let (mut client, _) = Client::new(pool);
 

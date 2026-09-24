@@ -55,7 +55,7 @@ sealed interface RT {
 
     /** 名前のある型（変換したクラス・enum・record、chrono の型など）。uses はその型を使うための use パス。 */
     record Named(String name, List<String> uses, boolean copy, Kind kind, String javaName) implements RT {
-        enum Kind { ENTITY, RECORD, ENUM, VALUE, CLOCK }
+        enum Kind { ENTITY, RECORD, ENUM, VALUE, CLOCK, SERVICE, FORM }
 
         public Named {
             uses = List.copyOf(uses);

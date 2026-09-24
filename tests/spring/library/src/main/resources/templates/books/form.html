@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('New book')}"></head>
+<body>
+<form th:action="@{/books}" th:object="${bookForm}" method="post">
+    <input type="text" th:field="*{title}" th:errorclass="error">
+    <span th:if="${#fields.hasErrors('title')}" th:errors="*{title}">error</span>
+    <input type="text" th:field="*{author}">
+    <input type="number" th:field="*{stock}" th:errorclass="error">
+    <ul>
+        <li th:each="e : ${#fields.errors('stock')}" th:text="${e}">error</li>
+    </ul>
+    <button type="submit">Save</button>
+</form>
+</body>
+</html>

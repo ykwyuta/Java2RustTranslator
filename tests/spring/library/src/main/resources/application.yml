@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/library
+    username: library
+    password: ${LIBRARY_PASSWORD:secret}
+  sql:
+    init:
+      mode: always
+server:
+  port: 9090

@@ -56,6 +56,10 @@ public final class SpringTranslator {
     final Set<String> rowTypes = new HashSet<>();
     /** 生成したファイルが使う補助モジュール（clock / mybatis）。 */
     final Set<String> supportModules = new TreeSet<>();
+    /** messages.properties（Spring Boot の既定と同じく UTF-8）。 */
+    private final java.util.Properties messages = new java.util.Properties();
+    /** application.yml / application.properties を平らにしたもの（spring.datasource.url → 値）。 */
+    private final Map<String, String> properties = new java.util.TreeMap<>();
 
     private SpringTranslator(Decl.Program program, List<Path> resourceDirs, Diagnostics diags) {
         this.diags = diags;
@@ -64,9 +68,58 @@ public final class SpringTranslator {
         this.types = new TypeResolver(model);
         try {
             this.xml = MyBatisXml.scan(resourceDirs);
+            Path msg = findResource("messages.properties");
+            if (msg != null) {
+                try (var reader = Files.newBufferedReader(msg, StandardCharsets.UTF_8)) {
+                    messages.load(reader);
+                }
+            }
+            loadApplicationProperties();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    private void loadApplicationProperties() throws IOException {
+        Path props = findResource("application.properties");
+        if (props != null) {
+            java.util.Properties p = new java.util.Properties();
+            try (var reader = Files.newBufferedReader(props, StandardCharsets.UTF_8)) {
+                p.load(reader);
+            }
+            p.stringPropertyNames().forEach(k -> properties.put(k, p.getProperty(k)));
+        }
+        for (String name : List.of("application.yml", "application.yaml")) {
+            Path yml = findResource(name);
+            if (yml != null) {
+                Object root = new org.snakeyaml.engine.v2.api.Load(org.snakeyaml.engine.v2.api.LoadSettings.builder().build())
+                        .loadFromString(Files.readString(yml, StandardCharsets.UTF_8));
+                flatten("", root);
+            }
+        }
+    }
+
+    private void flatten(String prefix, Object node) {
+        if (node instanceof Map<?, ?> m) {
+            m.forEach((k, v) -> flatten(prefix.isEmpty() ? String.valueOf(k) : prefix + "." + k, v));
+        } else if (node instanceof List<?> l) {
+            properties.put(prefix, String.join(",", l.stream().map(String::valueOf).toList()));
+        } else if (node != null) {
+            properties.put(prefix, String.valueOf(node));
+        }
+    }
+
+    java.util.Properties messages() {
+        return messages;
+    }
+
+    /** application.yml の値（なければ null）。 */
+    String property(String key) {
+        return properties.get(key);
+    }
+
+    List<Path> resourceDirs() {
+        return resourceDirs;
     }
 
     /**
@@ -87,6 +140,10 @@ public final class SpringTranslator {
         Map<List<String>, List<String>> reexports = new TreeMap<>(SpringTranslator::compareLists);
         Map<List<String>, Set<String>> children = new TreeMap<>(SpringTranslator::compareLists);
         DomainGenerator domain = new DomainGenerator(this);
+        WebGenerator web = new WebGenerator(this, crateName);
+        if (web.enabled()) {
+            web.prepare();
+        }
         MapperGenerator mappers = new MapperGenerator(this);
         ServiceGenerator services = new ServiceGenerator(this);
         for (Decl.TypeDecl t : model.types.values()) {
@@ -94,7 +151,9 @@ public final class SpringTranslator {
             RFile file = switch (role) {
                 case MAPPER -> mappers.generate(t, xml.get(t.qualifiedName()));
                 case SERVICE -> services.generate(t);
-                case ENTITY, RECORD, ENUM -> t.outer() == null ? domain.generate(t) : null;
+                case ENTITY, RECORD, ENUM, FORM -> t.outer() == null ? domain.generate(t) : null;
+                case CONTROLLER, ADVICE -> web.enabled() ? web.handlerFile(t) : null;
+                case CONFIGURATION -> web.enabled() ? web.configFile(t) : null;
                 default -> null;
             };
             if (file == null) {
@@ -104,7 +163,7 @@ public final class SpringTranslator {
             files.computeIfAbsent(mods, k -> new ArrayList<>()).add(file);
             registerModule(children, mods);
             children.get(mods).add(SpringModel.fileModule(t));
-            if (role != SpringModel.Role.MAPPER) {
+            if (role != SpringModel.Role.MAPPER && role != SpringModel.Role.CONTROLLER && role != SpringModel.Role.ADVICE) {
                 reexports.computeIfAbsent(mods, k -> new ArrayList<>())
                         .add(SpringModel.fileModule(t) + "::" + SpringModel.rustTypeName(t));
             }
@@ -120,8 +179,17 @@ public final class SpringTranslator {
             registerModule(children, List.of());
             children.get(List.of()).add("error");
         }
+        Path schema = findResource("schema.sql");
+        if (web.enabled()) {
+            out.addAll(web.viewFiles());
+            out.add(web.appFile(schema != null && "always".equals(property("spring.sql.init.mode"))));
+            out.add(web.configRs());
+            out.add(web.mainRs());
+            registerModule(children, List.of());
+            children.get(List.of()).addAll(List.of("app", "config", "views"));
+        }
         for (GeneratedFile f : List.copyOf(out)) {
-            for (String support : List.of("clock", "mybatis")) {
+            for (String support : List.of("clock", "mybatis", "spring_web")) {
                 if (f.content().contains("crate::" + support + "::")) {
                     supportModules.add(support);
                 }
@@ -132,7 +200,6 @@ public final class SpringTranslator {
             registerModule(children, List.of());
             children.get(List.of()).add(support);
         }
-        Path schema = findResource("schema.sql");
         // mod.rs / lib.rs
         for (Map.Entry<List<String>, Set<String>> e : children.entrySet()) {
             List<String> mods = e.getKey();
@@ -144,6 +211,9 @@ public final class SpringTranslator {
                 items.add(new RItem.Use(List.of(), true, re));
             }
             if (mods.isEmpty()) {
+                if (web.enabled()) {
+                    items.add(new RItem.Use(List.of(), true, "app::{AppError, AppState, Beans, app, connect}"));
+                }
                 if (schema != null) {
                     items.add(new RItem.Static(List.of("schema.sql（spring.sql.init）に当たるマイグレーション。起動時に `MIGRATOR.run(&pool)` で流す。"),
                             true, "MIGRATOR", new RType("sqlx::migrate::Migrator"),
@@ -163,7 +233,7 @@ public final class SpringTranslator {
                 throw new UncheckedIOException(e);
             }
         }
-        out.add(new GeneratedFile("Cargo.toml", cargoToml(crateName)));
+        out.add(new GeneratedFile("Cargo.toml", cargoToml(crateName, web.enabled())));
         out.add(new GeneratedFile(".gitignore", "/target\n/j2r-report.json\n"));
         out.sort(java.util.Comparator.comparing(GeneratedFile::path));
         return out;
@@ -197,6 +267,26 @@ public final class SpringTranslator {
 
     static String print(RFile f) {
         return RustPrinter.printWrapped(f).replace("// " + Imports.GROUP_BREAK + "\n\n", "");
+    }
+
+    private String cargoToml(String crateName, boolean web) {
+        String deps = cargoToml(crateName);
+        if (!web) {
+            return deps;
+        }
+        return deps + """
+                # Spring MVC・Thymeleaf・セッション・ログ
+                askama = "0.16"
+                askama_web = { version = "0.16", features = ["axum-0.8"] }
+                axum = "0.8"
+                serde = { version = "1", features = ["derive"] }
+                serde_urlencoded = "0.7"
+                tokio = { version = "1", features = ["full"] }
+                tower-http = { version = "0.7", features = ["fs", "trace"] }
+                tower-sessions = "0.14"
+                tracing = "0.1"
+                tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+                """;
     }
 
     private String cargoToml(String crateName) {
@@ -234,7 +324,7 @@ public final class SpringTranslator {
     private void plan() {
         for (Decl.TypeDecl t : model.types.values()) {
             switch (model.role(t.qualifiedName())) {
-                case ENTITY, RECORD -> planAccessors(t);
+                case ENTITY, RECORD, FORM -> planAccessors(t);
                 case EXCEPTION -> planError(t);
                 default -> { }
             }
@@ -244,7 +334,8 @@ public final class SpringTranslator {
         }
         for (Decl.TypeDecl t : model.types.values()) {
             SpringModel.Role role = model.role(t.qualifiedName());
-            if (role == SpringModel.Role.ENTITY || role == SpringModel.Role.RECORD || role == SpringModel.Role.ENUM) {
+            if (role == SpringModel.Role.ENTITY || role == SpringModel.Role.RECORD || role == SpringModel.Role.ENUM
+                    || role == SpringModel.Role.FORM) {
                 planDomainMethods(t, role);
             }
         }

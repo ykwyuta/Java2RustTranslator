@@ -1,5 +1,5 @@
 // 移行元のデモアプリ: Spring Boot 4.1 + Spring MVC + MyBatis + Thymeleaf + PostgreSQL。
-// 対応する Rust 版は ../rust（Web 層、手書き）と ../rust-core（Mapper・サービス・ドメイン、j2r で生成）。
+// 対応する Rust 版（../rust）は j2r が生成する（./gradlew translateToRust）。
 // 対応関係は docs/07-spring-to-rust.md を参照。
 plugins {
     java
@@ -34,9 +34,9 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-// ./gradlew translateToRust で、@Mapper（+ Mapper XML）・@Service・それらが使う型を ../rust-core に変換する。
+// ./gradlew translateToRust で、アプリ全体（コントローラ・テンプレート・サービス・Mapper・設定）を ../rust に変換する。
 j2r {
     framework.set("spring")
-    crateName.set("todo-core")
-    outputDir.set(layout.projectDirectory.dir("../rust-core"))
+    crateName.set("todo")
+    outputDir.set(layout.projectDirectory.dir("../rust"))
 }

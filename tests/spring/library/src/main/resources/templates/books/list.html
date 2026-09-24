@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Books')}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: nav}"></nav>
+<form th:action="@{/books}" method="get">
+    <input type="search" name="keyword" th:value="${keyword}">
+    <label><input type="checkbox" name="inStock" value="true"> in stock</label>
+</form>
+<p th:unless="${summary.isEmpty()}">
+    <span th:text="${summary.books}">0</span> books,
+    <span th:text="${summary.totalStock}">0</span> in stock
+</p>
+<table th:if="${!books.isEmpty()}">
+    <tr th:each="book, stat : ${books}" th:classappend="${stat.odd} ? 'odd'" th:class="${book.available} ? 'available' : 'empty'">
+        <td th:text="${stat.count}">1</td>
+        <td><a th:href="@{/books/{id}(id=${book.id})}" th:text="${book.title}">title</a></td>
+        <td th:text="${book.author} ?: 'unknown'">author</td>
+        <td th:text="${book.stock}">0</td>
+    </tr>
+</table>
+<p th:if="${books.isEmpty()}">No books<span th:if="${keyword != null}" th:text="' for ' + ${keyword}"></span>.</p>
+<a th:href="@{/books/new}">Add</a>
+</body>
+</html>

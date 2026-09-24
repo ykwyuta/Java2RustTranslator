@@ -1,40 +1,43 @@
-{% extends "base.html" %}
-{% block title %}{% if todo_id.is_none() %}新規作成{% else %}編集{% endif %}{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if todo_id.is_none() %}新規作成{% else %}編集{% endif %} | Todo</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="/todos">Todo</a>
+</header>
+<main class="container">
     <h1>{% if todo_id.is_none() %}Todo を追加{% else %}Todo を編集{% endif %}</h1>
 
-    <form action="{% if let Some(id) = todo_id %}/todos/{{ id }}{% else %}/todos{% endif %}" method="post" class="todo-form">
+    <form action="{% if let Some(todo_id3) = todo_id %}/todos/{{ todo_id3 }}{% else %}/todos{% endif %}"
+          method="post" class="todo-form">
         <div class="field">
             <label for="title">タイトル</label>
-            <input type="text" maxlength="100" id="title" name="title" value="{{ form.title }}"{% if errors.has("title") %} class="invalid"{% endif %}>
-            {%- for err in errors.of("title") %}
-            <p class="error">{{ err }}</p>
-            {%- endfor %}
+            <input type="text" maxlength="100" id="title" name="title" value="{% if let Some(value) = todo_form.title %}{{ value }}{% endif %}"{% if todo_form_binding.has_field_errors("title") %} class="invalid"{% endif %}>
+            {% for err in todo_form_binding.field_errors("title") %}<p class="error">{{ err }}</p>{% endfor %}
         </div>
         <div class="field">
             <label for="description">説明</label>
-            <textarea rows="4" id="description" name="description"{% if errors.has("description") %} class="invalid"{% endif %}>{{ form.description }}</textarea>
-            {%- for err in errors.of("description") %}
-            <p class="error">{{ err }}</p>
-            {%- endfor %}
+            <textarea rows="4" id="description" name="description"{% if todo_form_binding.has_field_errors("description") %} class="invalid"{% endif %}>{% if let Some(value2) = todo_form.description %}{{ value2 }}{% endif %}</textarea>
+            {% for err2 in todo_form_binding.field_errors("description") %}<p class="error">{{ err2 }}</p>{% endfor %}
         </div>
         <div class="field">
             <label for="dueDate">期限</label>
-            <input type="date" id="dueDate" name="dueDate" value="{{ form.due_date }}"{% if errors.has("dueDate") %} class="invalid"{% endif %}>
-            {%- for err in errors.of("dueDate") %}
-            <p class="error">{{ err }}</p>
-            {%- endfor %}
+            <input type="date" id="dueDate" name="dueDate" value="{% if let Some(rejected) = todo_form_binding.rejected_value("dueDate") %}{{ rejected }}{% else %}{% if let Some(value3) = todo_form.due_date %}{{ value3.format("%Y-%m-%d") }}{% endif %}{% endif %}"{% if todo_form_binding.has_field_errors("dueDate") %} class="invalid"{% endif %}>
+            {% for err3 in todo_form_binding.field_errors("dueDate") %}<p class="error">{{ err3 }}</p>{% endfor %}
         </div>
-        {%- if todo_id.is_some() %}
-        <div class="field checkbox">
-            <label>
-                <input type="checkbox" id="done1" name="done" value="true"{% if form.done %} checked="checked"{% endif %}>
-                <input type="hidden" name="_done" value="on"/> 完了</label>
-        </div>
-        {%- endif %}
+        {% if todo_id.is_some() %}<div class="field checkbox">
+            <label><input type="checkbox" id="done1" name="done" value="true"{% if todo_form.done %} checked="checked"{% endif %}><input type="hidden" name="_done" value="on"/> 完了</label>
+        </div>{% endif %}
         <div class="buttons">
             <button type="submit" class="primary">保存</button>
             <a class="button" href="/todos">キャンセル</a>
         </div>
     </form>
-{% endblock %}
+</main>
+</body>
+</html>

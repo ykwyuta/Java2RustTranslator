@@ -1,157 +1,170 @@
-//! TodoController.java に相当する。
+//! Translated from `TodoController` (TodoController.java) by Java2RustTranslator.
 
-use axum::Form;
-use axum::extract::{Path, Query, State};
+use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Response};
-use axum_messages::Messages;
 use serde::Deserialize;
-use todo_core::domain::TodoFilter;
 
-use super::global_exception_handler::AppError;
-use super::redirect;
-use super::todo_form::{FieldErrors, TodoForm};
-use super::views::{TodoFormView, TodoListView};
-use crate::AppState;
+use crate::app::{AppError, AppState};
+use crate::domain::TodoFilter;
+use crate::spring_web::{BindingResult, Flash, RequestParams, redirect};
+use crate::views::{TodosFormView, TodosListView};
+use crate::web::TodoForm;
 
-type Result<T> = std::result::Result<T, AppError>;
-
-/// @RequestParam(name = "filter", required = false) と @RequestParam(name = "q", required = false)
-#[derive(Debug, Default, Deserialize)]
+/// `list` の `@RequestParam`。
+#[derive(Debug, Deserialize)]
 pub struct ListParams {
     filter: Option<String>,
     q: Option<String>,
 }
 
-/// GET /todos
+/// `GET /todos`
 pub async fn list(
     State(state): State<AppState>,
-    Query(params): Query<ListParams>,
-    messages: Messages,
-) -> Result<TodoListView> {
-    let filter = TodoFilter::from_param(params.filter.as_deref());
-    Ok(TodoListView {
-        todos: state
-            .todo_service
-            .find_all(filter, params.q.as_deref())
-            .await?,
-        summary: state.todo_service.summary().await?,
-        filter: filter.param(),
-        q: params.q.unwrap_or_default(),
-        today: state.clock.today(),
-        message: messages.into_iter().last().map(|m| m.message),
-    })
+    flash: Flash,
+    params: RequestParams,
+) -> Result<Response, AppError> {
+    let request: ListParams = params.parse()?;
+    let filter_param = request.filter.as_deref();
+    let keyword = request.q.as_deref();
+    let filter = TodoFilter::from_param(filter_param);
+    let model_todos = state.todo_service.find_all(filter, keyword).await?;
+    let model_summary = state.todo_service.summary().await?;
+    let model_filter = filter.param();
+    let model_q = keyword.unwrap_or("").to_string();
+    let model_today = state.clock.today();
+    Ok(
+        TodosListView {
+            todos: model_todos,
+            summary: model_summary,
+            filter: model_filter,
+            q: model_q,
+            today: model_today,
+            message: flash.get("message"),
+        }.into_response(),
+    )
 }
 
-/// GET /todos/new
-pub async fn new_form() -> TodoFormView {
-    TodoFormView {
-        todo_id: None,
-        form: TodoForm::default(),
-        errors: FieldErrors::default(),
-    }
+/// `GET /todos/new`
+pub async fn new_form() -> Result<Response, AppError> {
+    let model_todo_form = TodoForm::default();
+    Ok(
+        TodosFormView {
+            todo_form: model_todo_form,
+            todo_id: None,
+            todo_form_binding: BindingResult::default(),
+        }.into_response(),
+    )
 }
 
-/// POST /todos
+/// `POST /todos`
 pub async fn create(
     State(state): State<AppState>,
-    messages: Messages,
-    Form(form): Form<TodoForm>,
-) -> Result<Response> {
-    let input = match form.validated() {
-        Ok(input) => input,
-        Err(errors) => {
-            return Ok(TodoFormView {
+    mut flash: Flash,
+    params: RequestParams,
+) -> Result<Response, AppError> {
+    let (form, mut binding_result) = TodoForm::bind(&params);
+    form.validate(&mut binding_result);
+    if binding_result.has_errors() {
+        return Ok(
+            TodosFormView {
+                todo_form: form,
                 todo_id: None,
-                form,
-                errors,
-            }
-            .into_response());
-        }
-    };
-    let todo = state
-        .todo_service
-        .create(&input.title, input.description.as_deref(), input.due_date)
-        .await?;
-    messages.info(format!("「{}」を追加しました", todo.title));
-    Ok(redirect("/todos"))
+                todo_form_binding: binding_result,
+            }.into_response(),
+        );
+    }
+    let todo = state.todo_service.create(
+        &form.normalized_title(),
+        form.normalized_description().as_deref(),
+        form.due_date,
+    ).await?;
+    flash.set("message", format!("「{}」を追加しました", todo.title)).await;
+    Ok(redirect("/todos", &[]))
 }
 
-/// GET /todos/{id}/edit
-pub async fn edit_form(State(state): State<AppState>, Path(id): Path<i64>) -> Result<TodoFormView> {
-    let todo = state.todo_service.find_by_id(id).await?;
-    Ok(TodoFormView {
-        todo_id: Some(id),
-        form: TodoForm::from_todo(&todo),
-        errors: FieldErrors::default(),
-    })
+/// `GET /todos/{id}/edit`
+pub async fn edit_form(
+    State(state): State<AppState>,
+    Path(id): Path<i64>,
+) -> Result<Response, AppError> {
+    let model_todo_id = id;
+    let model_todo_form = TodoForm::from(&state.todo_service.find_by_id(id).await?);
+    Ok(
+        TodosFormView {
+            todo_form: model_todo_form,
+            todo_id: Some(model_todo_id),
+            todo_form_binding: BindingResult::default(),
+        }.into_response(),
+    )
 }
 
-/// POST /todos/{id}
+/// `POST /todos/{id}`
 pub async fn update(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-    messages: Messages,
-    Form(form): Form<TodoForm>,
-) -> Result<Response> {
-    let input = match form.validated() {
-        Ok(input) => input,
-        Err(errors) => {
-            return Ok(TodoFormView {
-                todo_id: Some(id),
-                form,
-                errors,
-            }
-            .into_response());
-        }
-    };
-    let todo = state
-        .todo_service
-        .update(
-            id,
-            &input.title,
-            input.description.as_deref(),
-            input.due_date,
-            input.done,
-        )
-        .await?;
-    messages.info(format!("「{}」を更新しました", todo.title));
-    Ok(redirect("/todos"))
+    mut flash: Flash,
+    params: RequestParams,
+) -> Result<Response, AppError> {
+    let (form, mut binding_result) = TodoForm::bind(&params);
+    form.validate(&mut binding_result);
+    if binding_result.has_errors() {
+        let model_todo_id = id;
+        return Ok(
+            TodosFormView {
+                todo_form: form,
+                todo_id: Some(model_todo_id),
+                todo_form_binding: binding_result,
+            }.into_response(),
+        );
+    }
+    let todo = state.todo_service.update(
+        id,
+        &form.normalized_title(),
+        form.normalized_description().as_deref(),
+        form.due_date,
+        form.done,
+    ).await?;
+    flash.set("message", format!("「{}」を更新しました", todo.title)).await;
+    Ok(redirect("/todos", &[]))
 }
 
-/// @RequestParam(name = "filter", required = false)
-#[derive(Debug, Default, Deserialize)]
+/// `toggle` の `@RequestParam`。
+#[derive(Debug, Deserialize)]
 pub struct ToggleParams {
     filter: Option<String>,
 }
 
-/// POST /todos/{id}/toggle
+/// `POST /todos/{id}/toggle`
 pub async fn toggle(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-    Form(params): Form<ToggleParams>,
-) -> Result<Response> {
+    params: RequestParams,
+) -> Result<Response, AppError> {
+    let request: ToggleParams = params.parse()?;
+    let filter_param = request.filter.as_deref();
+    let mut redirect_params: Vec<(&str, String)> = Vec::new();
     state.todo_service.toggle(id).await?;
-    let filter = TodoFilter::from_param(params.filter.as_deref());
-    Ok(redirect(&format!("/todos?filter={}", filter.param())))
+    redirect_params.push(("filter", TodoFilter::from_param(filter_param).param()));
+    Ok(redirect("/todos", &redirect_params))
 }
 
-/// POST /todos/{id}/delete
+/// `POST /todos/{id}/delete`
 pub async fn delete(
     State(state): State<AppState>,
     Path(id): Path<i64>,
-    messages: Messages,
-) -> Result<Response> {
+    mut flash: Flash,
+) -> Result<Response, AppError> {
     let todo = state.todo_service.delete(id).await?;
-    messages.info(format!("「{}」を削除しました", todo.title));
-    Ok(redirect("/todos"))
+    flash.set("message", format!("「{}」を削除しました", todo.title)).await;
+    Ok(redirect("/todos", &[]))
 }
 
-/// POST /todos/completed/delete
+/// `POST /todos/completed/delete`
 pub async fn delete_completed(
     State(state): State<AppState>,
-    messages: Messages,
-) -> Result<Response> {
+    mut flash: Flash,
+) -> Result<Response, AppError> {
     let count = state.todo_service.delete_completed().await?;
-    messages.info(format!("完了済みの {count} 件を削除しました"));
-    Ok(redirect("/todos"))
+    flash.set("message", format!("完了済みの {} 件を削除しました", count)).await;
+    Ok(redirect("/todos", &[]))
 }

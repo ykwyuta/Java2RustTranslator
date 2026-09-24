@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Library - Error</title>
+    <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<p>{% if let Some(value) = message.present() %}{{ value }}{% else %}not found{% endif %}</p>
+</body>
+</html>

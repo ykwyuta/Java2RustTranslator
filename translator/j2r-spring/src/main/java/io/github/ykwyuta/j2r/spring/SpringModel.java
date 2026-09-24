@@ -31,22 +31,22 @@ import java.util.TreeSet;
  * </ul>
  */
 final class SpringModel {
-    enum Role { MAPPER, SERVICE, ENTITY, RECORD, ENUM, EXCEPTION, SKIPPED }
+    enum Role { MAPPER, SERVICE, ENTITY, RECORD, ENUM, EXCEPTION, CONTROLLER, ADVICE, CONFIGURATION, APPLICATION, FORM, SKIPPED }
 
     static final String MAPPER = "org.apache.ibatis.annotations.Mapper";
     static final String SERVICE = "org.springframework.stereotype.Service";
     static final String TRANSACTIONAL = "org.springframework.transaction.annotation.Transactional";
     static final String PARAM = "org.apache.ibatis.annotations.Param";
     static final String SPRING_BOOT_APPLICATION = "org.springframework.boot.autoconfigure.SpringBootApplication";
+    static final String CONTROLLER = "org.springframework.stereotype.Controller";
+    static final String CONTROLLER_ADVICE = "org.springframework.web.bind.annotation.ControllerAdvice";
+    static final String CONFIGURATION = "org.springframework.context.annotation.Configuration";
+    static final String MODEL_ATTRIBUTE = "org.springframework.web.bind.annotation.ModelAttribute";
 
     /** まだ変換しない層を表す注釈。 */
     private static final Map<String, String> SKIPPED_STEREOTYPES = Map.of(
-            "org.springframework.stereotype.Controller", "@Controller (web layer)",
-            "org.springframework.web.bind.annotation.RestController", "@RestController (web layer)",
-            "org.springframework.web.bind.annotation.ControllerAdvice", "@ControllerAdvice (web layer)",
-            "org.springframework.web.bind.annotation.RestControllerAdvice", "@RestControllerAdvice (web layer)",
-            "org.springframework.context.annotation.Configuration", "@Configuration (application setup)",
-            SPRING_BOOT_APPLICATION, "@SpringBootApplication (application setup)",
+            "org.springframework.web.bind.annotation.RestController", "@RestController (JSON APIs)",
+            "org.springframework.web.bind.annotation.RestControllerAdvice", "@RestControllerAdvice (JSON APIs)",
             "org.springframework.stereotype.Component", "@Component");
 
     /** フレームワーク・ライブラリのパッケージ（テスト用のスタブがソースに含まれていても変換しない）。 */
@@ -87,6 +87,30 @@ final class SpringModel {
             } else if (info.has(SERVICE)) {
                 roles.put(t.qualifiedName(), Role.SERVICE);
                 work.add(t.qualifiedName());
+            } else if (info.has(CONTROLLER)) {
+                roles.put(t.qualifiedName(), Role.CONTROLLER);
+                work.add(t.qualifiedName());
+            } else if (info.has(CONTROLLER_ADVICE)) {
+                roles.put(t.qualifiedName(), Role.ADVICE);
+                work.add(t.qualifiedName());
+            } else if (info.has(CONFIGURATION)) {
+                roles.put(t.qualifiedName(), Role.CONFIGURATION);
+                work.add(t.qualifiedName());
+            } else if (info.has(SPRING_BOOT_APPLICATION)) {
+                roles.put(t.qualifiedName(), Role.APPLICATION);
+            }
+        }
+        // コントローラのハンドラが引数に取るクラス（@ModelAttribute）はフォーム。
+        for (Decl.TypeDecl t : typesWith(Role.CONTROLLER)) {
+            for (Decl.MethodDecl m : t.methods()) {
+                for (int i = 0; i < m.params().size(); i++) {
+                    if (m.params().get(i).type() instanceof JType.ClassType c && types.containsKey(c.qualifiedName())
+                            && !roles.containsKey(c.qualifiedName()) && types.get(c.qualifiedName()).kind() == Decl.TypeKind.CLASS
+                            && isModelAttribute(program.info(DeclInfo.paramKey(m.ref(), i)))) {
+                        roles.put(c.qualifiedName(), Role.FORM);
+                        work.add(c.qualifiedName());
+                    }
+                }
             }
         }
         // Mapper とサービスから使われる型をたどる。
@@ -115,10 +139,15 @@ final class SpringModel {
                 roles.put(t.qualifiedName(), Role.SKIPPED);
                 if (t.outer() == null) {
                     diags.report(DiagnosticCode.SPRING_SKIPPED, t.pos(),
-                            t.simpleName() + " is not translated: it is not used by any @Service or @Mapper");
+                            t.simpleName() + " is not translated: it is not used by any controller, service or Mapper");
                 }
             }
         }
+    }
+
+    /** 注釈のない複合型の引数と @ModelAttribute の引数（@PathVariable・@RequestParam・@RequestBody 以外）。 */
+    private static boolean isModelAttribute(DeclInfo info) {
+        return info.has(MODEL_ATTRIBUTE) || info.annotations().stream().noneMatch(a -> a.type().startsWith("org.springframework.web.bind.annotation."));
     }
 
     private boolean isException(Decl.TypeDecl t) {

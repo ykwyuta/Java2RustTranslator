@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Library - New book</title>
+    <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<form action="/books" method="post">
+    <input type="text" id="title" name="title" value="{% if let Some(value) = book_form.title %}{{ value }}{% endif %}"{% if book_form_binding.has_field_errors("title") %} class="error"{% endif %}>
+    {% if book_form_binding.has_field_errors("title") %}<span>{% for e in book_form_binding.field_errors("title") %}{% if !loop.first %}<br />{% endif %}{{ e }}{% endfor %}</span>{% endif %}
+    <input type="text" id="author" name="author" value="{% if let Some(value2) = book_form.author %}{{ value2 }}{% endif %}">
+    <input type="number" id="stock" name="stock" value="{% if let Some(rejected) = book_form_binding.rejected_value("stock") %}{{ rejected }}{% else %}{% if let Some(value3) = book_form.stock %}{{ value3 }}{% endif %}{% endif %}"{% if book_form_binding.has_field_errors("stock") %} class="error"{% endif %}>
+    <ul>
+        {% for e in book_form_binding.field_errors("stock") %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+    <button type="submit">Save</button>
+</form>
+</body>
+</html>

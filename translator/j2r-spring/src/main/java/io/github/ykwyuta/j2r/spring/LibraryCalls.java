@@ -35,6 +35,11 @@ final class LibraryCalls {
             case "java.time.LocalDate", "java.time.LocalDateTime", "java.time.LocalTime",
                  "java.time.chrono.ChronoLocalDate", "java.time.chrono.ChronoLocalDateTime" -> time(l, c, ctx, name, argc);
             case "java.util.List", "java.util.Collection", "java.util.ArrayList" -> list(l, c, ctx, name, argc);
+            case "java.lang.Throwable" -> {
+                BodyLowerer.RV recv = l.receiver(c, ctx);
+                yield (name + "/" + argc).equals("getMessage/0") && recv.type() instanceof RT.ErrorValue
+                        ? rv(new RExpr.MethodCall(recv.expr(), "to_string", List.of()), RT.STR) : null;
+            }
             default -> null;
         };
     }
@@ -59,6 +64,12 @@ final class LibraryCalls {
                 l.imports().add("chrono::Local");
                 return rv(new RExpr.MethodCall(new RExpr.Call(new RExpr.Path("Local::now"), List.of()), "naive_local", List.of()),
                         TypeResolver.NAIVE_DATE_TIME);
+            }
+            case "java.time.Clock#systemDefaultZone/0", "java.time.Clock#systemUTC/0" -> {
+                l.imports().add("std::sync::Arc");
+                String clock = name.equals("systemUTC") ? "UtcClock" : "SystemClock";
+                l.imports().add("crate::clock::" + clock);
+                return rv(new RExpr.Call(new RExpr.Path("Arc::new"), List.of(new RExpr.Path(clock))), TypeResolver.CLOCK);
             }
             case "java.util.Objects#equals/2" -> {
                 BodyLowerer.RV a = l.expr(c.args().get(0), ctx);

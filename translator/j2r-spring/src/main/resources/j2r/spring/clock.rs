@@ -20,6 +20,15 @@ impl Clock for SystemClock {
     }
 }
 
+/// `Clock.systemUTC()`
+pub struct UtcClock;
+
+impl Clock for UtcClock {
+    fn now(&self) -> NaiveDateTime {
+        chrono::Utc::now().naive_utc()
+    }
+}
+
 /// `Clock.fixed(...)`（テスト用）
 pub struct FixedClock(pub NaiveDateTime);
 

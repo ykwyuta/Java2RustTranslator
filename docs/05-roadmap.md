@@ -10,7 +10,7 @@
 | M3 例外・ジェネリクス・ラムダ | **完了**: 例外は `Result` で伝える（送出しうるメソッドは固定点の例外フロー解析で求める。ランタイム例外も catch できる）、try/catch/finally・try-with-resources、ジェネリクス（消去）、ラムダ・メソッド参照、コレクション・ストリーム API・Optional・正規表現、JUnit 5 のテストの変換 |
 | M4 イディオム化 | 未着手 |
 | M5 規模対応・周辺機能 | 一部: スレッドと `java.util.concurrent` を決定的なスケジューラで実行する（実際の並列実行は未着手） |
-| F1 フレームワーク（Spring） | 一部: `--framework spring` で Mapper（MyBatis）・サービス（`@Transactional`）・ドメインを sqlx の crate に変換する。Web 層（コントローラ・Thymeleaf）は未着手（[07-spring-to-rust.md](07-spring-to-rust.md) §7） |
+| F1 フレームワーク（Spring） | 一部: `--framework spring` でアプリ全体（コントローラ・フォーム・Thymeleaf・設定・サービス・Mapper・ドメイン）を axum + sqlx + askama に変換する。examples/todo-app の Rust 版はすべて生成で、Spring 版と応答が一致する。未対応の機能は [07-spring-to-rust.md](07-spring-to-rust.md) §7 |
 
 E2E テスト 25 件（`tests/e2e`）と JUnit 変換のテスト（`tests/junit`）がすべて JVM と一致する。
 
@@ -68,10 +68,12 @@ NullPointerException の詳細メッセージ、`StackOverflowError`、プラッ
 ## F1: フレームワーク（Spring Boot + MyBatis + Thymeleaf → axum + sqlx + askama）
 - **済**: 宣言のメタ情報（注釈の値・消去前の型・JSpecify の `@Nullable`）、`@Mapper` + Mapper XML / 注釈の SQL → sqlx の関数
   （動的 SQL は `QueryBuilder`）、`@Service` → トランザクションを張る構造体、エンティティ・record・enum・例外
-- 次: Web 層（`@Controller` → axum のハンドラとルート、フォームと Bean Validation → serde + validator）、
-  Thymeleaf → askama のテンプレート、`@Configuration` の `@Bean` → `AppState` の組み立て
-- その後: `<foreach>`・`resultMap`、サービス間の呼び出し（トランザクションの伝播）、Spring Data JDBC / JPA
-- **到達点**: examples/todo-app の Rust 版をすべて生成し、compare.sh で Spring 版と一致する
+- **済**: Web 層（`@Controller` → axum のハンドラとルート、`@ModelAttribute` のフォームと Bean Validation → `bind`・`validate`、
+  `@ControllerAdvice` → `AppError`）、Thymeleaf → askama のテンプレート（フラグメントは展開）、`@Configuration` の `@Bean` →
+  `AppState` の組み立て、`application.yml` → 環境変数で上書きできる設定
+- **到達点（達成）**: examples/todo-app の Rust 版をすべて生成し、compare.sh で Spring 版と一致する
+- 次: MockMvc / `@SpringBootTest` のテストの変換、`<foreach>`・`resultMap`、サービス間の呼び出し（トランザクションの伝播）、
+  Thymeleaf の残りの機能（`#{...}` のメッセージ式・`<select>` の `th:field` など）、Spring Data JDBC / JPA
 
 ## M6（実験）: LLM 後処理プラグイン
 - `todo!()` 箇所や `J2R-PERF` 診断箇所を対象に LLM でリライト案を生成

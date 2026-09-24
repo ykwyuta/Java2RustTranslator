@@ -28,6 +28,10 @@ final class Imports {
         paths.add(path);
     }
 
+    void remove(String path) {
+        paths.remove(path);
+    }
+
     void defineLocal(String name) {
         locals.add(name);
     }

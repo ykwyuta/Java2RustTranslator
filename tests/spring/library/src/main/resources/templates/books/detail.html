@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${book.title})}"></head>
+<body>
+<nav th:replace="~{fragments/layout :: nav}"></nav>
+<h1 th:text="${label}">label</h1>
+<dl>
+    <dt>Author</dt>
+    <dd th:text="${book.author} ?: '(unknown)'">author</dd>
+    <dt>Stock</dt>
+    <dd th:text="${book.stock} + ' copies'">0 copies</dd>
+</dl>
+<form th:action="@{/books/{id}/archive(id=${book.id})}" method="post" th:unless="${book.archived}">
+    <button type="submit">Archive</button>
+</form>
+</body>
+</html>
