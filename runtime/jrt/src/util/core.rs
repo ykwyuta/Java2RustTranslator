@@ -99,11 +99,18 @@ pub(crate) struct HashCore {
     size: usize,
     threshold: usize,
     order: Option<Vec<Rc<MapEntry>>>,
+    /// ConcurrentHashMap（compute / merge でもバケットの末尾に入れ、要素数が 0.75n に達したら広げる）。
+    concurrent: bool,
 }
 
 impl HashCore {
     pub(crate) fn new(linked: bool) -> HashCore {
-        HashCore { table: Vec::new(), size: 0, threshold: 0, order: if linked { Some(Vec::new()) } else { None } }
+        HashCore { table: Vec::new(), size: 0, threshold: 0, order: if linked { Some(Vec::new()) } else { None }, concurrent: false }
+    }
+
+    /// ConcurrentHashMap の表。
+    pub(crate) fn new_concurrent() -> HashCore {
+        HashCore { concurrent: true, ..HashCore::new(false) }
     }
 
     /// `new HashMap(initialCapacity)`。
@@ -145,7 +152,7 @@ impl HashCore {
             o.push(entry);
         }
         self.size += 1;
-        if self.size > self.threshold {
+        if self.size > self.threshold || (self.concurrent && self.size >= self.threshold) {
             self.resize();
         }
     }
@@ -153,6 +160,9 @@ impl HashCore {
     /// merge / compute / computeIfAbsent の最初に行うリサイズ（Java はこれらの操作の冒頭で
     /// `size > threshold` なら表を広げ、新しい要素はバケットの先頭に入れる）。
     pub(crate) fn pre_resize_for_compute(&mut self) {
+        if self.concurrent {
+            return;
+        }
         if self.table.is_empty() || self.size > self.threshold {
             self.resize();
         }
@@ -160,6 +170,9 @@ impl HashCore {
 
     /// merge / compute 系で新しい要素を入れる（バケットの先頭。リサイズは次の操作の冒頭で行う）。
     pub(crate) fn insert_new_head(&mut self, entry: Rc<MapEntry>) {
+        if self.concurrent {
+            return self.insert_new(entry);
+        }
         if self.table.is_empty() {
             self.resize();
         }
@@ -314,4 +327,84 @@ pub(crate) fn try_sort_by<T: Clone>(v: &mut Vec<T>, mut cmp: impl FnMut(&T, &T) 
     }
     *v = merge_sort(v, &mut cmp)?;
     Ok(())
+}
+
+/// java.util.Hashtable の表（HashMap と別のアルゴリズム: 容量 11 から 2n+1 で広げ、`(hash & 0x7FFFFFFF) % 容量` の
+/// バケットの先頭に入れ、反復は表の後ろのバケットから）。反復順を Java と一致させる。
+pub(crate) struct TableCore {
+    table: Vec<Vec<Rc<MapEntry>>>,
+    count: usize,
+    threshold: usize,
+}
+
+impl TableCore {
+    pub(crate) fn new(cap: usize) -> TableCore {
+        let cap = cap.max(1);
+        TableCore { table: vec![Vec::new(); cap], count: 0, threshold: ((cap as f64) * 0.75) as usize }
+    }
+
+    fn index(hash: i32, len: usize) -> usize {
+        ((hash & 0x7FFF_FFFF) as usize) % len
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.count
+    }
+
+    /// Hashtable のハッシュは key.hashCode() そのもの（null のキーは NullPointerException）。
+    pub(crate) fn hash(key: &JObject) -> JResult<i32> {
+        key.hash_code()
+    }
+
+    pub(crate) fn find(&self, key: &JObject, hash: i32) -> JResult<Option<Rc<MapEntry>>> {
+        for e in &self.table[Self::index(hash, self.table.len())] {
+            if e.hash == hash && e.key.equals(key)? {
+                return Ok(Some(e.clone()));
+            }
+        }
+        Ok(None)
+    }
+
+    pub(crate) fn insert_new(&mut self, entry: Rc<MapEntry>) {
+        if self.count >= self.threshold {
+            self.rehash();
+        }
+        let idx = Self::index(entry.hash, self.table.len());
+        self.table[idx].insert(0, entry);
+        self.count += 1;
+    }
+
+    fn rehash(&mut self) {
+        let old = std::mem::take(&mut self.table);
+        let new_cap = (old.len() << 1) + 1;
+        self.threshold = ((new_cap as f64) * 0.75) as usize;
+        let mut table: Vec<Vec<Rc<MapEntry>>> = vec![Vec::new(); new_cap];
+        for bucket in old.into_iter().rev() {
+            for e in bucket {
+                let idx = Self::index(e.hash, new_cap);
+                table[idx].insert(0, e);
+            }
+        }
+        self.table = table;
+    }
+
+    pub(crate) fn remove_entry(&mut self, e: &Rc<MapEntry>) {
+        let idx = Self::index(e.hash, self.table.len());
+        if let Some(p) = self.table[idx].iter().position(|x| Rc::ptr_eq(x, e)) {
+            self.table[idx].remove(p);
+            self.count -= 1;
+        }
+    }
+
+    pub(crate) fn clear(&mut self) {
+        for b in &mut self.table {
+            b.clear();
+        }
+        self.count = 0;
+    }
+
+    /// 反復順（表の最後のバケットから、各バケットは先頭から）。
+    pub(crate) fn entries(&self) -> Vec<Rc<MapEntry>> {
+        self.table.iter().rev().flat_map(|b| b.iter().cloned()).collect()
+    }
 }

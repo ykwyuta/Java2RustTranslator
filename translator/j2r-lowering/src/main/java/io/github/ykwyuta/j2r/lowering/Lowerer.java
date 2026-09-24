@@ -449,7 +449,7 @@ public final class Lowerer {
                     inits.add(new RExpr.FieldInit("__throwable", call("jrt::lang::throwable::Throwable::new_part")));
                 }
                 if (t.kind() == Decl.TypeKind.ENUM) {
-                    inits.add(new RExpr.FieldInit("__enum", call("jrt::lang::enums::EnumBase::new", path("name"), path("ordinal"), str(binaryName()))));
+                    inits.add(new RExpr.FieldInit("__enum", call("jrt::lang::enums::EnumBase::new", path("name"), path("ordinal"), str(binaryName()), path(self + "::__values"))));
                 }
             }
             if (t.hasOuterInstance()) {

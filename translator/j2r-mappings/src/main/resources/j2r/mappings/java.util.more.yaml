@@ -1,0 +1,565 @@
+classes:
+- class:
+  - java.util.Vector
+  - java.util.concurrent.CopyOnWriteArrayList
+  - java.util.concurrent.CopyOnWriteArraySet
+  - java.util.concurrent.LinkedBlockingQueue
+  - java.util.concurrent.ConcurrentLinkedQueue
+  - java.util.concurrent.ConcurrentLinkedDeque
+  - java.util.concurrent.ArrayBlockingQueue
+  - java.util.concurrent.LinkedBlockingDeque
+  - java.util.concurrent.BlockingQueue
+  - java.util.concurrent.BlockingDeque
+  - java.util.EnumSet
+  - java.util.concurrent.ConcurrentSkipListSet
+  - java.util.AbstractSequentialList
+  methods:
+  - sig: size()
+    rust: '{this}.size()?'
+  - sig: isEmpty()
+    rust: '{this}.is_empty()?'
+  - sig: contains(java.lang.Object)
+    rust: '{this}.contains({0})?'
+  - sig: add(java.lang.Object)
+    rust: '{this}.add({0})?'
+  - sig: remove(java.lang.Object)
+    rust: '{this}.remove({0})?'
+  - sig: clear()
+    rust: '{this}.clear()?'
+  - sig: addAll(java.util.Collection)
+    rust: '{this}.add_all({&0})?'
+  - sig: removeAll(java.util.Collection)
+    rust: '{this}.remove_all({&0})?'
+  - sig: retainAll(java.util.Collection)
+    rust: '{this}.retain_all({&0})?'
+  - sig: containsAll(java.util.Collection)
+    rust: '{this}.contains_all({&0})?'
+  - sig: iterator()
+    rust: '{this}.iterator()?'
+  - sig: forEach(java.util.function.Consumer)
+    rust: '{this}.for_each({&0})?'
+  - sig: removeIf(java.util.function.Predicate)
+    rust: '{this}.remove_if({&0})?'
+  - sig: get(int)
+    rust: '{this}.get({0})?'
+  - sig: set(int,java.lang.Object)
+    rust: '{this}.set({0}, JObject::from({1}))?'
+  - sig: add(int,java.lang.Object)
+    rust: '{this}.add_at({0}, JObject::from({1}))?'
+  - sig: remove(int)
+    rust: '{this}.remove_at({0})?'
+  - sig: indexOf(java.lang.Object)
+    rust: '{this}.index_of({0})?'
+  - sig: lastIndexOf(java.lang.Object)
+    rust: '{this}.last_index_of({0})?'
+  - sig: sort(java.util.Comparator)
+    rust: '{this}.sort({&0})?'
+  - sig: subList(int,int)
+    rust: '{this}.sub_list({0}, {1})?'
+  - sig: replaceAll(java.util.function.UnaryOperator)
+    rust: '{this}.replace_all({&0})?'
+  - sig: getFirst()
+    rust: '{this}.get_first()?'
+  - sig: getLast()
+    rust: '{this}.get_last()?'
+  - sig: removeFirst()
+    rust: '{this}.remove_first()?'
+  - sig: removeLast()
+    rust: '{this}.remove_last()?'
+  - sig: offer(java.lang.Object)
+    rust: '{this}.offer({0})?'
+  - sig: poll()
+    rust: '{this}.poll()?'
+  - sig: peek()
+    rust: '{this}.peek()?'
+  - sig: element()
+    rust: '{this}.element()?'
+  - sig: remove()
+    rust: '{this}.remove_head()?'
+  - sig: push(java.lang.Object)
+    rust: '{this}.push({0})?'
+  - sig: pop()
+    rust: '{this}.pop()?'
+  - sig: empty()
+    rust: '{this}.is_empty()?'
+  - sig: addFirst(java.lang.Object)
+    rust: '{this}.add_first({0})?'
+  - sig: addLast(java.lang.Object)
+    rust: '{this}.add_last({0})?'
+  - sig: offerFirst(java.lang.Object)
+    rust: '{this}.offer_first({0})?'
+  - sig: offerLast(java.lang.Object)
+    rust: '{this}.offer_last({0})?'
+  - sig: pollFirst()
+    rust: '{this}.poll_first()?'
+  - sig: pollLast()
+    rust: '{this}.poll_last()?'
+  - sig: peekFirst()
+    rust: '{this}.peek_first()?'
+  - sig: peekLast()
+    rust: '{this}.peek_last()?'
+  - sig: first()
+    rust: '{this}.first()?'
+  - sig: last()
+    rust: '{this}.last()?'
+  - sig: floor(java.lang.Object)
+    rust: '{this}.floor({0})?'
+  - sig: ceiling(java.lang.Object)
+    rust: '{this}.ceiling({0})?'
+  - sig: higher(java.lang.Object)
+    rust: '{this}.higher({0})?'
+  - sig: lower(java.lang.Object)
+    rust: '{this}.lower({0})?'
+  - sig: headSet(java.lang.Object)
+    rust: '{this}.head_set({0}, false)?'
+  - sig: headSet(java.lang.Object,boolean)
+    rust: '{this}.head_set(JObject::from({0}), {1})?'
+  - sig: tailSet(java.lang.Object)
+    rust: '{this}.tail_set({0}, true)?'
+  - sig: tailSet(java.lang.Object,boolean)
+    rust: '{this}.tail_set(JObject::from({0}), {1})?'
+  - sig: toString()
+    rust: '{this}.to_jstring()?'
+  - sig: stream()
+    rust: jrt::util::stream::of_collection({&this})?
+  - sig: parallelStream()
+    rust: jrt::util::stream::of_collection({&this})?
+- class:
+  - java.util.EnumMap
+  - java.util.Hashtable
+  - java.util.Dictionary
+  - java.util.concurrent.ConcurrentHashMap
+  - java.util.concurrent.ConcurrentMap
+  - java.util.concurrent.ConcurrentSkipListMap
+  - java.util.concurrent.ConcurrentNavigableMap
+  - java.util.WeakHashMap
+  methods:
+  - sig: size()
+    rust: '{this}.size()?'
+  - sig: isEmpty()
+    rust: '{this}.is_empty()?'
+  - sig: clear()
+    rust: '{this}.clear()?'
+  - sig: get(java.lang.Object)
+    rust: '{this}.map_get({0})?'
+  - sig: put(java.lang.Object,java.lang.Object)
+    rust: '{this}.put(JObject::from({0}), JObject::from({1}))?'
+  - sig: containsKey(java.lang.Object)
+    rust: '{this}.contains_key({0})?'
+  - sig: containsValue(java.lang.Object)
+    rust: '{this}.contains_value({0})?'
+  - sig: remove(java.lang.Object)
+    rust: '{this}.map_remove({0})?'
+  - sig: getOrDefault(java.lang.Object,java.lang.Object)
+    rust: '{this}.get_or_default(JObject::from({0}), JObject::from({1}))?'
+  - sig: putIfAbsent(java.lang.Object,java.lang.Object)
+    rust: '{this}.put_if_absent(JObject::from({0}), JObject::from({1}))?'
+  - sig: putAll(java.util.Map)
+    rust: '{this}.put_all({&0})?'
+  - sig: keySet()
+    rust: '{this}.key_set()?'
+  - sig: values()
+    rust: '{this}.values()?'
+  - sig: entrySet()
+    rust: '{this}.entry_set()?'
+  - sig: computeIfAbsent(java.lang.Object,java.util.function.Function)
+    rust: '{this}.compute_if_absent({0}, {&1})?'
+  - sig: computeIfPresent(java.lang.Object,java.util.function.BiFunction)
+    rust: '{this}.compute_if_present({0}, {&1})?'
+  - sig: compute(java.lang.Object,java.util.function.BiFunction)
+    rust: '{this}.compute({0}, {&1})?'
+  - sig: merge(java.lang.Object,java.lang.Object,java.util.function.BiFunction)
+    rust: '{this}.merge({0}, {1}, {&2})?'
+  - sig: forEach(java.util.function.BiConsumer)
+    rust: '{this}.map_for_each({&0})?'
+  - sig: replace(java.lang.Object,java.lang.Object)
+    rust: '{this}.map_replace(JObject::from({0}), JObject::from({1}))?'
+  - sig: firstKey()
+    rust: '{this}.first_key()?'
+  - sig: lastKey()
+    rust: '{this}.last_key()?'
+  - sig: floorKey(java.lang.Object)
+    rust: '{this}.floor_key({0})?'
+  - sig: ceilingKey(java.lang.Object)
+    rust: '{this}.ceiling_key({0})?'
+  - sig: higherKey(java.lang.Object)
+    rust: '{this}.higher_key({0})?'
+  - sig: lowerKey(java.lang.Object)
+    rust: '{this}.lower_key({0})?'
+  - sig: firstEntry()
+    rust: '{this}.first_entry()?'
+  - sig: lastEntry()
+    rust: '{this}.last_entry()?'
+  - sig: pollFirstEntry()
+    rust: '{this}.poll_first_entry()?'
+  - sig: pollLastEntry()
+    rust: '{this}.poll_last_entry()?'
+  - sig: floorEntry(java.lang.Object)
+    rust: '{this}.floor_entry({0})?'
+  - sig: ceilingEntry(java.lang.Object)
+    rust: '{this}.ceiling_entry({0})?'
+  - sig: headMap(java.lang.Object)
+    rust: '{this}.head_map({0}, false)?'
+  - sig: headMap(java.lang.Object,boolean)
+    rust: '{this}.head_map(JObject::from({0}), {1})?'
+  - sig: tailMap(java.lang.Object)
+    rust: '{this}.tail_map({0}, true)?'
+  - sig: tailMap(java.lang.Object,boolean)
+    rust: '{this}.tail_map(JObject::from({0}), {1})?'
+  - sig: toString()
+    rust: '{this}.to_jstring()?'
+- class:
+  - java.util.Collection
+  - java.util.List
+  - java.util.ArrayList
+  - java.util.LinkedList
+  - java.util.AbstractList
+  - java.util.AbstractCollection
+  - java.util.Queue
+  - java.util.Deque
+  - java.util.ArrayDeque
+  - java.util.Stack
+  - java.util.Set
+  - java.util.HashSet
+  - java.util.LinkedHashSet
+  - java.util.TreeSet
+  - java.util.SortedSet
+  - java.util.NavigableSet
+  - java.util.AbstractSet
+  - java.util.PriorityQueue
+  - java.util.AbstractQueue
+  - java.util.SequencedCollection
+  - java.util.SequencedSet
+  - java.util.Vector
+  - java.util.concurrent.CopyOnWriteArrayList
+  - java.util.concurrent.CopyOnWriteArraySet
+  - java.util.concurrent.LinkedBlockingQueue
+  - java.util.concurrent.ConcurrentLinkedQueue
+  - java.util.concurrent.ConcurrentLinkedDeque
+  - java.util.concurrent.ArrayBlockingQueue
+  - java.util.concurrent.LinkedBlockingDeque
+  - java.util.concurrent.BlockingQueue
+  - java.util.concurrent.BlockingDeque
+  - java.util.EnumSet
+  - java.util.concurrent.ConcurrentSkipListSet
+  - java.util.AbstractSequentialList
+  methods:
+  - sig: toArray()
+    rust: jrt::util::collections::to_array({&this})?
+  - sig: toArray(java.lang.Object[])
+    rust: jrt::util::collections::to_array({&this})?
+  - sig: toArray(java.util.function.IntFunction)
+    rust: jrt::util::collections::to_array({&this})?
+  - sig: listIterator()
+    rust: jrt::util::collections::list_iterator({&this}, 0)?
+  - sig: listIterator(int)
+    rust: jrt::util::collections::list_iterator({&this}, {0})?
+  - sig: descendingIterator()
+    rust: jrt::util::collections::descending_iterator({&this})?
+  - sig: descendingSet()
+    rust: jrt::util::collections::reversed_copy({&this})?
+  - sig: reversed()
+    rust: jrt::util::collections::reversed_copy({&this})?
+  - sig: elementAt(int)
+    rust: '{this}.get({0})?'
+  - sig: firstElement()
+    rust: '{this}.get_first()?'
+  - sig: lastElement()
+    rust: '{this}.get_last()?'
+  - sig: addElement(java.lang.Object)
+    rust: '{this}.add({0})?'
+  - sig: insertElementAt(java.lang.Object,int)
+    rust: '{this}.add_at({1}, {0})?'
+  - sig: setElementAt(java.lang.Object,int)
+    rust: '{this}.set({1}, {0})?'
+  - sig: removeElementAt(int)
+    rust: '{this}.remove_at({0})?'
+  - sig: removeElement(java.lang.Object)
+    rust: '{this}.remove({0})?'
+  - sig: removeAllElements()
+    rust: '{this}.clear()?'
+  - sig: elements()
+    rust: jrt::util::collections::elements_enumeration({&this})?
+  - sig: search(java.lang.Object)
+    rust: jrt::util::collections::stack_search({&this}, {0})?
+  - sig: put(java.lang.Object)
+    rust: '{this}.add({0})?'
+  - sig: take()
+    rust: '{this}.remove_head()?'
+  - sig: hashCode()
+    rust: '{this}.hash_code()?'
+  - sig: equals(java.lang.Object)
+    rust: '{this}.equals(&JObject::from({0}))?'
+- class:
+  - java.util.Map
+  - java.util.HashMap
+  - java.util.LinkedHashMap
+  - java.util.TreeMap
+  - java.util.SortedMap
+  - java.util.NavigableMap
+  - java.util.AbstractMap
+  - java.util.SequencedMap
+  - java.util.EnumMap
+  - java.util.Hashtable
+  - java.util.Dictionary
+  - java.util.concurrent.ConcurrentHashMap
+  - java.util.concurrent.ConcurrentMap
+  - java.util.concurrent.ConcurrentSkipListMap
+  - java.util.concurrent.ConcurrentNavigableMap
+  - java.util.WeakHashMap
+  methods:
+  - sig: descendingMap()
+    rust: jrt::util::collections::descending_map({&this})?
+  - sig: descendingKeySet()
+    rust: jrt::util::collections::reversed_copy(&{this}.key_set()?)?
+  - sig: navigableKeySet()
+    rust: '{this}.key_set()?'
+  - sig: keys()
+    rust: jrt::util::collections::keys_enumeration({&this})?
+  - sig: elements()
+    rust: jrt::util::collections::elements_enumeration({&this})?
+  - sig: contains(java.lang.Object)
+    rust: '{this}.contains_value({0})?'
+  - sig: hashCode()
+    rust: '{this}.hash_code()?'
+  - sig: equals(java.lang.Object)
+    rust: '{this}.equals(&JObject::from({0}))?'
+- class: java.util.ListIterator
+  methods:
+  - sig: hasNext()
+    rust: '{this}.has_next()?'
+  - sig: next()
+    rust: '{this}.next()?'
+  - sig: remove()
+    rust: '{this}.iter_remove()?'
+  - sig: hasPrevious()
+    rust: jrt::util::collections::li_has_previous({&this})?
+  - sig: previous()
+    rust: jrt::util::collections::li_previous({&this})?
+  - sig: nextIndex()
+    rust: jrt::util::collections::li_next_index({&this})?
+  - sig: previousIndex()
+    rust: jrt::util::collections::li_previous_index({&this})?
+  - sig: set(java.lang.Object)
+    rust: jrt::util::collections::li_set({&this}, {0})?
+  - sig: add(java.lang.Object)
+    rust: jrt::util::collections::li_add({&this}, {0})?
+- class:
+  - java.util.Iterator
+  - java.util.ListIterator
+  methods:
+  - sig: forEachRemaining(java.util.function.Consumer)
+    rust: jrt::util::collections::for_each_remaining({&this}, {&0})?
+- class: java.util.Enumeration
+  methods:
+  - sig: hasMoreElements()
+    rust: '{this}.has_next()?'
+  - sig: nextElement()
+    rust: '{this}.next()?'
+  - sig: asIterator()
+    rust: '{this}.clone()'
+- class: java.util.Vector
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_list(jrt::util::collections::ListKind::Vector)
+  - sig: <init>(int)
+    rust: jrt::util::collections::new_list_with_capacity(jrt::util::collections::ListKind::Vector, {0})?
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_list_from(jrt::util::collections::ListKind::Vector, {&0})?
+- class: java.util.concurrent.CopyOnWriteArrayList
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_list(jrt::util::collections::ListKind::CopyOnWriteArrayList)
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_list_from(jrt::util::collections::ListKind::CopyOnWriteArrayList, {&0})?
+- class: java.util.concurrent.LinkedBlockingQueue
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_list(jrt::util::collections::ListKind::LinkedBlockingQueue)
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_list_from(jrt::util::collections::ListKind::LinkedBlockingQueue, {&0})?
+- class: java.util.concurrent.ConcurrentLinkedQueue
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_list(jrt::util::collections::ListKind::ConcurrentLinkedQueue)
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_list_from(jrt::util::collections::ListKind::ConcurrentLinkedQueue, {&0})?
+- class: java.util.concurrent.ConcurrentLinkedDeque
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_list(jrt::util::collections::ListKind::ConcurrentLinkedDeque)
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_list_from(jrt::util::collections::ListKind::ConcurrentLinkedDeque, {&0})?
+- class: java.util.concurrent.LinkedBlockingDeque
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_list(jrt::util::collections::ListKind::LinkedBlockingDeque)
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_list_from(jrt::util::collections::ListKind::LinkedBlockingDeque, {&0})?
+- class: java.util.concurrent.ArrayBlockingQueue
+  constructors:
+  - sig: <init>(int)
+    rust: jrt::util::collections::new_list_with_capacity(jrt::util::collections::ListKind::ArrayBlockingQueue, {0})?
+- class: java.util.concurrent.LinkedBlockingQueue
+  constructors:
+  - sig: <init>(int)
+    rust: jrt::util::collections::new_list_with_capacity(jrt::util::collections::ListKind::LinkedBlockingQueue, {0})?
+- class: java.util.concurrent.CopyOnWriteArraySet
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_set(jrt::util::collections::SetKind::CopyOnWrite)
+  - sig: <init>(java.util.Collection)
+    rust: jrt::util::collections::new_set_from(jrt::util::collections::SetKind::CopyOnWrite, {&0})?
+- class: java.util.concurrent.ConcurrentSkipListSet
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_set(jrt::util::collections::SetKind::ConcurrentSkipList)
+- class: java.util.Hashtable
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_map(jrt::util::collections::MapKind::Hashtable)
+  - sig: <init>(java.util.Map)
+    rust: jrt::util::collections::new_map_from(jrt::util::collections::MapKind::Hashtable, {&0})?
+- class: java.util.concurrent.ConcurrentHashMap
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_map(jrt::util::collections::MapKind::ConcurrentHash)
+  - sig: <init>(int)
+    rust: jrt::util::collections::new_map_with_capacity(jrt::util::collections::MapKind::ConcurrentHash, {0})?
+  - sig: <init>(java.util.Map)
+    rust: jrt::util::collections::new_map_from(jrt::util::collections::MapKind::ConcurrentHash, {&0})?
+- class: java.util.concurrent.ConcurrentSkipListMap
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_map(jrt::util::collections::MapKind::ConcurrentSkipList)
+- class: java.util.WeakHashMap
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_map(jrt::util::collections::MapKind::WeakHash)
+- class: java.util.EnumMap
+  constructors:
+  - sig: <init>(java.lang.Class)
+    rust: jrt::util::collections::new_enum_map({&0})?
+  - sig: <init>(java.util.Map)
+    rust: jrt::util::collections::new_enum_map({&0})?
+  - sig: <init>(java.util.EnumMap)
+    rust: jrt::util::collections::new_enum_map({&0})?
+- class: java.util.EnumSet
+  methods:
+  - sig: of(java.lang.Enum)
+    rust: jrt::util::collections::enum_set_of_items(&JArray::from_vec(vec![JObject::from({0})]))?
+  - sig: of(java.lang.Enum,java.lang.Enum)
+    rust: jrt::util::collections::enum_set_of_items(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1})]))?
+  - sig: of(java.lang.Enum,java.lang.Enum,java.lang.Enum)
+    rust: jrt::util::collections::enum_set_of_items(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2})]))?
+  - sig: of(java.lang.Enum,java.lang.Enum,java.lang.Enum,java.lang.Enum)
+    rust: jrt::util::collections::enum_set_of_items(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3})]))?
+  - sig: of(java.lang.Enum,java.lang.Enum,java.lang.Enum,java.lang.Enum,java.lang.Enum)
+    rust: jrt::util::collections::enum_set_of_items(&JArray::from_vec(vec![JObject::from({0}), JObject::from({1}), JObject::from({2}), JObject::from({3}), JObject::from({4})]))?
+  - sig: of(java.lang.Enum,java.lang.Enum[])
+    rust: jrt::util::collections::enum_set_of_first_rest({0}, {&1})?
+  - sig: noneOf(java.lang.Class)
+    rust: jrt::util::collections::enum_set_none_of({&0})?
+  - sig: allOf(java.lang.Class)
+    rust: jrt::util::collections::enum_set_all_of({&0})?
+  - sig: range(java.lang.Enum,java.lang.Enum)
+    rust: jrt::util::collections::enum_set_range({&0}, {&1})?
+  - sig: complementOf(java.util.EnumSet)
+    rust: jrt::util::collections::enum_set_complement_of({&0})?
+  - sig: copyOf(java.util.Collection)
+    rust: jrt::util::collections::enum_set_copy_of({&0})?
+  - sig: copyOf(java.util.EnumSet)
+    rust: jrt::util::collections::enum_set_copy_of({&0})?
+- class: java.util.BitSet
+  methods:
+  - sig: set(int)
+    rust: jrt::util::collections::bits_set({&this}, {0}, true)?
+  - sig: set(int,boolean)
+    rust: jrt::util::collections::bits_set({&this}, {0}, {1})?
+  - sig: set(int,int)
+    rust: jrt::util::collections::bits_set_range({&this}, {0}, {1}, true)?
+  - sig: set(int,int,boolean)
+    rust: jrt::util::collections::bits_set_range({&this}, {0}, {1}, {2})?
+  - sig: clear(int)
+    rust: jrt::util::collections::bits_set({&this}, {0}, false)?
+  - sig: clear(int,int)
+    rust: jrt::util::collections::bits_set_range({&this}, {0}, {1}, false)?
+  - sig: clear()
+    rust: jrt::util::collections::bits_clear_all({&this})?
+  - sig: flip(int)
+    rust: jrt::util::collections::bits_flip({&this}, {0})?
+  - sig: get(int)
+    rust: jrt::util::collections::bits_get({&this}, {0})?
+  - sig: cardinality()
+    rust: jrt::util::collections::bits_cardinality({&this})?
+  - sig: length()
+    rust: jrt::util::collections::bits_length({&this})?
+  - sig: size()
+    rust: jrt::util::collections::bits_size({&this})?
+  - sig: isEmpty()
+    rust: jrt::util::collections::bits_is_empty({&this})?
+  - sig: nextSetBit(int)
+    rust: jrt::util::collections::bits_next({&this}, {0}, true)?
+  - sig: nextClearBit(int)
+    rust: jrt::util::collections::bits_next({&this}, {0}, false)?
+  - sig: previousSetBit(int)
+    rust: jrt::util::collections::bits_previous_set({&this}, {0})?
+  - sig: and(java.util.BitSet)
+    rust: jrt::util::collections::bits_combine({&this}, {&0}, "and")?
+  - sig: or(java.util.BitSet)
+    rust: jrt::util::collections::bits_combine({&this}, {&0}, "or")?
+  - sig: xor(java.util.BitSet)
+    rust: jrt::util::collections::bits_combine({&this}, {&0}, "xor")?
+  - sig: andNot(java.util.BitSet)
+    rust: jrt::util::collections::bits_combine({&this}, {&0}, "andNot")?
+  - sig: intersects(java.util.BitSet)
+    rust: jrt::util::collections::bits_intersects({&this}, {&0})?
+  - sig: stream()
+    rust: jrt::util::collections::bits_stream({&this})?
+  - sig: clone()
+    rust: jrt::util::collections::bits_clone({&this})?
+  - sig: toString()
+    rust: '{this}.to_jstring()?'
+  - sig: equals(java.lang.Object)
+    rust: '{this}.equals(&JObject::from({0}))?'
+  - sig: hashCode()
+    rust: '{this}.hash_code()?'
+  constructors:
+  - sig: <init>()
+    rust: jrt::util::collections::new_bit_set(64)?
+  - sig: <init>(int)
+    rust: jrt::util::collections::new_bit_set({0})?
+- class: java.util.Collections
+  methods:
+  - sig: fill(java.util.List,java.lang.Object)
+    rust: jrt::util::misc::fill({&0}, {1})?
+  - sig: rotate(java.util.List,int)
+    rust: jrt::util::misc::rotate({&0}, {1})?
+  - sig: disjoint(java.util.Collection,java.util.Collection)
+    rust: jrt::util::misc::disjoint({&0}, {&1})?
+  - sig: singleton(java.lang.Object)
+    rust: jrt::util::misc::singleton({0})?
+  - sig: singletonMap(java.lang.Object,java.lang.Object)
+    rust: jrt::util::misc::singleton_map({0}, {1})?
+  - sig: synchronizedList(java.util.List)
+    rust: '{0}'
+  - sig: synchronizedMap(java.util.Map)
+    rust: '{0}'
+  - sig: synchronizedSet(java.util.Set)
+    rust: '{0}'
+  - sig: synchronizedCollection(java.util.Collection)
+    rust: '{0}'
+  - sig: emptyIterator()
+    rust: jrt::util::collections::enumeration(Vec::new())
+  - sig: max(java.util.Collection,java.util.Comparator)
+    rust: jrt::util::misc::max({&0}, {&1})?
+  - sig: binarySearch(java.util.List,java.lang.Object,java.util.Comparator)
+    rust: jrt::util::misc::binary_search({&0}, {1}, {&2})?
+- class: java.util.Map
+  methods:
+  - sig: ofEntries(java.util.Map.Entry[])
+    rust: jrt::util::misc::map_of_entries({&0})?
+- class: java.util.EnumMap
+  methods:
+  - sig: put(java.lang.Enum,java.lang.Object)
+    rust: '{this}.put(JObject::from({0}), JObject::from({1}))?'

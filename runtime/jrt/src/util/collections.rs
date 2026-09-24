@@ -75,6 +75,22 @@ pub enum ListKind {
     KeySet,
     Values,
     EntrySet,
+    Vector,
+    CopyOnWriteArrayList,
+    /// java.util.concurrent のキュー（逐次実行なので ArrayDeque と同じ動作。null は入れられない）。
+    LinkedBlockingQueue,
+    ConcurrentLinkedQueue,
+    ConcurrentLinkedDeque,
+    ArrayBlockingQueue,
+    LinkedBlockingDeque,
+}
+
+impl ListKind {
+    /// キュー（Deque）として振る舞い、null を入れられない種類。
+    fn is_queue(self) -> bool {
+        matches!(self, ListKind::ArrayDeque | ListKind::LinkedBlockingQueue | ListKind::ConcurrentLinkedQueue
+            | ListKind::ConcurrentLinkedDeque | ListKind::ArrayBlockingQueue | ListKind::LinkedBlockingDeque)
+    }
 }
 
 pub struct JList {
@@ -94,7 +110,7 @@ impl JList {
     }
 
     fn is_list(&self) -> bool {
-        !matches!(self.kind, ListKind::ArrayDeque | ListKind::KeySet | ListKind::Values | ListKind::EntrySet)
+        !self.kind.is_queue() && !matches!(self.kind, ListKind::KeySet | ListKind::Values | ListKind::EntrySet)
     }
 
     fn snapshot(&self) -> Vec<JObject> {
@@ -117,6 +133,13 @@ impl Object for JList {
             ListKind::KeySet => "java.util.HashMap$KeySet",
             ListKind::Values => "java.util.HashMap$Values",
             ListKind::EntrySet => "java.util.HashMap$EntrySet",
+            ListKind::Vector => "java.util.Vector",
+            ListKind::CopyOnWriteArrayList => "java.util.concurrent.CopyOnWriteArrayList",
+            ListKind::LinkedBlockingQueue => "java.util.concurrent.LinkedBlockingQueue",
+            ListKind::ConcurrentLinkedQueue => "java.util.concurrent.ConcurrentLinkedQueue",
+            ListKind::ConcurrentLinkedDeque => "java.util.concurrent.ConcurrentLinkedDeque",
+            ListKind::ArrayBlockingQueue => "java.util.concurrent.ArrayBlockingQueue",
+            ListKind::LinkedBlockingDeque => "java.util.concurrent.LinkedBlockingDeque",
         }
     }
     fn instance_of(&self, class: &str) -> bool {
@@ -124,11 +147,16 @@ impl Object for JList {
             return true;
         }
         match self.kind {
-            ListKind::ArrayDeque => matches!(class, "java.util.Deque" | "java.util.Queue" | "java.util.SequencedCollection"),
+            ListKind::ArrayDeque | ListKind::ConcurrentLinkedDeque | ListKind::LinkedBlockingDeque => {
+                matches!(class, "java.util.Deque" | "java.util.Queue" | "java.util.SequencedCollection" | "java.util.concurrent.BlockingDeque" | "java.util.concurrent.BlockingQueue")
+            }
+            ListKind::LinkedBlockingQueue | ListKind::ArrayBlockingQueue | ListKind::ConcurrentLinkedQueue => {
+                matches!(class, "java.util.Queue" | "java.util.concurrent.BlockingQueue")
+            }
             ListKind::KeySet | ListKind::EntrySet => class == "java.util.Set",
             ListKind::Values => false,
             ListKind::LinkedList => matches!(class, "java.util.List" | "java.util.Deque" | "java.util.Queue" | "java.util.SequencedCollection" | "java.util.AbstractList"),
-            ListKind::Stack => matches!(class, "java.util.List" | "java.util.Vector" | "java.util.RandomAccess" | "java.util.SequencedCollection" | "java.util.AbstractList"),
+            ListKind::Stack | ListKind::Vector => matches!(class, "java.util.List" | "java.util.Vector" | "java.util.RandomAccess" | "java.util.SequencedCollection" | "java.util.AbstractList"),
             _ => matches!(class, "java.util.List" | "java.util.RandomAccess" | "java.util.SequencedCollection" | "java.util.AbstractList"),
         }
     }
@@ -140,7 +168,7 @@ impl Object for JList {
             return Ok(true);
         }
         match self.kind {
-            ListKind::ArrayDeque => Ok(false),
+            k if k.is_queue() => Ok(false),
             ListKind::KeySet | ListKind::EntrySet => set_equals(&self.base().this(), other),
             ListKind::Values => Ok(false),
             _ => match other.downcast_ref::<JList>() {
@@ -162,7 +190,7 @@ impl Object for JList {
     }
     fn hash_code(&self) -> JResult<i32> {
         match self.kind {
-            ListKind::ArrayDeque | ListKind::Values => Ok(self.base().identity_hash()),
+            k if k.is_queue() || k == ListKind::Values => Ok(self.base().identity_hash()),
             ListKind::KeySet | ListKind::EntrySet => {
                 let mut h = 0i32;
                 for x in self.snapshot() {
@@ -224,6 +252,16 @@ pub enum SetKind {
     LinkedHash,
     Tree,
     Immutable,
+    /// EnumSet（序数の順。実装は TreeSet と同じ）。
+    Enum,
+    ConcurrentSkipList,
+    CopyOnWrite,
+}
+
+impl SetKind {
+    fn sorted(self) -> bool {
+        matches!(self, SetKind::Tree | SetKind::Enum | SetKind::ConcurrentSkipList)
+    }
 }
 
 enum SetImpl {
@@ -355,12 +393,16 @@ impl Object for JSet {
             SetKind::LinkedHash => "java.util.LinkedHashSet",
             SetKind::Tree => "java.util.TreeSet",
             SetKind::Immutable => "java.util.ImmutableCollections$SetN",
+            SetKind::Enum => "java.util.RegularEnumSet",
+            SetKind::ConcurrentSkipList => "java.util.concurrent.ConcurrentSkipListSet",
+            SetKind::CopyOnWrite => "java.util.concurrent.CopyOnWriteArraySet",
         }
     }
     fn instance_of(&self, class: &str) -> bool {
         matches!(class, "java.lang.Object" | "java.util.Collection" | "java.lang.Iterable" | "java.util.Set")
             || class == self.class_name()
-            || (self.kind == SetKind::Tree && matches!(class, "java.util.SortedSet" | "java.util.NavigableSet" | "java.util.SequencedSet" | "java.util.SequencedCollection"))
+            || (self.kind.sorted() && self.kind != SetKind::Enum && matches!(class, "java.util.SortedSet" | "java.util.NavigableSet" | "java.util.SequencedSet" | "java.util.SequencedCollection"))
+            || (self.kind == SetKind::Enum && class == "java.util.EnumSet")
             || (self.kind == SetKind::LinkedHash && matches!(class, "java.util.HashSet" | "java.util.SequencedSet" | "java.util.SequencedCollection"))
     }
     fn to_jstring(&self) -> JResult<JString> {
@@ -413,9 +455,10 @@ pub fn new_tree_set(comparator: JObject) -> JObject {
 }
 
 fn new_set_with(kind: SetKind, comparator: JObject, hash: HashCore) -> JObject {
-    let imp = match kind {
-        SetKind::Tree => SetImpl::Tree(RefCell::new(TreeCore::new(comparator))),
-        _ => SetImpl::Hash(RefCell::new(hash)),
+    let imp = if kind.sorted() {
+        SetImpl::Tree(RefCell::new(TreeCore::new(comparator)))
+    } else {
+        SetImpl::Hash(RefCell::new(hash))
     };
     alloc(|base| JSet { base, kind, imp })
 }
@@ -423,7 +466,7 @@ fn new_set_with(kind: SetKind, comparator: JObject, hash: HashCore) -> JObject {
 /// `new HashSet<>(collection)` など。
 pub fn new_set_from(kind: SetKind, source: &JObject) -> JResult<JObject> {
     let items = to_vec(source)?;
-    let comparator = if kind == SetKind::Tree {
+    let comparator = if kind.sorted() {
         source.downcast_ref::<JSet>().and_then(|s| match &s.imp {
             SetImpl::Tree(t) => Some(t.borrow().comparator.clone()),
             _ => None,
@@ -472,11 +515,24 @@ pub enum MapKind {
     LinkedHash,
     Tree,
     Immutable,
+    /// EnumMap（序数の順。実装は TreeMap と同じ）。
+    Enum,
+    Hashtable,
+    ConcurrentHash,
+    ConcurrentSkipList,
+    WeakHash,
+}
+
+impl MapKind {
+    fn sorted(self) -> bool {
+        matches!(self, MapKind::Tree | MapKind::Enum | MapKind::ConcurrentSkipList)
+    }
 }
 
 enum MapImpl {
     Hash(RefCell<HashCore>),
     Tree(RefCell<TreeCore>),
+    Table(RefCell<crate::util::core::TableCore>),
 }
 
 pub struct JMap {
@@ -490,13 +546,21 @@ impl JMap {
         match &self.imp {
             MapImpl::Hash(c) => c.borrow().entries(),
             MapImpl::Tree(c) => c.borrow().entries.clone(),
+            MapImpl::Table(c) => c.borrow().entries(),
         }
     }
 
     fn find(&self, key: &JObject) -> JResult<Option<Rc<MapEntry>>> {
         match &self.imp {
             MapImpl::Hash(c) => {
+                if key.is_null() && self.kind == MapKind::ConcurrentHash {
+                    return npe();
+                }
                 let h = spread(key)?;
+                c.borrow().find(key, h)
+            }
+            MapImpl::Table(c) => {
+                let h = crate::util::core::TableCore::hash(key)?;
                 c.borrow().find(key, h)
             }
             MapImpl::Tree(c) => {
@@ -520,7 +584,18 @@ impl JMap {
     }
 
     fn insert(&self, key: JObject, value: JObject) -> JResult<JObject> {
+        if value.is_null() && matches!(self.kind, MapKind::Hashtable | MapKind::ConcurrentHash | MapKind::ConcurrentSkipList) {
+            return npe();
+        }
         match &self.imp {
+            MapImpl::Table(c) => {
+                let h = crate::util::core::TableCore::hash(&key)?;
+                let found = c.borrow().find(&key, h)?;
+                if let Some(e) = found {
+                    return Ok(e.set_value(value));
+                }
+                c.borrow_mut().insert_new(MapEntry::new(h, key, value));
+            }
             MapImpl::Hash(c) => {
                 let h = spread(&key)?;
                 let found = c.borrow().find(&key, h)?;
@@ -563,7 +638,7 @@ impl JMap {
                 let h = spread(&key)?;
                 c.borrow_mut().insert_new_head(MapEntry::new(h, key, value));
             }
-            MapImpl::Tree(_) => {
+            MapImpl::Tree(_) | MapImpl::Table(_) => {
                 self.put(key, value)?;
             }
         }
@@ -585,6 +660,14 @@ impl JMap {
                 let pos = c.borrow().search(key)?;
                 Ok(pos.ok().map(|i| c.borrow_mut().entries.remove(i)))
             }
+            MapImpl::Table(c) => {
+                let h = crate::util::core::TableCore::hash(key)?;
+                let found = c.borrow().find(key, h)?;
+                if let Some(e) = &found {
+                    c.borrow_mut().remove_entry(e);
+                }
+                Ok(found)
+            }
         }
     }
 
@@ -592,13 +675,14 @@ impl JMap {
         match &self.imp {
             MapImpl::Hash(c) => c.borrow().len(),
             MapImpl::Tree(c) => c.borrow().entries.len(),
+            MapImpl::Table(c) => c.borrow().len(),
         }
     }
 
     fn tree(&self) -> JResult<&RefCell<TreeCore>> {
         match &self.imp {
             MapImpl::Tree(c) => Ok(c),
-            MapImpl::Hash(_) => unsupported(),
+            _ => unsupported(),
         }
     }
 }
@@ -613,12 +697,19 @@ impl Object for JMap {
             MapKind::LinkedHash => "java.util.LinkedHashMap",
             MapKind::Tree => "java.util.TreeMap",
             MapKind::Immutable => "java.util.ImmutableCollections$MapN",
+            MapKind::Enum => "java.util.EnumMap",
+            MapKind::Hashtable => "java.util.Hashtable",
+            MapKind::ConcurrentHash => "java.util.concurrent.ConcurrentHashMap",
+            MapKind::ConcurrentSkipList => "java.util.concurrent.ConcurrentSkipListMap",
+            MapKind::WeakHash => "java.util.WeakHashMap",
         }
     }
     fn instance_of(&self, class: &str) -> bool {
         matches!(class, "java.lang.Object" | "java.util.Map")
             || class == self.class_name()
-            || (self.kind == MapKind::Tree && matches!(class, "java.util.SortedMap" | "java.util.NavigableMap" | "java.util.SequencedMap"))
+            || (matches!(self.kind, MapKind::Tree | MapKind::ConcurrentSkipList) && matches!(class, "java.util.SortedMap" | "java.util.NavigableMap" | "java.util.SequencedMap"))
+            || (self.kind == MapKind::Hashtable && class == "java.util.Dictionary")
+            || (matches!(self.kind, MapKind::ConcurrentHash | MapKind::ConcurrentSkipList) && class == "java.util.concurrent.ConcurrentMap")
             || (self.kind == MapKind::LinkedHash && matches!(class, "java.util.HashMap" | "java.util.SequencedMap"))
     }
     fn to_jstring(&self) -> JResult<JString> {
@@ -659,12 +750,28 @@ impl Object for JMap {
 
 /// `new HashMap<>()` など。
 pub fn new_map(kind: MapKind) -> JObject {
-    new_map_with(kind, JObject::null(), HashCore::new(kind != MapKind::Hash))
+    new_map_with(kind, JObject::null(), hash_core_for(kind))
+}
+
+fn hash_core_for(kind: MapKind) -> HashCore {
+    match kind {
+        MapKind::ConcurrentHash => HashCore::new_concurrent(),
+        MapKind::LinkedHash | MapKind::Immutable => HashCore::new(true),
+        _ => HashCore::new(false),
+    }
 }
 
 /// `new HashMap<>(initialCapacity)`。
 pub fn new_map_with_capacity(kind: MapKind, cap: i32) -> JResult<JObject> {
-    Ok(new_map_with(kind, JObject::null(), HashCore::with_capacity(kind != MapKind::Hash, cap)?))
+    let core = if kind == MapKind::ConcurrentHash {
+        if cap < 0 {
+            return throw("java.lang.IllegalArgumentException", None);
+        }
+        HashCore::new_concurrent()
+    } else {
+        HashCore::with_capacity(matches!(kind, MapKind::LinkedHash | MapKind::Immutable), cap)?
+    };
+    Ok(new_map_with(kind, JObject::null(), core))
 }
 
 /// `new TreeMap<>(comparator)`。
@@ -673,9 +780,12 @@ pub fn new_tree_map(comparator: JObject) -> JObject {
 }
 
 fn new_map_with(kind: MapKind, comparator: JObject, hash: HashCore) -> JObject {
-    let imp = match kind {
-        MapKind::Tree => MapImpl::Tree(RefCell::new(TreeCore::new(comparator))),
-        _ => MapImpl::Hash(RefCell::new(hash)),
+    let imp = if kind.sorted() {
+        MapImpl::Tree(RefCell::new(TreeCore::new(comparator)))
+    } else if kind == MapKind::Hashtable {
+        MapImpl::Table(RefCell::new(crate::util::core::TableCore::new(11)))
+    } else {
+        MapImpl::Hash(RefCell::new(hash))
     };
     alloc(|base| JMap { base, kind, imp })
 }
@@ -683,7 +793,7 @@ fn new_map_with(kind: MapKind, comparator: JObject, hash: HashCore) -> JObject {
 /// `new HashMap<>(map)` など。
 pub fn new_map_from(kind: MapKind, source: &JObject) -> JResult<JObject> {
     let real = if kind == MapKind::Immutable { MapKind::LinkedHash } else { kind };
-    let m = new_map_with(real, JObject::null(), HashCore::new(real != MapKind::Hash));
+    let m = new_map_with(real, JObject::null(), hash_core_for(real));
     let entries = map_entries(source)?;
     if let Some(map) = m.downcast_ref::<JMap>() {
         if let MapImpl::Hash(c) = &map.imp {
@@ -703,7 +813,7 @@ fn freeze_map(m: JObject) -> JObject {
     let map = m.downcast_rc::<JMap>().expect("internal error: not a map");
     let imp = match &map.imp {
         MapImpl::Hash(c) => MapImpl::Hash(RefCell::new(std::mem::replace(&mut *c.borrow_mut(), HashCore::new(true)))),
-        MapImpl::Tree(_) => unreachable!(),
+        MapImpl::Tree(_) | MapImpl::Table(_) => unreachable!(),
     };
     alloc(|base| JMap { base, kind: MapKind::Immutable, imp })
 }
@@ -1174,7 +1284,7 @@ impl Collections for JObject {
         let x = x.into();
         if let Some(l) = list(self) {
             l.check_modifiable()?;
-            if l.kind == ListKind::ArrayDeque && x.is_null() {
+            if l.kind.is_queue() && x.is_null() {
                 return npe();
             }
             l.items.borrow_mut().push_back(x);
@@ -1238,6 +1348,7 @@ impl Collections for JObject {
             match &m.imp {
                 MapImpl::Hash(c) => c.borrow_mut().clear(),
                 MapImpl::Tree(c) => c.borrow_mut().entries.clear(),
+                MapImpl::Table(c) => c.borrow_mut().clear(),
             }
         } else if let Some(q) = self.downcast_ref::<JPriorityQueue>() {
             q.heap.borrow_mut().clear();
@@ -1531,7 +1642,7 @@ impl Collections for JObject {
         let x = x.into();
         let l = deque(self)?;
         l.check_modifiable()?;
-        if l.kind == ListKind::ArrayDeque && x.is_null() {
+        if l.kind.is_queue() && x.is_null() {
             return npe();
         }
         l.items.borrow_mut().push_front(x);
@@ -1542,7 +1653,7 @@ impl Collections for JObject {
         let x = x.into();
         let l = deque(self)?;
         l.check_modifiable()?;
-        if l.kind == ListKind::ArrayDeque && x.is_null() {
+        if l.kind.is_queue() && x.is_null() {
             return npe();
         }
         l.items.borrow_mut().push_back(x);
@@ -1951,6 +2062,9 @@ impl Collections for JObject {
     }
 
     fn has_next(&self) -> JResult<bool> {
+        if let Some(li) = self.downcast_ref::<JListIterator>() {
+            return li.has_next();
+        }
         match self.downcast_ref::<JIterator>() {
             Some(it) => Ok(it.pos.get() < it.items.len()),
             None => call(self, "hasNext", &[])?.unbox_bool(),
@@ -1958,6 +2072,9 @@ impl Collections for JObject {
     }
 
     fn next(&self) -> JResult<JObject> {
+        if let Some(li) = self.downcast_ref::<JListIterator>() {
+            return li.next();
+        }
         match self.downcast_ref::<JIterator>() {
             Some(it) => {
                 let p = it.pos.get();
@@ -1973,6 +2090,9 @@ impl Collections for JObject {
     }
 
     fn iter_remove(&self) -> JResult<()> {
+        if let Some(li) = self.downcast_ref::<JListIterator>() {
+            return li.remove();
+        }
         match self.downcast_ref::<JIterator>() {
             Some(it) => it.remove(),
             None => {
@@ -2010,4 +2130,514 @@ pub fn map_entry(key: impl Into<JObject>, value: impl Into<JObject>) -> JResult<
         return npe();
     }
     Ok(new_entry(k, v))
+}
+
+// ================================================================== ListIterator・逆順・配列化など
+
+/// `list.listIterator()` / `listIterator(index)`（リストを直接読み書きする）。
+pub struct JListIterator {
+    base: ObjectBase,
+    list: JObject,
+    cursor: Cell<i32>,
+    last: Cell<i32>,
+}
+
+impl Object for JListIterator {
+    fn base(&self) -> &ObjectBase {
+        &self.base
+    }
+    fn class_name(&self) -> &'static str {
+        "java.util.ArrayList$ListItr"
+    }
+    fn instance_of(&self, class: &str) -> bool {
+        matches!(class, "java.lang.Object" | "java.util.Iterator" | "java.util.ListIterator")
+    }
+}
+
+pub fn list_iterator(list: &JObject, index: i32) -> JResult<JObject> {
+    let n = list.size()?;
+    if index < 0 || index > n {
+        return index_oob(index, n as usize);
+    }
+    Ok(alloc(|base| JListIterator { base, list: list.clone(), cursor: Cell::new(index), last: Cell::new(-1) }))
+}
+
+fn list_it(o: &JObject) -> JResult<&JListIterator> {
+    match o.downcast_ref::<JListIterator>() {
+        Some(x) => Ok(x),
+        None => {
+            o.obj()?;
+            crate::object::class_cast(o, "java.util.ListIterator")
+        }
+    }
+}
+
+pub fn li_has_previous(o: &JObject) -> JResult<bool> {
+    Ok(list_it(o)?.cursor.get() > 0)
+}
+
+pub fn li_previous(o: &JObject) -> JResult<JObject> {
+    let it = list_it(o)?;
+    let i = it.cursor.get() - 1;
+    if i < 0 {
+        return no_such_element();
+    }
+    let x = it.list.get(i)?;
+    it.cursor.set(i);
+    it.last.set(i);
+    Ok(x)
+}
+
+pub fn li_next_index(o: &JObject) -> JResult<i32> {
+    Ok(list_it(o)?.cursor.get())
+}
+
+pub fn li_previous_index(o: &JObject) -> JResult<i32> {
+    Ok(list_it(o)?.cursor.get() - 1)
+}
+
+pub fn li_set(o: &JObject, x: impl Into<JObject>) -> JResult<()> {
+    let it = list_it(o)?;
+    if it.last.get() < 0 {
+        return throw("java.lang.IllegalStateException", None);
+    }
+    it.list.set(it.last.get(), x)?;
+    Ok(())
+}
+
+pub fn li_add(o: &JObject, x: impl Into<JObject>) -> JResult<()> {
+    let it = list_it(o)?;
+    it.list.add_at(it.cursor.get(), x)?;
+    it.cursor.set(it.cursor.get() + 1);
+    it.last.set(-1);
+    Ok(())
+}
+
+impl JListIterator {
+    fn has_next(&self) -> JResult<bool> {
+        Ok(self.cursor.get() < self.list.size()?)
+    }
+
+    fn next(&self) -> JResult<JObject> {
+        let i = self.cursor.get();
+        if i >= self.list.size()? {
+            return no_such_element();
+        }
+        let x = self.list.get(i)?;
+        self.cursor.set(i + 1);
+        self.last.set(i);
+        Ok(x)
+    }
+
+    fn remove(&self) -> JResult<()> {
+        let l = self.last.get();
+        if l < 0 {
+            return throw("java.lang.IllegalStateException", None);
+        }
+        self.list.remove_at(l)?;
+        if l < self.cursor.get() {
+            self.cursor.set(self.cursor.get() - 1);
+        }
+        self.last.set(-1);
+        Ok(())
+    }
+}
+
+/// `iterator.forEachRemaining(action)`。
+pub fn for_each_remaining(it: &JObject, action: &JObject) -> JResult<()> {
+    action.obj()?;
+    while it.has_next()? {
+        action.invoke("accept", &[it.next()?])?;
+    }
+    Ok(())
+}
+
+/// `descendingIterator()`（Deque / NavigableSet）。
+pub fn descending_iterator(c: &JObject) -> JResult<JObject> {
+    let mut v = to_vec(c)?;
+    v.reverse();
+    Ok(new_iterator(v, IterSource::None))
+}
+
+/// `descendingSet()` / `List.reversed()`（逆順の複製。Java のビューと違い、元のコレクションの変更は反映されない）。
+pub fn reversed_copy(c: &JObject) -> JResult<JObject> {
+    let mut v = to_vec(c)?;
+    v.reverse();
+    if let Some(s) = c.downcast_ref::<JSet>() {
+        if s.kind.sorted() {
+            let cmp = s.tree()?.borrow().comparator.clone();
+            let rev = crate::util::functional::reversed_or_natural(&cmp);
+            let out = new_tree_set(rev);
+            for x in v {
+                out.add(x)?;
+            }
+            return Ok(out);
+        }
+        let out = new_set(SetKind::LinkedHash);
+        for x in v {
+            out.add(x)?;
+        }
+        return Ok(out);
+    }
+    list_from_vec(ListKind::ArrayList, v)
+}
+
+/// `descendingMap()` / `descendingKeySet()`（逆順の TreeMap の複製）。
+pub fn descending_map(m: &JObject) -> JResult<JObject> {
+    let map = map(m)?;
+    let cmp = map.tree()?.borrow().comparator.clone();
+    let out = new_tree_map(crate::util::functional::reversed_or_natural(&cmp));
+    for e in map.entries() {
+        out.put(e.key.clone(), e.value())?;
+    }
+    Ok(out)
+}
+
+/// `collection.toArray()` / `toArray(T[])` / `toArray(IntFunction)`（Object[]。型付きの配列には呼び出し側で変換する）。
+pub fn to_array(c: &JObject) -> JResult<crate::JArray<JObject>> {
+    Ok(crate::JArray::from_vec(to_vec(c)?))
+}
+
+/// `Enumeration`（Hashtable.keys() / elements()、Vector.elements()）。
+pub fn enumeration(items: Vec<JObject>) -> JObject {
+    new_iterator(items, IterSource::None)
+}
+
+/// `hashtable.keys()`。
+pub fn keys_enumeration(m: &JObject) -> JResult<JObject> {
+    Ok(enumeration(map(m)?.entries().iter().map(|e| e.key.clone()).collect()))
+}
+
+/// `hashtable.elements()` / `vector.elements()`。
+pub fn elements_enumeration(c: &JObject) -> JResult<JObject> {
+    if let Some(m) = c.downcast_ref::<JMap>() {
+        return Ok(enumeration(m.entries().iter().map(|e| e.value()).collect()));
+    }
+    Ok(enumeration(to_vec(c)?))
+}
+
+/// `stack.search(o)`（上から 1 始まりの位置。なければ -1）。
+pub fn stack_search(s: &JObject, x: impl Into<JObject>) -> JResult<i32> {
+    let x = x.into();
+    let items = deque(s)?.snapshot();
+    for (i, e) in items.iter().enumerate().rev() {
+        if equals_nullable(&x, e)? {
+            return Ok((items.len() - i) as i32);
+        }
+    }
+    Ok(-1)
+}
+
+// ================================================================== EnumSet
+
+fn enum_set_of(items: Vec<JObject>) -> JResult<JObject> {
+    let s = new_set_with(SetKind::Enum, JObject::null(), HashCore::new(false));
+    for x in items {
+        s.add(x)?;
+    }
+    Ok(s)
+}
+
+/// `EnumSet.of(a, b, ...)`。
+pub fn enum_set_of_items(items: &crate::JArray<JObject>) -> JResult<JObject> {
+    enum_set_of(items.to_vec()?)
+}
+
+/// `EnumSet.of(first, rest...)`。
+pub fn enum_set_of_first_rest(first: impl Into<JObject>, rest: &crate::JArray<JObject>) -> JResult<JObject> {
+    let mut items = vec![first.into()];
+    items.extend(rest.to_vec()?);
+    enum_set_of(items)
+}
+
+/// `EnumSet.noneOf(Class)`。
+pub fn enum_set_none_of(class: &JObject) -> JResult<JObject> {
+    crate::util::misc::enum_constants(class)?;
+    enum_set_of(Vec::new())
+}
+
+/// `EnumSet.allOf(Class)`。
+pub fn enum_set_all_of(class: &JObject) -> JResult<JObject> {
+    enum_set_of(crate::util::misc::enum_constants(class)?.to_vec()?)
+}
+
+/// `EnumSet.range(from, to)`。
+pub fn enum_set_range(from: &JObject, to: &JObject) -> JResult<JObject> {
+    let (a, b) = (crate::lang::enums::ordinal(from)?, crate::lang::enums::ordinal(to)?);
+    if a > b {
+        return throw("java.lang.IllegalArgumentException", Some(&format!("{} > {}", to_java_string(from)?, to_java_string(to)?)));
+    }
+    let all = crate::lang::enums::values_of(from)?.to_vec()?;
+    enum_set_of(all.into_iter().filter(|x| crate::lang::enums::ordinal(x).is_ok_and(|o| a <= o && o <= b)).collect())
+}
+
+/// `EnumSet.complementOf(set)`（空の EnumSet の補集合は、要素の型が分からないので空にする）。
+pub fn enum_set_complement_of(set: &JObject) -> JResult<JObject> {
+    let items = to_vec(set)?;
+    let Some(first) = items.first() else { return enum_set_of(Vec::new()) };
+    let all = crate::lang::enums::values_of(first)?.to_vec()?;
+    let mut out = Vec::new();
+    for x in all {
+        if !contains_any(set, &x)? {
+            out.push(x);
+        }
+    }
+    enum_set_of(out)
+}
+
+/// `EnumSet.copyOf(collection)`。
+pub fn enum_set_copy_of(c: &JObject) -> JResult<JObject> {
+    enum_set_of(to_vec(c)?)
+}
+
+/// `new EnumMap<>(Class)` / `new EnumMap<>(map)`。
+pub fn new_enum_map(source: &JObject) -> JResult<JObject> {
+    let m = new_map_with(MapKind::Enum, JObject::null(), HashCore::new(false));
+    if source.downcast_ref::<JMap>().is_some() {
+        m.put_all(source)?;
+    } else {
+        crate::util::misc::enum_constants(source)?;
+    }
+    Ok(m)
+}
+
+// ================================================================== BitSet
+
+pub struct JBitSet {
+    base: ObjectBase,
+    words: RefCell<Vec<u64>>,
+}
+
+impl JBitSet {
+    fn get(&self, i: usize) -> bool {
+        self.words.borrow().get(i / 64).is_some_and(|w| w >> (i % 64) & 1 == 1)
+    }
+
+    fn set(&self, i: usize, v: bool) {
+        let mut w = self.words.borrow_mut();
+        if w.len() <= i / 64 {
+            if !v {
+                return;
+            }
+            w.resize(i / 64 + 1, 0);
+        }
+        if v {
+            w[i / 64] |= 1 << (i % 64);
+        } else {
+            w[i / 64] &= !(1 << (i % 64));
+        }
+    }
+
+    fn trim(&self) {
+        let mut w = self.words.borrow_mut();
+        while w.last() == Some(&0) {
+            w.pop();
+        }
+    }
+
+    fn length(&self) -> usize {
+        let w = self.words.borrow();
+        match w.iter().rposition(|x| *x != 0) {
+            Some(i) => i * 64 + 64 - w[i].leading_zeros() as usize,
+            None => 0,
+        }
+    }
+
+    fn bits(&self) -> Vec<usize> {
+        (0..self.length()).filter(|&i| self.get(i)).collect()
+    }
+}
+
+impl Object for JBitSet {
+    fn base(&self) -> &ObjectBase {
+        &self.base
+    }
+    fn class_name(&self) -> &'static str {
+        "java.util.BitSet"
+    }
+    fn instance_of(&self, class: &str) -> bool {
+        matches!(class, "java.lang.Object" | "java.util.BitSet" | "java.lang.Cloneable")
+    }
+    fn to_jstring(&self) -> JResult<JString> {
+        Ok(join(self.bits().iter().map(|b| b.to_string()).collect(), "{", "}"))
+    }
+    fn equals(&self, other: &JObject) -> JResult<bool> {
+        Ok(other.downcast_ref::<JBitSet>().is_some_and(|o| {
+            self.trim();
+            o.trim();
+            *o.words.borrow() == *self.words.borrow()
+        }))
+    }
+    fn hash_code(&self) -> JResult<i32> {
+        self.trim();
+        let mut h: i64 = 1234;
+        for (i, w) in self.words.borrow().iter().enumerate().rev() {
+            h ^= (*w as i64).wrapping_mul(i as i64 + 1);
+        }
+        Ok(((h >> 32) ^ h) as i32)
+    }
+}
+
+/// `new BitSet()` / `new BitSet(nbits)`。
+pub fn new_bit_set(nbits: i32) -> JResult<JObject> {
+    if nbits < 0 {
+        return throw("java.lang.NegativeArraySizeException", Some(&format!("nbits < 0: {nbits}")));
+    }
+    Ok(alloc(|base| JBitSet { base, words: RefCell::new(Vec::new()) }))
+}
+
+fn bits_of(o: &JObject) -> JResult<&JBitSet> {
+    match o.downcast_ref::<JBitSet>() {
+        Some(b) => Ok(b),
+        None => {
+            o.obj()?;
+            crate::object::class_cast(o, "java.util.BitSet")
+        }
+    }
+}
+
+fn check_bit(i: i32) -> JResult<usize> {
+    if i < 0 {
+        return throw("java.lang.IndexOutOfBoundsException", Some(&format!("bitIndex < 0: {i}")));
+    }
+    Ok(i as usize)
+}
+
+fn check_bit_range(from: i32, to: i32) -> JResult<(usize, usize)> {
+    if from < 0 {
+        return throw("java.lang.IndexOutOfBoundsException", Some(&format!("fromIndex < 0: {from}")));
+    }
+    if to < 0 {
+        return throw("java.lang.IndexOutOfBoundsException", Some(&format!("toIndex < 0: {to}")));
+    }
+    if from > to {
+        return throw("java.lang.IndexOutOfBoundsException", Some(&format!("fromIndex: {from} > toIndex: {to}")));
+    }
+    Ok((from as usize, to as usize))
+}
+
+/// `bits.set(i)` / `set(i, v)`。
+pub fn bits_set(o: &JObject, i: i32, v: bool) -> JResult<()> {
+    let i = check_bit(i)?;
+    bits_of(o)?.set(i, v);
+    Ok(())
+}
+
+/// `bits.set(from, to)` / `set(from, to, v)` / `clear(from, to)`。
+pub fn bits_set_range(o: &JObject, from: i32, to: i32, v: bool) -> JResult<()> {
+    let (a, b) = check_bit_range(from, to)?;
+    let bs = bits_of(o)?;
+    for i in a..b {
+        bs.set(i, v);
+    }
+    Ok(())
+}
+
+/// `bits.flip(i)`。
+pub fn bits_flip(o: &JObject, i: i32) -> JResult<()> {
+    let i = check_bit(i)?;
+    let bs = bits_of(o)?;
+    bs.set(i, !bs.get(i));
+    Ok(())
+}
+
+/// `bits.get(i)`。
+pub fn bits_get(o: &JObject, i: i32) -> JResult<bool> {
+    let i = check_bit(i)?;
+    Ok(bits_of(o)?.get(i))
+}
+
+/// `bits.clear()`。
+pub fn bits_clear_all(o: &JObject) -> JResult<()> {
+    bits_of(o)?.words.borrow_mut().clear();
+    Ok(())
+}
+
+/// `bits.cardinality()`。
+pub fn bits_cardinality(o: &JObject) -> JResult<i32> {
+    Ok(bits_of(o)?.words.borrow().iter().map(|w| w.count_ones() as i32).sum())
+}
+
+/// `bits.length()`。
+pub fn bits_length(o: &JObject) -> JResult<i32> {
+    Ok(bits_of(o)?.length() as i32)
+}
+
+/// `bits.size()`（確保しているビット数。64 の倍数）。
+pub fn bits_size(o: &JObject) -> JResult<i32> {
+    Ok((bits_of(o)?.words.borrow().len().max(1) * 64) as i32)
+}
+
+/// `bits.isEmpty()`。
+pub fn bits_is_empty(o: &JObject) -> JResult<bool> {
+    Ok(bits_of(o)?.length() == 0)
+}
+
+/// `bits.nextSetBit(from)`（なければ -1）/ `nextClearBit(from)`。
+pub fn bits_next(o: &JObject, from: i32, set: bool) -> JResult<i32> {
+    if from < 0 {
+        return throw("java.lang.IndexOutOfBoundsException", Some(&format!("fromIndex < 0: {from}")));
+    }
+    let bs = bits_of(o)?;
+    let len = bs.length();
+    let mut i = from as usize;
+    loop {
+        if set && i >= len {
+            return Ok(-1);
+        }
+        if bs.get(i) == set {
+            return Ok(i as i32);
+        }
+        i += 1;
+    }
+}
+
+/// `bits.previousSetBit(from)`。
+pub fn bits_previous_set(o: &JObject, from: i32) -> JResult<i32> {
+    let bs = bits_of(o)?;
+    let mut i = from;
+    while i >= 0 {
+        if bs.get(i as usize) {
+            return Ok(i);
+        }
+        i -= 1;
+    }
+    Ok(-1)
+}
+
+/// `a.and(b)` / `or` / `xor` / `andNot`。
+pub fn bits_combine(a: &JObject, b: &JObject, op: &str) -> JResult<()> {
+    let other = bits_of(b)?.words.borrow().clone();
+    let bs = bits_of(a)?;
+    let mut w = bs.words.borrow_mut();
+    let n = w.len().max(other.len());
+    w.resize(n, 0);
+    for i in 0..n {
+        let o = other.get(i).copied().unwrap_or(0);
+        w[i] = match op {
+            "and" => w[i] & o,
+            "or" => w[i] | o,
+            "xor" => w[i] ^ o,
+            _ => w[i] & !o,
+        };
+    }
+    Ok(())
+}
+
+/// `bits.intersects(other)`。
+pub fn bits_intersects(a: &JObject, b: &JObject) -> JResult<bool> {
+    let other = bits_of(b)?.words.borrow().clone();
+    Ok(bits_of(a)?.words.borrow().iter().zip(other.iter()).any(|(x, y)| x & y != 0))
+}
+
+/// `bits.stream()`（立っているビットの IntStream）。
+pub fn bits_stream(o: &JObject) -> JResult<JObject> {
+    let items = bits_of(o)?.bits().into_iter().map(|b| crate::box_i32(b as i32)).collect();
+    Ok(crate::util::stream::from_vec(crate::util::stream::Kind::Int, items))
+}
+
+/// `bits.clone()`。
+pub fn bits_clone(o: &JObject) -> JResult<JObject> {
+    let w = bits_of(o)?.words.borrow().clone();
+    Ok(alloc(|base| JBitSet { base, words: RefCell::new(w) }))
 }

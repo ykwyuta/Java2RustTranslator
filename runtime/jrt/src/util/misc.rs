@@ -218,6 +218,8 @@ pub fn require_non_null_else(o: JObject, default: JObject) -> JResult<JObject> {
 struct ClassObj {
     base: crate::object::ObjectBase,
     name: &'static str,
+    /// enum のクラスなら、定数の一覧（EnumSet.allOf など）。
+    enum_values: std::cell::Cell<Option<fn() -> JArray<JObject>>>,
 }
 
 impl crate::object::Object for ClassObj {
@@ -249,7 +251,32 @@ thread_local! {
 
 /// クラス名（binary name）の Class オブジェクト（`X.class`。同じ名前なら同じオブジェクト）。
 pub fn class_for(name: &'static str) -> JObject {
-    CLASSES.with(|c| c.borrow_mut().entry(name).or_insert_with(|| crate::object::alloc(|base| ClassObj { base, name })).clone())
+    CLASSES.with(|c| {
+        c.borrow_mut()
+            .entry(name)
+            .or_insert_with(|| crate::object::alloc(|base| ClassObj { base, name, enum_values: std::cell::Cell::new(None) }))
+            .clone()
+    })
+}
+
+/// enum のクラスの Class オブジェクト（`Color.class`）。定数の一覧を覚えておく。
+pub fn enum_class_for(name: &'static str, values: fn() -> JArray<JObject>) -> JObject {
+    let c = class_for(name);
+    if let Some(k) = c.downcast_ref::<ClassObj>() {
+        k.enum_values.set(Some(values));
+    }
+    c
+}
+
+/// enum の Class オブジェクトから定数の一覧（enum でなければ ClassCastException）。
+pub fn enum_constants(class: &JObject) -> JResult<JArray<JObject>> {
+    match class.downcast_ref::<ClassObj>().and_then(|k| k.enum_values.get()) {
+        Some(f) => Ok(f()),
+        None => {
+            class.obj()?;
+            crate::rt::throw("java.lang.ClassCastException", Some("not an enum class"))
+        }
+    }
 }
 
 /// `c.getName()`。
@@ -278,3 +305,64 @@ pub fn identity_hash_code(o: &JObject) -> i32 {
     }
 }
 
+
+/// `Collections.fill(list, x)`。
+pub fn fill(list: &JObject, x: impl Into<JObject>) -> JResult<()> {
+    let x = x.into();
+    for i in 0..list.size()? {
+        list.set(i, x.clone())?;
+    }
+    Ok(())
+}
+
+/// `Collections.rotate(list, distance)`。
+pub fn rotate(list: &JObject, distance: i32) -> JResult<()> {
+    let v = to_vec(list)?;
+    let n = v.len() as i64;
+    if n == 0 {
+        return Ok(());
+    }
+    let d = ((distance as i64 % n) + n) % n;
+    for (i, x) in v.into_iter().enumerate() {
+        list.set(((i as i64 + d) % n) as i32, x)?;
+    }
+    Ok(())
+}
+
+/// `Collections.disjoint(a, b)`。
+pub fn disjoint(a: &JObject, b: &JObject) -> JResult<bool> {
+    for x in to_vec(a)? {
+        if b.contains(x)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// `Collections.singleton(x)`。
+pub fn singleton(x: impl Into<JObject>) -> JResult<JObject> {
+    let s = crate::util::collections::new_set(SetKind::LinkedHash);
+    s.add(x)?;
+    new_set_from(SetKind::Immutable, &s)
+}
+
+/// `Collections.singletonMap(k, v)`。
+pub fn singleton_map(k: impl Into<JObject>, v: impl Into<JObject>) -> JResult<JObject> {
+    let m = crate::util::collections::new_map(crate::util::collections::MapKind::LinkedHash);
+    m.put(k, v)?;
+    crate::util::collections::new_map_from(crate::util::collections::MapKind::Immutable, &m)
+}
+
+/// `Map.ofEntries(e1, e2, ...)`。
+pub fn map_of_entries(entries: &JArray<JObject>) -> JResult<JObject> {
+    let mut pairs = Vec::new();
+    for e in entries.to_vec()? {
+        pairs.push((e.get_key()?, e.get_value()?));
+    }
+    crate::util::collections::map_of(pairs)
+}
+
+/// `Collections.max` などに渡す、要素の自然順序の比較（null）。
+pub fn natural() -> JObject {
+    JObject::null()
+}

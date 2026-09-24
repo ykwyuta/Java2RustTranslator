@@ -148,3 +148,13 @@ pub fn nulls(cmp: &JObject, first: bool) -> JResult<JObject> {
         Ok(box_i32(r))
     }))
 }
+
+/// 比較関数の逆順（null なら自然順序の逆順）。
+pub fn reversed_or_natural(cmp: &JObject) -> JObject {
+    if cmp.is_null() {
+        reverse_order()
+    } else {
+        let cmp = cmp.clone();
+        lambda(COMPARATOR, move |a| Ok(box_i32(compare_with(&cmp, &a[1], &a[0])?)))
+    }
+}

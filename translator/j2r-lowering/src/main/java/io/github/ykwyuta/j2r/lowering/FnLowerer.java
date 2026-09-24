@@ -1310,6 +1310,10 @@ final class FnLowerer {
             // クラスリテラル X.class（同じクラスなら同じ Class オブジェクト）。
             ProgramIndex.TypeInfo ti = cx.index().type(f.owner());
             String name = ti != null ? Lowerer.binaryName(cx.index(), ti.decl()) : f.owner();
+            if (ti != null && ti.decl().kind() == Decl.TypeKind.ENUM) {
+                return new RExpr.Call(new RExpr.Path("jrt::util::misc::enum_class_for"), List.of(new RExpr.Lit(quoted(name)),
+                        new RExpr.Path(imp.type(ti) + "::__values")));
+            }
             return new RExpr.Call(new RExpr.Path("jrt::util::misc::class_for"), List.of(new RExpr.Lit(quoted(name))));
         }
         ProgramIndex.FieldInfo fi = cx.index().field(f.owner(), f.name());
