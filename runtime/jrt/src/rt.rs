@@ -70,6 +70,23 @@ pub fn static_init<T>(init: impl FnOnce() -> JResult<T>) -> T {
     }
 }
 
+/// クラスの初期化で送出された例外 e を `ExceptionInInitializerError` にする（Error はそのまま）。
+pub fn initializer_error(e: JObject) -> JObject {
+    if e.instance_of("java.lang.Error") {
+        return e;
+    }
+    crate::lang::throwable::new_throwable("java.lang.ExceptionInInitializerError", JString::null(), e)
+}
+
+/// 初期化に失敗したクラスを再び使おうとした: `NoClassDefFoundError`。
+pub fn no_class_def_found<T>(class_name: &str) -> JResult<T> {
+    Err(crate::lang::throwable::new_throwable(
+        "java.lang.NoClassDefFoundError",
+        JString::from(format!("Could not initialize class {class_name}")),
+        JObject::null(),
+    ))
+}
+
 /// `main` の戻り値（例外を送出しない `main` は `()`、送出しうる `main` は `JResult<()>`）。
 pub trait MainResult {
     fn into_result(self) -> JResult<()>;

@@ -8,12 +8,19 @@ use crate::rt::JResult;
 pub struct EnumBase {
     name: JString,
     ordinal: i32,
+    /// enum のクラス名（本体付きの定数でも enum 自身の名前。`getDeclaringClass()` 用）。
+    class: &'static str,
 }
 
 impl EnumBase {
-    pub fn new(name: JString, ordinal: i32) -> EnumBase {
-        EnumBase { name, ordinal }
+    pub fn new(name: JString, ordinal: i32, class: &'static str) -> EnumBase {
+        EnumBase { name, ordinal, class }
     }
+}
+
+/// `getDeclaringClass()`。
+pub fn declaring_class(this: &JObject) -> JResult<JObject> {
+    Ok(crate::util::misc::class_for(of(this)?.class))
 }
 
 fn of(this: &JObject) -> JResult<&EnumBase> {

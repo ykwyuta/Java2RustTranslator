@@ -78,6 +78,12 @@ public sealed interface Expr {
     record InstanceOf(Expr expr, JType target, String binding, JType type, SourcePos pos) implements Expr {}
 
     /**
+     * パターンの束縛変数 name に value を代入して true になる式（record パターンの構成要素の、常に一致するパターン）。
+     * 束縛変数の型は value の型。type は boolean。
+     */
+    record Bind(String name, Expr value, JType type, SourcePos pos) implements Expr {}
+
+    /**
      * ラムダ式（メソッド参照もラムダに正規化する）。
      *
      * @param params     ラムダの仮引数（型は具体化された型）

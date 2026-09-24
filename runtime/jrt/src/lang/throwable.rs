@@ -217,7 +217,9 @@ pub fn jdk_super(class: &str) -> Option<&'static str> {
         "java.util.InputMismatchException" => "java.util.NoSuchElementException",
         "java.lang.AssertionError" | "java.lang.LinkageError" | "java.lang.VirtualMachineError" => "java.lang.Error",
         "java.lang.StackOverflowError" | "java.lang.OutOfMemoryError" => "java.lang.VirtualMachineError",
-        "java.lang.IncompatibleClassChangeError" => "java.lang.LinkageError",
+        "java.lang.IncompatibleClassChangeError"
+        | "java.lang.ExceptionInInitializerError"
+        | "java.lang.NoClassDefFoundError" => "java.lang.LinkageError",
         "java.lang.AbstractMethodError" => "java.lang.IncompatibleClassChangeError",
         _ => return None,
     })

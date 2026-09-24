@@ -70,6 +70,7 @@ public abstract class JirRewriter {
             case Expr.New x -> new Expr.New(x.constructor(), exprs(x.args()), expr(x.outer()), x.jdkThrowable(), x.type(), x.pos());
             case Expr.CtorCall x -> new Expr.CtorCall(x.isSuper(), x.constructor(), exprs(x.args()), expr(x.outer()), x.type(), x.pos());
             case Expr.InstanceOf x -> new Expr.InstanceOf(expr(x.expr()), x.target(), x.binding(), x.type(), x.pos());
+            case Expr.Bind x -> new Expr.Bind(x.name(), expr(x.value()), x.type(), x.pos());
             case Expr.Lambda x -> new Expr.Lambda(x.params(), (Stmt.Block) stmt(x.body()), x.sam(), x.interfaces(), x.type(), x.pos());
             case Expr.SwitchExpr x -> new Expr.SwitchExpr(expr(x.selector()), cases(x.cases()), x.type(), x.pos());
             case Expr.NewArray x -> new Expr.NewArray(x.type(), exprs(x.dims()), x.initializer() == null ? null : exprs(x.initializer()), x.pos());

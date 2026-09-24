@@ -240,8 +240,16 @@ impl crate::object::Object for ClassObj {
 
 /// `o.getClass()`（名前だけを持つ Class オブジェクト）。
 pub fn class_of(o: &JObject) -> JResult<JObject> {
-    let name = o.class_name()?;
-    Ok(crate::object::alloc(|base| ClassObj { base, name }))
+    Ok(class_for(o.class_name()?))
+}
+
+thread_local! {
+    static CLASSES: std::cell::RefCell<std::collections::HashMap<&'static str, JObject>> = std::cell::RefCell::new(std::collections::HashMap::new());
+}
+
+/// クラス名（binary name）の Class オブジェクト（`X.class`。同じ名前なら同じオブジェクト）。
+pub fn class_for(name: &'static str) -> JObject {
+    CLASSES.with(|c| c.borrow_mut().entry(name).or_insert_with(|| crate::object::alloc(|base| ClassObj { base, name })).clone())
 }
 
 /// `c.getName()`。

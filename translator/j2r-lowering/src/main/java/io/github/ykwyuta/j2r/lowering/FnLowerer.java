@@ -160,6 +160,9 @@ final class FnLowerer {
                 if (e instanceof Expr.InstanceOf io && io.binding() != null) {
                     out.putIfAbsent(io.binding(), io.target());
                 }
+                if (e instanceof Expr.Bind b) {
+                    out.putIfAbsent(b.name(), b.value().type());
+                }
                 if (e instanceof Expr.SwitchExpr se) {
                     se.cases().forEach(c -> patternBindings(c, out));
                 }
@@ -1087,10 +1090,11 @@ final class FnLowerer {
 
     /** static 初期化ブロックを持つ別のクラスの static 変数を参照する前に呼ぶ __clinit()（なければ null）。 */
     private RExpr clinitCall(ProgramIndex.TypeInfo t) {
-        if (t.decl().staticInit() == null || t == owner) {
+        if (!Lowerer.needsClinit(cx.index(), t) || t == owner) {
             return null;
         }
-        return new RExpr.Call(new RExpr.Path(imp.type(t) + "::__clinit"), List.of());
+        RExpr call = new RExpr.Call(new RExpr.Path(imp.type(t) + "::__clinit"), List.of());
+        return cx.throwing().isThrowing(Lowerer.clinitKey(t.decl())) ? tryOp(call) : call;
     }
 
     private static RExpr withClinit(RExpr clinit, RExpr e) {
@@ -1205,6 +1209,8 @@ final class FnLowerer {
             case Expr.New n -> newObject(n);
             case Expr.CtorCall c -> ctorCall(c);
             case Expr.InstanceOf io -> instanceOf(io);
+            case Expr.Bind b -> new RExpr.Block(List.of(new RStmt.ExprStmt(
+                    new RExpr.Assign(new RExpr.Path(Naming.valueName(b.name())), "=", value(b.value())), true)), new RExpr.Lit("true"), null, false);
             case Expr.Lambda l -> lambda(l);
             case Expr.SwitchExpr se -> switchExpr(se);
             case Expr.NewArray na -> newArray(na);
@@ -1300,6 +1306,12 @@ final class FnLowerer {
     }
 
     private RExpr staticField(Expr.StaticField f) {
+        if (f.name().equals("class")) {
+            // クラスリテラル X.class（同じクラスなら同じ Class オブジェクト）。
+            ProgramIndex.TypeInfo ti = cx.index().type(f.owner());
+            String name = ti != null ? Lowerer.binaryName(cx.index(), ti.decl()) : f.owner();
+            return new RExpr.Call(new RExpr.Path("jrt::util::misc::class_for"), List.of(new RExpr.Lit(quoted(name))));
+        }
         ProgramIndex.FieldInfo fi = cx.index().field(f.owner(), f.name());
         if (fi != null) {
             return switch (fi.storage()) {
@@ -1768,6 +1780,7 @@ final class FnLowerer {
                 case Expr.This t -> usesThis[0] = true;
                 case Expr.Lambda inner -> inner.params().forEach(p -> declared.add(p.name()));
                 case Expr.InstanceOf io when io.binding() != null -> declared.add(io.binding());
+                case Expr.Bind b -> declared.add(b.name());
                 default -> { }
             }
         });
