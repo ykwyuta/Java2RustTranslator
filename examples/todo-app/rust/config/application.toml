@@ -1,0 +1,3 @@
+# application.yml に相当する設定。環境変数 DATABASE_URL / PORT で上書きできる。
+database_url = "postgres://todo:todo@localhost:5432/todo"
+port = 8080

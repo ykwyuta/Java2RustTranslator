@@ -1,0 +1,39 @@
+# 移行先: axum + sqlx + askama + PostgreSQL。
+# 移行元の Spring Boot 版は ../spring-boot、対応関係は docs/07-spring-to-rust.md を参照。
+[package]
+name = "todo"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# リポジトリ直下の Cargo ワークスペース（runtime/jrt）には入れない独立したプロジェクト。
+[workspace]
+
+[dependencies]
+# Spring MVC（DispatcherServlet・@Controller）
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.7", features = ["fs", "trace"] }
+# MyBatis（Mapper・動的 SQL）と DataSource・@Transactional
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres", "chrono", "migrate", "macros"] }
+# Thymeleaf
+askama = "0.16"
+askama_web = { version = "0.16", features = ["axum-0.8", "tracing-0.1"] }
+# RedirectAttributes#addFlashAttribute（セッション上のフラッシュ属性）
+tower-sessions = "0.14"  # axum-messages 0.8 が 0.14 に依存
+axum-messages = "0.8"
+# Bean Validation とフォームのバインド
+validator = { version = "0.21", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+# java.time
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+# application.yml
+config = { version = "0.15", default-features = false, features = ["toml"] }
+# ログ（SLF4J + Logback）
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+thiserror = "2"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"

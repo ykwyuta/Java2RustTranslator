@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}見つかりません{% endblock %}
+{% block content %}
+    <h1>404 Not Found</h1>
+    <p>{% if let Some(message) = message %}{{ message }}{% else %}ページが見つかりませんでした{% endif %}</p>
+    <a class="button" href="/todos">一覧に戻る</a>
+{% endblock %}

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head(${todoId} == null ? '新規作成' : '編集')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="container">
+    <h1 th:text="${todoId} == null ? 'Todo を追加' : 'Todo を編集'">Todo を追加</h1>
+
+    <form th:action="${todoId} == null ? @{/todos} : @{/todos/{id}(id=${todoId})}"
+          th:object="${todoForm}" method="post" class="todo-form">
+        <div class="field">
+            <label for="title">タイトル</label>
+            <input type="text" th:field="*{title}" th:errorclass="invalid" maxlength="100">
+            <p class="error" th:each="err : ${#fields.errors('title')}" th:text="${err}"></p>
+        </div>
+        <div class="field">
+            <label for="description">説明</label>
+            <textarea th:field="*{description}" th:errorclass="invalid" rows="4"></textarea>
+            <p class="error" th:each="err : ${#fields.errors('description')}" th:text="${err}"></p>
+        </div>
+        <div class="field">
+            <label for="dueDate">期限</label>
+            <input type="date" th:field="*{dueDate}" th:errorclass="invalid">
+            <p class="error" th:each="err : ${#fields.errors('dueDate')}" th:text="${err}"></p>
+        </div>
+        <div class="field checkbox" th:if="${todoId != null}">
+            <label><input type="checkbox" th:field="*{done}"> 完了</label>
+        </div>
+        <div class="buttons">
+            <button type="submit" class="primary">保存</button>
+            <a class="button" th:href="@{/todos}">キャンセル</a>
+        </div>
+    </form>
+</main>
+</body>
+</html>

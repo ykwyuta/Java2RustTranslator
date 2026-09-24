@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('見つかりません')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="container">
+    <h1>404 Not Found</h1>
+    <p th:text="${message} ?: 'ページが見つかりませんでした'">ページが見つかりませんでした</p>
+    <a class="button" th:href="@{/todos}">一覧に戻る</a>
+</main>
+</body>
+</html>

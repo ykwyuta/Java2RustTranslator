@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.todo.mapper.TodoMapper">
+
+    <sql id="columns">
+        id, title, description, done, due_date, created_at, updated_at
+    </sql>
+
+    <select id="findAll" resultType="Todo">
+        SELECT <include refid="columns"/>
+        FROM todos
+        <where>
+            <if test="filter.name() == 'ACTIVE'">
+                AND done = FALSE
+            </if>
+            <if test="filter.name() == 'COMPLETED'">
+                AND done = TRUE
+            </if>
+            <if test="keyword != null and keyword != ''">
+                AND title ILIKE '%' || #{keyword} || '%'
+            </if>
+        </where>
+        ORDER BY done, due_date NULLS LAST, id
+    </select>
+
+    <select id="findById" resultType="Todo">
+        SELECT <include refid="columns"/>
+        FROM todos
+        WHERE id = #{id}
+    </select>
+
+    <select id="countByDone" resultType="long">
+        SELECT COUNT(*) FROM todos WHERE done = #{done}
+    </select>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        INSERT INTO todos (title, description, done, due_date, created_at, updated_at)
+        VALUES (#{title}, #{description}, #{done}, #{dueDate}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <update id="update">
+        UPDATE todos
+        SET title = #{title},
+            description = #{description},
+            done = #{done},
+            due_date = #{dueDate},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM todos WHERE id = #{id}
+    </delete>
+
+    <delete id="deleteCompleted">
+        DELETE FROM todos WHERE done = TRUE
+    </delete>
+</mapper>

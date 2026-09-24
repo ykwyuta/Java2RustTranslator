@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: todo
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/todo}
+    username: ${DATABASE_USERNAME:todo}
+    password: ${DATABASE_PASSWORD:todo}
+  sql:
+    init:
+      # 起動時に schema.sql を流す（CREATE TABLE IF NOT EXISTS なので何度流してもよい）
+      mode: always
+  messages:
+    basename: messages
+
+server:
+  port: ${PORT:8080}
+  servlet:
+    session:
+      # URL に ;jsessionid=... を付けない
+      tracking-modes: cookie
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.example.todo.domain
+  configuration:
+    map-underscore-to-camel-case: true

@@ -6,3 +6,5 @@ target/
 .idea/
 out/
 Cargo.lock
+# アプリケーションの例は依存のバージョンを固定する
+!examples/todo-app/rust/Cargo.lock

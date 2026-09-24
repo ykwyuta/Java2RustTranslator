@@ -11,6 +11,7 @@ Java ソースコードを Rust ソースコードへ変換するトランスパ
 | [04-directory-structure.md](04-directory-structure.md) | 本プロジェクトのディレクトリ構成・モジュール分割・命名規約 |
 | [05-roadmap.md](05-roadmap.md) | 段階的な実装計画と現在の状況 |
 | [06-usage.md](06-usage.md) | ビルド方法、Gradle プラグイン・コマンドラインでの変換、現在の対応範囲 |
+| [07-spring-to-rust.md](07-spring-to-rust.md) | Spring Boot（MVC・MyBatis・Thymeleaf）の Web アプリの移行先の標準構成（axum・sqlx・askama）と変換規則 |
 
 ## 要約（TL;DR）
 

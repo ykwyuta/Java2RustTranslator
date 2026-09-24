@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('一覧')}"></head>
+<body>
+<header th:replace="~{fragments/layout :: header}"></header>
+<main class="container">
+    <div th:replace="~{fragments/layout :: flash}"></div>
+
+    <div class="toolbar">
+        <nav class="filters">
+            <a th:href="@{/todos(filter='all', q=${q})}" th:classappend="${filter == 'all'} ? 'active'">
+                すべて (<span th:text="${summary.total}">0</span>)</a>
+            <a th:href="@{/todos(filter='active', q=${q})}" th:classappend="${filter == 'active'} ? 'active'">
+                未完了 (<span th:text="${summary.active}">0</span>)</a>
+            <a th:href="@{/todos(filter='completed', q=${q})}" th:classappend="${filter == 'completed'} ? 'active'">
+                完了 (<span th:text="${summary.completed}">0</span>)</a>
+        </nav>
+        <form class="search" th:action="@{/todos}" method="get">
+            <input type="hidden" name="filter" th:value="${filter}">
+            <input type="search" name="q" th:value="${q}" placeholder="タイトルで検索">
+            <button type="submit">検索</button>
+        </form>
+        <a class="button primary" th:href="@{/todos/new}">新規作成</a>
+    </div>
+
+    <p th:if="${todos.isEmpty()}" class="empty">Todo はありません</p>
+
+    <ul th:unless="${todos.isEmpty()}" class="todo-list">
+        <li th:each="todo : ${todos}" class="todo"
+            th:classappend="${todo.done} ? 'done' : (${todo.isOverdue(today)} ? 'overdue')">
+            <form th:action="@{/todos/{id}/toggle(id=${todo.id})}" method="post" class="inline">
+                <input type="hidden" name="filter" th:value="${filter}">
+                <button type="submit" class="check" th:text="${todo.done} ? '✔' : ''"
+                        th:title="${todo.done} ? '未完了に戻す' : '完了にする'"></button>
+            </form>
+            <div class="body">
+                <span class="title" th:text="${todo.title}">タイトル</span>
+                <p class="description" th:if="${todo.description}" th:text="${todo.description}">説明</p>
+                <span class="due" th:if="${todo.dueDate}">
+                    期限: <span th:text="${#temporals.format(todo.dueDate, 'yyyy/MM/dd')}">2026/01/01</span>
+                    <span th:if="${todo.isOverdue(today)}" class="badge">期限切れ</span>
+                </span>
+            </div>
+            <div class="actions">
+                <a class="button" th:href="@{/todos/{id}/edit(id=${todo.id})}">編集</a>
+                <form th:action="@{/todos/{id}/delete(id=${todo.id})}" method="post" class="inline"
+                      onsubmit="return confirm('削除しますか？');">
+                    <button type="submit" class="danger">削除</button>
+                </form>
+            </div>
+        </li>
+    </ul>
+
+    <form th:if="${summary.completed > 0}" th:action="@{/todos/completed/delete}" method="post" class="footer"
+          onsubmit="return confirm('完了済みの Todo をすべて削除しますか？');">
+        <button type="submit" class="danger">完了済みを削除</button>
+    </form>
+</main>
+</body>
+</html>

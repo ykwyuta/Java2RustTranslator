@@ -1,0 +1,18 @@
+{#- fragments/layout.html の head・header フラグメントに相当する。子テンプレートは block を埋める。 -#}
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}{% endblock %} | Todo</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="site-header">
+    <a class="brand" href="/todos">Todo</a>
+</header>
+<main class="container">
+{%- block content %}{% endblock %}
+</main>
+</body>
+</html>
