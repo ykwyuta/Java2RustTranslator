@@ -15,7 +15,6 @@ use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 use crate::ClockConfig;
 use crate::clock::Clock;
-use crate::config::AppConfig;
 use crate::error::Error;
 use crate::service::{ActivityService, TodoService};
 use crate::spring_web::{BadRequest, render};
@@ -98,7 +97,7 @@ async fn not_found() -> Response {
 }
 
 /// DataSource（HikariCP）の作成と、schema.sql（spring.sql.init.mode=always）の実行。
-pub async fn connect(config: &AppConfig) -> Result<PgPool, sqlx::Error> {
+pub async fn connect(config: &crate::config::AppConfig) -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url)

@@ -1,12 +1,12 @@
 //! Translated from `BookController` (BookController.java) by Java2RustTranslator.
 
 use axum::extract::{Path, State};
-use axum::response::{IntoResponse, Response};
+use axum::response::Response;
 use serde::Deserialize;
 
 use crate::app::{AppError, AppState};
 use crate::domain::Sort;
-use crate::spring_web::{BindingResult, Flash, RequestParams, redirect};
+use crate::spring_web::{BindingResult, Flash, RequestParams, render};
 use crate::views::{BooksDetailView, BooksFormView, BooksListView};
 use crate::web::BookForm;
 
@@ -30,12 +30,15 @@ pub async fn list(
     let model_summary = state.book_service.summary().await?;
     let model_keyword = keyword.map(str::to_string);
     Ok(
-        BooksListView {
-            books: model_books,
-            summary: model_summary,
-            keyword: model_keyword,
-            notice: flash.get("notice"),
-        }.into_response(),
+        render(
+            "books/list",
+            BooksListView {
+                books: model_books,
+                summary: model_summary,
+                keyword: model_keyword,
+                notice: flash.get("notice"),
+            },
+        ),
     )
 }
 
@@ -49,11 +52,14 @@ pub async fn detail(
     let model_label = state.book_service.label(&book);
     let model_book = book;
     Ok(
-        BooksDetailView {
-            label: model_label,
-            book: model_book,
-            notice: flash.get("notice"),
-        }.into_response(),
+        render(
+            "books/detail",
+            BooksDetailView {
+                label: model_label,
+                book: model_book,
+                notice: flash.get("notice"),
+            },
+        ),
     )
 }
 
@@ -61,10 +67,13 @@ pub async fn detail(
 pub async fn new_form() -> Result<Response, AppError> {
     let model_book_form = BookForm::default();
     Ok(
-        BooksFormView {
-            book_form: model_book_form,
-            book_form_binding: BindingResult::default(),
-        }.into_response(),
+        render(
+            "books/form",
+            BooksFormView {
+                book_form: model_book_form,
+                book_form_binding: BindingResult::default(),
+            },
+        ),
     )
 }
 
@@ -78,10 +87,13 @@ pub async fn register(
     form.validate(&mut binding_result);
     if binding_result.has_errors() {
         return Ok(
-            BooksFormView {
-                book_form: form,
-                book_form_binding: binding_result,
-            }.into_response(),
+            render(
+                "books/form",
+                BooksFormView {
+                    book_form: form,
+                    book_form_binding: binding_result,
+                },
+            ),
         );
     }
     let book = state.book_service.register(
@@ -89,8 +101,8 @@ pub async fn register(
         form.author.as_deref(),
         form.get_stock(),
     ).await?;
-    flash.set("notice", format!("registered {}", book.title)).await;
-    Ok(redirect(&format!("/books/{}", book.id), &[]))
+    flash.set("notice", format!("registered {}", book.title));
+    Ok(flash.redirect(&format!("/books/{}", book.id), &[]).await)
 }
 
 /// `POST /books/{id}/archive`
@@ -108,7 +120,7 @@ pub async fn archive(
         } else {
             "already archived"
         }).to_string(),
-    ).await;
+    );
     redirect_params.push(("inStock", false.to_string()));
-    Ok(redirect("/books", &redirect_params))
+    Ok(flash.redirect("/books", &redirect_params).await)
 }

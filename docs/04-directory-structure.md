@@ -35,7 +35,7 @@ Java2RustTranslator/
 │   ├── j2r-rir/                     # RIR（Rust IR）の定義と RustPrinter（優先順位に基づく括弧付け）
 │   ├── j2r-mappings/                # JDK API のマッピング規則（YAML リソースのみ）
 │   ├── j2r-lowering/                # JIR → RIR の変換（Lowerer）、型の対応（TypeMapper）、マッピング規則の読み込み
-│   ├── j2r-spring/                  # --framework spring: Spring Boot + MyBatis → sqlx の crate（docs/07-spring-to-rust.md）
+│   ├── j2r-spring/                  # --framework spring: Spring Boot + MyBatis + Thymeleaf → axum + sqlx + askama（docs/07-spring-to-rust.md）
 │   ├── j2r-backend/                 # Cargo プロジェクトの書き出し、jrt ソースの同梱、cargo の実行
 │   ├── j2r-driver/                  # パイプライン全体の実行（ライブラリ API: Translator.translate(options)）
 │   ├── j2r-cli/                     # コマンドライン `j2r`（picocli）。installDist で配布物を作る
@@ -62,7 +62,7 @@ Java2RustTranslator/
 │   ├── e2e/<カテゴリ>/<ケース>/     # 差分実行テスト: src/**/*.java（+ 任意の stdin.txt）
 │   ├── junit/<カテゴリ>/<ケース>/   # JUnit テストの変換: src/**/*.java（JUnit と cargo test の結果を比べる）
 │   ├── golden/<カテゴリ>/<ケース>/  # ゴールデンテスト: src/**/*.java + expected/（生成される src/ の中身）
-│   ├── spring/<ケース>/             # --framework spring のゴールデンテスト: src/main/{java,resources} + expected/
+│   ├── spring/<ケース>/             # --framework spring のゴールデンテスト: src/main/{java,resources}・src/test/java + expected/
 │   │   └── (stubs/)                 #   Spring・MyBatis・JSpecify の注釈のスタブ
 │   └── corpus/                      # 実プロジェクトの回帰コーパス（予定）
 │

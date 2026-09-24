@@ -1,0 +1,11 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/catalog}
+    username: catalog
+    password: catalog
+  sql:
+    init:
+      mode: always
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true

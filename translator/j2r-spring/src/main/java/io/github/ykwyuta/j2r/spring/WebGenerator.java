@@ -1108,7 +1108,7 @@ final class WebGenerator {
 
     private RItem connect(Imports imports, boolean migrate) {
         imports.add("sqlx::postgres::PgPoolOptions");
-        imports.add("crate::config::AppConfig");
+
         List<RStmt> stmts = new ArrayList<>();
         stmts.add(new RStmt.Let("pool", false, null, new RExpr.Path(
                 "PgPoolOptions::new()\n        .max_connections(10)\n        .connect(&config.database_url)\n        .await?")));
@@ -1116,7 +1116,7 @@ final class WebGenerator {
             stmts.add(new RStmt.ExprStmt(new RExpr.Path("crate::MIGRATOR.run(&pool).await?"), true));
         }
         String doc = migrate ? "DataSource（HikariCP）の作成と、schema.sql（spring.sql.init.mode=always）の実行。" : "DataSource（HikariCP）の作成。";
-        return new RItem.Fn(List.of(doc), List.of(), "pub", true, "connect", List.of(new RItem.Param("config", false, new RType("&AppConfig"))),
+        return new RItem.Fn(List.of(doc), List.of(), "pub", true, "connect", List.of(new RItem.Param("config", false, new RType("&crate::config::AppConfig"))),
                 new RType("Result<PgPool, sqlx::Error>"), new RExpr.Block(stmts, new RExpr.Path("Ok(pool)"), null, false));
     }
 

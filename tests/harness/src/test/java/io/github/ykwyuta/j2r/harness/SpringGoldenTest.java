@@ -21,10 +21,10 @@ import org.junit.jupiter.api.TestFactory;
 
 /**
  * Spring モード（{@code --framework spring}）のゴールデンテスト: tests/spring/&lt;case&gt;/src/main/java（と
- * src/main/resources）を変換した crate と expected/ を比べる。Spring・MyBatis・JSpecify の注釈は tests/spring/stubs の
+ * src/main/resources・src/test/java）を変換した crate と expected/ を比べる。Spring・MyBatis・JSpecify の注釈は tests/spring/stubs の
  * スタブで型検査する（変換器は注釈の名前と値しか見ない）。
  *
- * <p>cargo があれば、生成した crate を cargo check し、エラーも警告も出ないことを確かめる（依存 crate のビルドは
+ * <p>cargo があれば、生成した crate を（テストも含めて）cargo check し、エラーも警告も出ないことを確かめる（依存 crate のビルドは
  * build/spring-target で共有する）。{@code ./gradlew :j2r-test-harness:test -PupdateGolden=true} で expected/ を更新する。
  */
 class SpringGoldenTest {
@@ -42,7 +42,11 @@ class SpringGoldenTest {
     }
 
     private static Translator.Result translate(Path dir, Path out) {
-        Translator.Result r = Translator.translate(TranslatorOptions.builder()
+        TranslatorOptions.Builder options = TranslatorOptions.builder();
+        if (Files.isDirectory(dir.resolve("src/test/java"))) {
+            options.addTestSource(dir.resolve("src/test/java"));
+        }
+        Translator.Result r = Translator.translate(options
                 .addSource(dir.resolve("src/main/java"))
                 .addSource(ROOT.resolve("stubs"))
                 .addResourceDir(dir.resolve("src/main/resources"))
@@ -95,7 +99,7 @@ class SpringGoldenTest {
         Path out = Path.of("build/spring-check").toAbsolutePath().resolve(dir.getFileName().toString());
         translate(dir, out);
         Path target = Path.of("build/spring-target").toAbsolutePath();
-        CargoRunner.Result check = CargoRunner.run(out, List.of("check", "--quiet"), new byte[0],
+        CargoRunner.Result check = CargoRunner.run(out, List.of("check", "--quiet", "--all-targets"), new byte[0],
                 Map.of("CARGO_TARGET_DIR", target.toString()));
         assertThat(check.ok()).as("cargo check failed:\n%s", check.output()).isTrue();
         assertThat(check.output()).as("cargo check must not emit warnings").doesNotContain("warning");

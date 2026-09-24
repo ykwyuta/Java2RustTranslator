@@ -3,7 +3,7 @@
 use sqlx::{PgConnection, Postgres, QueryBuilder};
 
 use crate::domain::{Book, Sort, StockSummary};
-use crate::mybatis::Clause;
+use crate::mybatis::Trim;
 
 /// `@Select`
 pub async fn find_by_id(conn: &mut PgConnection, id: i64) -> sqlx::Result<Option<Book>> {
@@ -38,11 +38,11 @@ pub async fn search(
     let mut query = QueryBuilder::<Postgres>::new(
         "SELECT id, title, author, stock, archived FROM books",
     );
-    let mut where_clause = Clause::where_clause();
-    where_clause.part(&mut query, " AND ").push("archived = FALSE");
+    let mut where_clause = Trim::new("WHERE", "");
+    where_clause.part(&mut query, "", "").push("archived = FALSE");
     if keyword.is_some() && keyword != Some("") {
         where_clause
-            .part(&mut query, " AND ")
+            .part(&mut query, "AND", "")
             .push("(title ILIKE '%' || ")
             .push_bind(keyword)
             .push(" || '%' OR author ILIKE '%' || ")
@@ -50,7 +50,7 @@ pub async fn search(
             .push(" || '%')");
     }
     if in_stock_only {
-        where_clause.part(&mut query, " AND ").push("stock > 0");
+        where_clause.part(&mut query, "AND", "").push("stock > 0");
     }
     if sort.name() == "STOCK_DESC" {
         query.push(" ORDER BY stock DESC, id");
@@ -71,13 +71,13 @@ pub async fn find_ids_by_author(conn: &mut PgConnection, author: &str) -> sqlx::
 /// `<update id="updateSelective">`
 pub async fn update_selective(conn: &mut PgConnection, book: &Book) -> sqlx::Result<i32> {
     let mut query = QueryBuilder::<Postgres>::new("UPDATE books");
-    let mut set_clause = Clause::set_clause();
-    set_clause.part(&mut query, ", ").push("title = ").push_bind(&book.title);
+    let mut set_clause = Trim::new("SET", "");
+    set_clause.part(&mut query, "", ",").push("title = ").push_bind(&book.title);
     if book.author.is_some() {
-        set_clause.part(&mut query, ", ").push("author = ").push_bind(&book.author);
+        set_clause.part(&mut query, "", ",").push("author = ").push_bind(&book.author);
     }
     if book.stock >= 0 {
-        set_clause.part(&mut query, ", ").push("stock = ").push_bind(book.stock);
+        set_clause.part(&mut query, "", ",").push("stock = ").push_bind(book.stock);
     }
     query.push(" WHERE id = ").push_bind(book.id);
     let result = query.build().execute(conn).await?;

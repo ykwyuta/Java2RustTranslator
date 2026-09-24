@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<form th:action="@{/items}" th:object="${itemForm}" method="post">
+    <label for="name" th:text="#{label.name}">Name</label>
+    <input type="text" th:field="*{name}">
+    <p th:each="err : ${#fields.errors('name')}" th:text="${err}"></p>
+    <label for="category" th:text="#{label.category}">Category</label>
+    <select th:field="*{category}">
+        <option th:each="c : ${categories}" th:value="${c}" th:text="#{${'category.' + c}}">Book</option>
+    </select>
+    <label for="price" th:text="#{label.price}">Price</label>
+    <input type="number" th:field="*{price}">
+    <button type="submit">Save</button>
+</form>
+</body>
+</html>

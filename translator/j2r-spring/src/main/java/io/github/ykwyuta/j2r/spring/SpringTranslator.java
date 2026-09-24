@@ -595,9 +595,36 @@ public final class SpringTranslator {
     List<RT> paramTypes(Decl.MethodDecl m) {
         List<RT> out = new ArrayList<>();
         for (int i = 0; i < m.params().size(); i++) {
-            out.add(RT.borrowed(types.param(m.ref(), i, m.params().get(i).type())));
+            RT owned = types.param(m.ref(), i, m.params().get(i).type());
+            boolean mutated = owned instanceof RT.Named n && (n.kind() == RT.Named.Kind.ENTITY || n.kind() == RT.Named.Kind.FORM)
+                    && m.body() != null && mutatesParam(m.body(), m.params().get(i).name());
+            out.add(mutated ? new RT.Ref(owned, true) : RT.borrowed(owned));
         }
         return out;
+    }
+
+    /** 引数 name（エンティティ）を変更する（setter・フィールドへの代入・&mut で受け取る Mapper に渡す）。 */
+    private boolean mutatesParam(Stmt.Block body, String name) {
+        boolean[] found = {false};
+        JirVisitor.walk(body, s -> { }, e -> {
+            switch (e) {
+                case Expr.Call c when c.receiver() instanceof Expr.Local l && l.name().equals(name)
+                        && plans.setters.containsKey(c.method().key()) -> found[0] = true;
+                case Expr.Assign a when a.target() instanceof Expr.FieldAccess fa && fa.receiver() instanceof Expr.Local l
+                        && l.name().equals(name) -> found[0] = true;
+                case Expr.Call c when plans.mapperFns.containsKey(c.method().key()) -> {
+                    List<RT> ps = plans.mapperFns.get(c.method().key()).params();
+                    for (int i = 0; i < c.args().size() && i < ps.size(); i++) {
+                        if (ps.get(i) instanceof RT.Ref r && r.mut() && unwrapCast(c.args().get(i)) instanceof Expr.Local l
+                                && l.name().equals(name)) {
+                            found[0] = true;
+                        }
+                    }
+                }
+                default -> { }
+            }
+        });
+        return found[0];
     }
 
     /** サービスのメソッドの解析結果。otherCalls はほかのサービスのメソッドの呼び出し。 */

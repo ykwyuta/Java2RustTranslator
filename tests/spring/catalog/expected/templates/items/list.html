@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Items</title>
+</head>
+<body>
+{% if let Some(message) = message %}<p class="flash">{{ message }}</p>{% endif %}
+<p>{{ count.message_arg() }} items</p>
+<p>Prices in {yen}, updated {{ count.message_arg() }} times</p>
+<ul>
+    {% for item in items %}<li>
+        <span>{{ item.name }}</span>
+        <span>{% match item.category.name() %}{% when "BOOK" %}Book{% when "FOOD" %}Food{% when "TOOL" %}Tool{% else %}??category.{{ item.category.name() }}??{% endmatch %}</span>
+        <form action="/items/{{ item.id }}/discount" method="post"><button>-10%</button></form>
+    </li>{% endfor %}
+</ul>
+</body>
+</html>

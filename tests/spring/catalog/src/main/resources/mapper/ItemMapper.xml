@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.catalog.mapper.ItemMapper">
+
+    <resultMap id="itemMap" type="Item">
+        <id property="id" column="item_id"/>
+        <result property="name" column="item_name"/>
+    </resultMap>
+
+    <select id="findByIds" resultMap="itemMap">
+        SELECT id AS item_id, name AS item_name, category, price, note
+        FROM items
+        <where>
+            <foreach collection="ids" item="id" open="id IN (" separator=", " close=")">
+                #{id}
+            </foreach>
+        </where>
+    </select>
+
+    <select id="search" resultType="Item">
+        <bind name="pattern" value="'%' + keyword + '%'"/>
+        SELECT id, name, category, price, note
+        FROM items
+        <trim prefix="WHERE" prefixOverrides="AND |OR ">
+            <if test="keyword != null">
+                AND name ILIKE #{pattern}
+            </if>
+            <if test="!categories.isEmpty()">
+                AND category IN
+                <foreach collection="categories" item="c" open="(" separator=", " close=")">
+                    #{c}
+                </foreach>
+            </if>
+        </trim>
+        ORDER BY ${orderBy}
+    </select>
+
+    <insert id="insertAll">
+        INSERT INTO items (name, category, price, note)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.name}, #{item.category}, #{item.price}, #{item.note})
+        </foreach>
+    </insert>
+
+    <update id="updateSelective">
+        UPDATE items
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="note != null">note = #{note},</if>
+            name = #{name},
+            price = #{price},
+        </trim>
+        WHERE id = #{id}
+    </update>
+</mapper>

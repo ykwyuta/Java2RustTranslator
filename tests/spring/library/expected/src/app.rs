@@ -11,10 +11,9 @@ use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
-use crate::config::AppConfig;
 use crate::error::Error;
 use crate::service::BookService;
-use crate::spring_web::BadRequest;
+use crate::spring_web::{BadRequest, render};
 use crate::views::Error404View;
 use crate::web::{book_controller, library_exception_handler};
 
@@ -75,13 +74,13 @@ pub fn app(state: AppState) -> Router {
 
 /// どのルートにも当たらないリクエスト（Spring Boot の既定のエラーページ templates/error/404.html）。
 async fn not_found() -> Response {
-    (StatusCode::NOT_FOUND, Error404View {
+    (StatusCode::NOT_FOUND, render("error/404", Error404View {
         message: None,
-    }).into_response()
+    })).into_response()
 }
 
 /// DataSource（HikariCP）の作成と、schema.sql（spring.sql.init.mode=always）の実行。
-pub async fn connect(config: &AppConfig) -> Result<PgPool, sqlx::Error> {
+pub async fn connect(config: &crate::config::AppConfig) -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(10)
         .connect(&config.database_url)

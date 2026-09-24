@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html>
+<body>
+<form action="/items" method="post">
+    <label for="name">Name</label>
+    <input type="text" id="name" name="name" value="{% if let Some(value) = item_form.name %}{{ value }}{% endif %}">
+    {% for err in item_form_binding.field_errors("name") %}<p>{{ err }}</p>{% endfor %}
+    <label for="category">Category</label>
+    <select id="category" name="category">
+        {% for c in categories %}<option value="{{ c.name() }}"{% if item_form.category.name() == c.name() %} selected="selected"{% endif %}>{% match c.name() %}{% when "BOOK" %}Book{% when "FOOD" %}Food{% when "TOOL" %}Tool{% else %}??category.{{ c.name() }}??{% endmatch %}</option>{% endfor %}
+    </select>
+    <label for="price">Price</label>
+    <input type="number" id="price" name="price" value="{% if let Some(rejected) = item_form_binding.rejected_value("price") %}{{ rejected }}{% else %}{{ item_form.price }}{% endif %}">
+    <button type="submit">Save</button>
+</form>
+</body>
+</html>

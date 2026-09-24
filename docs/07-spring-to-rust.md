@@ -4,11 +4,12 @@ Spring Boot 4.1 + Spring MVC + MyBatis + Thymeleaf + PostgreSQL で作った Web
 **移行先の標準構成** と、層ごとの **変換規則** をまとめる。題材として同じ Todo 管理アプリを両方で実装した。
 
 - 移行元: [examples/todo-app/spring-boot](../examples/todo-app/spring-boot)
-- 移行先: [examples/todo-app/rust](../examples/todo-app/rust)（**j2r が移行元から生成**。手で書いたのは結合テストだけ）
+- 移行先: [examples/todo-app/rust](../examples/todo-app/rust)（**j2r が移行元から生成**。結合テストも MockMvc のテストから生成する）
 - 動かし方: [examples/todo-app/README.md](../examples/todo-app/README.md)
 
 j2r は `--framework spring` で、Spring Boot のアプリ（コントローラ・フォーム・Thymeleaf のテンプレート・例外ハンドラ・
-サービス・MyBatis の Mapper・ドメイン・設定クラス・application.yml）を、この文書の構成の Rust のアプリに変換する
+サービス・MyBatis の Mapper・ドメイン・設定クラス・application.yml・messages.properties）と、`@SpringBootTest` + MockMvc の
+結合テストを、この文書の構成の Rust のアプリとテストに変換する
 （[§7](#7-トランスパイラでの変換--framework-spring)）。§3 はその変換規則で、j2r が出力するコードの説明でもある。
 
 ## 1. 移行先の標準構成
@@ -17,47 +18,48 @@ j2r は `--framework spring` で、Spring Boot のアプリ（コントローラ
 |---|---|---|---|
 | Spring MVC（DispatcherServlet・`@Controller`） | **axum 0.8** | tokio / tower / hyper 上に作られた事実上の標準。ハンドラが普通の async 関数で、引数の型（抽出子）で `@RequestParam` などを表せる | actix-web（性能は同等だが独自ランタイム）、Loco（Rails 風のフルスタック。規約が Spring と違いすぎる） |
 | 組み込み Tomcat・スレッドプール | **tokio** | axum・sqlx が前提とする非同期ランタイム | — |
-| MyBatis（Mapper・XML の SQL・動的 SQL） | **sqlx 0.9** | MyBatis と同じ「SQL を自分で書き、結果を型に対応付ける」方式。`QueryBuilder` で `<where>` `<if>` を書ける | Diesel・SeaORM（どちらも ORM で、JPA / Hibernate の移行先に向く）、tokio-postgres（低水準すぎる） |
+| MyBatis（Mapper・XML の SQL・動的 SQL） | **sqlx 0.9** | MyBatis と同じ「SQL を自分で書き、結果を型に対応付ける」方式。`QueryBuilder` で `<where>` `<if>` `<foreach>` を書ける | Diesel・SeaORM（どちらも ORM で、JPA / Hibernate の移行先に向く）、tokio-postgres（低水準すぎる） |
 | HikariCP（DataSource） | **sqlx `PgPool`** | sqlx に内蔵 | deadpool-postgres |
 | `@Transactional` | **sqlx `Transaction`**（`pool.begin()` 〜 `commit()`） | 明示的に書く。`commit()` せずに抜けると drop でロールバック | — |
 | `spring.sql.init`（schema.sql）/ Flyway | **`sqlx::migrate!`**（migrations/） | 適用済みのバージョンを記録する点は Flyway と同じ | refinery |
 | Thymeleaf | **askama 0.16**（+ askama_web） | Jinja 風の構文。テンプレートをコンパイル時に Rust に変換するので、モデルの属性名の誤りや型の誤りがビルドで分かる | minijinja・Tera（実行時に読むので再ビルドなしで直せるが、型検査がない）、maud（HTML を Rust のマクロで書く。デザイナーが触れない） |
 | Bean Validation（`@NotBlank` `@Size`） | **検証のコード**（`validate(&self, &mut BindingResult)`） | 注釈ごとの検査をそのまま書く。メッセージ・対象（null の扱い）を Bean Validation と同じにできる | validator・garde（注釈と同じく宣言的だが、null の扱いと BindingResult との対応が合わない） |
 | フォームのバインド（`@ModelAttribute`・`@RequestParam`） | **serde（serde_urlencoded）+ バインドのコード**（`bind(&RequestParams)`） | 型変換に失敗した値を BindingResult に残して画面に戻せる（Spring の DataBinder と同じ） | `axum::Form`（失敗するとリクエスト全体が 422 になる） |
-| `RedirectAttributes#addFlashAttribute` | **tower-sessions**（セッションに入れて次のリクエストで取り出す `Flash`） | Spring の FlashMap と同じくセッションに置く | axum-messages（名前付きの属性を持てない） |
+| `RedirectAttributes#addFlashAttribute` | **tower-sessions**（セッションに入れ、リダイレクト先のリクエストで取り出す `Flash`） | Spring の FlashMap と同じくセッションに置き、リダイレクト先のパスとパラメータが一致するリクエストで 1 回だけ読む | axum-messages（名前付きの属性を持てない） |
+| MessageSource（messages.properties・`#{...}`） | **変換時に埋め込む** | 文言をテンプレートに書き込む。キーが値で決まる `#{${'priority.' + p}}` は `{% match %}` で分岐する | fluent・rust-i18n（ロケールごとに切り替えるなら） |
 | 静的リソース（`static/`） | **tower-http `ServeDir`** | — | — |
 | `application.yml` | **環境変数で上書きできる既定値**（`config.rs` の `AppConfig::load`） | `${ENV:default}` と緩いバインド（`SPRING_DATASOURCE_URL`）を同じ規則で読む | config・figment（ファイルを実行時に読む） |
 | SLF4J + Logback・アクセスログ | **tracing + tracing-subscriber**、tower-http `TraceLayer` | — | log + env_logger |
 | 例外・`@ControllerAdvice` | **thiserror** のエラー型 + `IntoResponse` | ハンドラが `Result` を返し、`Err` をレスポンスに変える | anyhow（型で分岐できない） |
 | DI コンテナ（Bean） | **`AppState` + `State` 抽出子** | コンテナを使わず、起動時に組み立てて Router に渡す | shaku 等の DI crate（使われていない） |
 | `java.time` | **chrono** | sqlx の `chrono` 機能で `DATE` / `TIMESTAMP` と対応する | time |
-| MockMvc / `@SpringBootTest` | **`tower::ServiceExt::oneshot`** / **`#[sqlx::test]`** | Router をサーバなしで呼べる。`#[sqlx::test]` はテストごとに空の DB を作る | Testcontainers（どちらでも使える） |
+| MockMvc / `@SpringBootTest` | **tests/mock_mvc**（`tower::ServiceExt::oneshot` で Router を呼ぶ、MockMvc と同じ名前の補助）/ **`#[sqlx::test]`** | Router をサーバなしで呼べる。`and_expect(status().is_ok())` のように Java のテストとほぼ同じ形で書ける。`#[sqlx::test]` はテストごとに空の DB を作る | Testcontainers（どちらでも使える） |
 
 Rust は 1.94 以上（sqlx 0.9 の MSRV）。
 
 ## 2. ファイルの対応
 
-`rust/` はテストを除いてすべて j2r が生成する（`./gradlew j2r` で作り直す）。
+`rust/` はすべて j2r が生成する（spring-boot/ で `./gradlew translateToRust` を実行すると作り直す）。
 
 | Spring Boot 版 | Rust 版（`rust/`） | |
 |---|---|---|
-| `build.gradle.kts` | `Cargo.toml`（`# j2r:keep` より後ろは作り直しても残る） | 生成 |
+| `build.gradle.kts` | `Cargo.toml`（テストの dev-dependencies も含む。`# j2r:keep` より後ろは作り直しても残る） | 生成 |
 | `TodoApplication.java`（`@SpringBootApplication`） | `src/main.rs`、`src/app.rs`（自動構成に当たる組み立て・`AppState`・`AppError`）、`src/lib.rs` | 生成 |
 | `application.yml` | `src/config.rs`（環境変数で上書きできる設定値） | 生成 |
 | `schema.sql` | `migrations/0001_schema.sql`、`src/lib.rs` の `MIGRATOR` | 生成 |
 | `ClockConfig.java`（`@Configuration` の `@Bean`） | `src/clock_config.rs` + `src/clock.rs`（`Clock` トレイト。j2r の補助モジュール） | 生成 |
-| `domain/Todo.java`・`domain/TodoFilter.java` | `src/domain/todo.rs`・`todo_filter.rs` | 生成 |
-| `mapper/TodoMapper.java` + `mapper/TodoMapper.xml` | `src/mapper/todo_mapper.rs`（+ 動的 SQL の補助 `mybatis.rs`） | 生成 |
-| `service/TodoService.java`・`TodoSummary.java` | `src/service/todo_service.rs`・`todo_summary.rs` | 生成 |
+| `domain/*.java`（`Todo`・`Activity`・`TodoFilter`・`Priority`・`ActivityAction`） | `src/domain/todo.rs` など | 生成 |
+| `mapper/TodoMapper.java` + `TodoMapper.xml`、`ActivityMapper.java` + `ActivityMapper.xml` | `src/mapper/todo_mapper.rs`・`activity_mapper.rs`（+ 動的 SQL・resultMap の補助 `mybatis.rs`） | 生成 |
+| `service/TodoService.java`・`ActivityService.java`・`TodoSummary.java` | `src/service/todo_service.rs`・`activity_service.rs`・`todo_summary.rs` | 生成 |
 | `service/TodoNotFoundException.java` | `src/error.rs` の `Error::TodoNotFound` | 生成 |
 | `web/TodoController.java`・`HomeController.java` | `src/web/todo_controller.rs`・`home_controller.rs`、ルートは `src/app.rs` の `routes()` | 生成 |
 | `web/TodoForm.java`（+ `messages.properties`） | `src/web/todo_form.rs`（`bind`・`validate`。メッセージは変換時に埋め込む） | 生成 |
 | `web/GlobalExceptionHandler.java` | `src/web/global_exception_handler.rs` + `src/app.rs` の `AppError` | 生成 |
-| `templates/**/*.html`（モデルは `Model`） | `templates/**/*.html`（askama）+ `src/views.rs`（テンプレートごとの構造体） | 生成 |
+| `templates/**/*.html`（モデルは `Model`、文言は `messages.properties`） | `templates/**/*.html`（askama）+ `src/views.rs`（テンプレートごとの構造体） | 生成 |
 | `templates/fragments/layout.html` | 呼び出し側のテンプレートに展開する | 生成 |
 | `static/css/app.css` | `static/css/app.css`（同じファイル） | コピー |
 | （Spring MVC の仕組み） | `src/spring_web.rs`（リクエストパラメータ・フラッシュ・`BindingResult` など。j2r の補助モジュール） | 生成 |
-| `TodoControllerTest.java` | `tests/todo_controller_test.rs` | 手書き |
+| `src/test/java/.../TodoControllerTest.java`（`@SpringBootTest` + MockMvc） | `tests/todo_controller_test.rs` + `tests/mock_mvc/mod.rs`（MockMvc に当たる補助） | 生成 |
 
 パッケージ（`domain` / `mapper` / `service`）はそのままモジュールにし、クラスはファイル（snake_case）に対応させる。
 `@SpringBootApplication` のクラスのパッケージ（`com.example.todo`）が crate のルートになる。
@@ -95,7 +97,8 @@ pub fn app(state: AppState) -> Router {
   （`${DATABASE_URL:jdbc:postgresql://...}`）・緩いバインドの環境変数（`SPRING_DATASOURCE_URL`）を Spring と同じ順に見る。
   JDBC の URL は sqlx の URL に直す。
 - `spring.sql.init.mode=always` なら、起動時に schema.sql（`migrations/`）を流す。
-- テストで差し替える Bean（`@Primary`）は `Beans` のフィールドを差し替えて渡す（例: `Beans { clock: Arc::new(FixedClock(...)) }`）。
+- テストで差し替える Bean（`@TestConfiguration` の `@Bean`・`@Primary`）は `Beans` のフィールドを差し替えて渡す
+  （例: `Beans { clock: FixedClockConfig::fixed_clock() }`。§3.9）。
 
 ### 3.2 コントローラ
 
@@ -105,9 +108,10 @@ pub fn app(state: AppState) -> Router {
 | `@PathVariable long id` | `Path(id): Path<i64>` |
 | `@RequestParam(required = false) @Nullable String filter` | `params: RequestParams`（クエリ文字列と urlencoded の本体）から、ハンドラごとの構造体 `ListParams { filter: Option<String> }` に変換する。`defaultValue` は `unwrap_or` |
 | `@Valid @ModelAttribute TodoForm form, BindingResult result` | `let (form, mut binding_result) = TodoForm::bind(&params); form.validate(&mut binding_result);` |
-| `model.addAttribute("todos", ...)` + `return "todos/list"` | `let model_todos = ...;` + `TodosListView { todos: model_todos, ... }.into_response()`（ビューの構造体は `src/views.rs`） |
+| `model.addAttribute("todos", ...)` + `return "todos/list"` | `let model_todos = ...;` + `render("todos/list", TodosListView { todos: model_todos, ... })`（ビューの構造体は `src/views.rs`。ビュー名はテストで確かめられるようにレスポンスに付ける） |
+| コントローラの `@ModelAttribute("priorities")` のメソッド | 関数 `priorities()` になり、ビューを返すハンドラの最初に `let model_priorities = priorities();` |
 | `return "redirect:/todos"`・`"redirect:/books/" + id` | `redirect("/todos", &[])`（302 Found。axum の `Redirect::to` は 303） |
-| `redirectAttributes.addFlashAttribute("message", ...)` | `flash.set("message", ...).await`（読む側のビューは `message: flash.get("message")`） |
+| `redirectAttributes.addFlashAttribute("message", ...)` | `flash.set("message", ...)` と `flash.redirect("/todos", &[]).await`（リダイレクト先のパスとパラメータに渡すものとしてセッションに入れる。読む側のビューは `message: flash.get("message")`） |
 | `redirectAttributes.addAttribute("filter", ...)` | `redirect_params.push(("filter", ...))` → リダイレクト先のクエリ文字列 |
 | コントローラのフィールド（注入された Bean） | `state.todo_service`・`state.clock` |
 | 例外を投げる（サービスの `Err`） | ハンドラは `Result<Response, AppError>` を返し、`?` で `AppError` にする |
@@ -150,6 +154,9 @@ impl TodoForm {
   メッセージ。`@Size` の長さは Java と同じ UTF-16 の単位で数える。
 - チェックボックスは、送られないときは `th:field` が出力する `_done` の目印で false にする（Spring と同じ）。
 - `@Valid` のフォームを `BindingResult` なしで受け取るハンドラは、エラーがあれば 400 を返す。
+- enum のフィールドは Spring の StringToEnumConverterFactory と同じく定数の名前で変換する（空文字列は null、ない名前は typeMismatch）。
+- フィールドの初期化子（`private Priority priority = Priority.MEDIUM;`）は `impl Default` の値になる。バインドはこの値から始めるので、
+  送られなかったパラメータのフィールドは初期値のまま（DataBinder と同じ）。
 
 ### 3.4 サービスとトランザクション（j2r が変換）
 
@@ -176,6 +183,30 @@ pub struct TodoService {
   データベースのエラー（Spring の `DataAccessException`）は `Error::Database(sqlx::Error)`。
 - `throw new X(...)` は `return Err(Error::X(...))`、`Optional#orElseThrow(() -> new X(...))` は
   `.ok_or_else(|| Error::X(...))?`（戻り値ならそのまま `Result` を返す）。
+- setter で変更するエンティティの引数は `&mut Todo` で受け取る。
+
+**ほかのサービスの呼び出し（トランザクションの伝播）**: サービスをまたぐ呼び出し関係はまとめて解析する
+（データベースを使うか・エラーを返すかも呼び出し先から伝える）。
+
+| 呼び出し先の `@Transactional(propagation = ...)` | 呼び出し元がトランザクションの中のとき |
+|---|---|
+| `REQUIRED`（既定）・`SUPPORTS`・`MANDATORY`・`NESTED`、`@Transactional` なし | 呼び出し元の接続を渡す版を呼ぶ: `self.activity_service.record_in(&mut tx, ...)`（同じトランザクションに参加する） |
+| `REQUIRES_NEW`・`NOT_SUPPORTED`・`NEVER` | 公開する版を呼ぶ（別の接続で、自分のトランザクションを始める / 張らない） |
+
+呼び出し元がトランザクションの外なら、いつも公開する版を呼ぶ。例: TodoService が ActivityService に操作履歴を書かせる
+todo-app では、履歴の表が todos を外部キーで参照するので、同じトランザクションでないとまだコミットしていない Todo を参照できない。
+`MANDATORY`・`NEVER`・`NESTED` は近い扱いにして警告を出す（`NESTED` のセーブポイントは作らない）。
+
+**ロールバックの規則**: Spring の既定（実行時例外はロールバック、検査例外はコミット）と `rollbackFor` / `noRollbackFor` から、
+ロールバックしない例外を決める。そういう例外があれば、公開する版は結果を見て、ロールバックしない例外ならコミットしてから返す:
+
+```rust
+let result = self.discount_in(&mut tx, id, percent).await;
+if matches!(result, Ok(_) | Err(Error::SoldOut(..))) {
+    tx.commit().await?;
+}
+result
+```
 
 ### 3.5 Mapper（MyBatis → sqlx。j2r が変換）
 
@@ -198,11 +229,17 @@ pub async fn find_by_id(conn: &mut PgConnection, id: i64) -> sqlx::Result<Option
 | `<insert useGeneratedKeys="true" keyProperty="id">`・`@Options(useGeneratedKeys = true, ...)` | `RETURNING id` を受け取って `todo.id` に入れる（引数は `&mut Todo`） |
 | 更新系の戻り値 `int` / `long` / `boolean` / `void` | `rows_affected()` を `as i32` / `as i64` / `> 0` / 捨てる |
 | `<sql id>` + `<include refid>` | 変換時に展開する |
-| `<where>` `<set>` `<if test>` `<choose>` | `QueryBuilder` に断片を足していく（`mybatis::Clause` が最初だけ `WHERE` / `SET` を付け、以降は `AND` / `OR` / `,`） |
-| `@Select` / `@Insert` / `@Update` / `@Delete`（注釈の SQL） | XML と同じ |
+| `<if test>` `<choose>` | `if` / `else if` で `QueryBuilder` に断片を足していく |
+| `<where>` `<set>` `<trim prefix prefixOverrides suffix suffixOverrides>` | `mybatis::Trim`。中身があれば最初の断片の前に `WHERE` / `SET` を付ける。断片の先頭の `AND` / `OR` と末尾の `,` は、中身の先頭と末尾のものだけを取り除く（MyBatis と同じ） |
+| `<foreach collection item index open separator close>` | `for (i, id) in ids.iter().copied().enumerate() { if i > 0 { query.push(", "); } query.push_bind(id); }`。要素がなければ open / close も書かない。`collection` は `@Param` の名前か、引数が 1 つなら `list` など |
+| `<bind name="pattern" value="'%' + keyword + '%'"/>` | `let pattern = format!("%{}%", keyword.unwrap_or("null"));`（OGNL と同じく null は "null"） |
+| `${orderBy}`（文字列の埋め込み） | `query.push(order_by)`（値をそのまま SQL に書く。MyBatis と同じく SQL インジェクションに注意） |
+| `<resultMap>`（`<id>`・`<result>`）・`@Results` / `@ResultMap` | 行を対応付ける関数 `fn item_map(row: PgRow) -> sqlx::Result<Item>` と `try_map`。書いていない列も（autoMapping の既定と同じく）プロパティ名の snake_case の列から入れ、結果にない列は無視する |
+| enum の列（`resultType` のフィールド・1 列の値） | enum に `sqlx::Type` / `sqlx::Decode` を実装し、列の文字列を定数の名前として読む（EnumTypeHandler と同じ） |
+| `@Select` / `@Insert` / `@Update` / `@Delete`（注釈の SQL）・`<script>` | XML と同じ（`<script>` の中は動的 SQL） |
 
 `test` 属性の OGNL は、`and` / `or` / `not`、比較（`==` `!=` `<` `>` `eq` `gte` など）、`null`・文字列・数値のリテラル、
-引数とプロパティの参照、引数なしのメソッド呼び出し（`name()` `size()` `isEmpty()`）に対応する。
+引数とプロパティの参照、引数なしのメソッド呼び出し（`name()` `size()` `isEmpty()`）、文字列の連結（`+`）に対応する。
 `@Nullable` な引数は `Option` なので、`keyword != null and keyword != ''` は `keyword.is_some() && keyword != Some("")` になる。
 
 sqlx 0.9 は SQL インジェクション対策として、`query()` に渡す SQL を文字列リテラル（`&'static str`）に限る
@@ -225,7 +262,9 @@ j2r は `@Nullable` の付いた型を `Option<T>` にし、付いていない�
 | `Long id`（INSERT 前は未設定） | `i64`（`Default` で 0。INSERT で生成されたキーが入る） |
 | `new Todo()` のあとに setter が続く | `Todo { title: ..., ..Default::default() }` |
 | `LocalDate` / `LocalDateTime` / `java.time.Clock` | `chrono::NaiveDate` / `NaiveDateTime` / `Arc<dyn Clock>`（`LocalDate.now(clock)` → `clock.today()`） |
-| `enum` | Copy な `enum` と `values()`・`name()`・`ordinal()` |
+| `enum` | Copy な `enum` と `values()`・`name()`・`ordinal()`・`value_of(name)`（`Option`）。最初の定数を `Default` にする（Java では null） |
+| フィールドの初期化子 | `impl Default` の値 |
+| `new ArrayList<>()`・`list.add(x)`・`List.of(a, b)` | `Vec::new()`・`list.push(x)`・`vec![a, b]`（ローカル変数の型引数は宣言から読む） |
 | `record TodoSummary(long active, long completed)` | `#[derive(Clone, Copy, ...)] struct TodoSummary`（アクセサの呼び出しはフィールドの読み出し） |
 | 引数の `String` / エンティティ / `List<T>` | `&str` / `&Todo` / `&[T]`（借用）。戻り値・フィールド・ローカル変数は所有する値 |
 
@@ -262,6 +301,10 @@ j2r は `@Nullable` の付いた型を `Option<T>` にし、付いていない�
 | `th:replace="~{fragments/layout :: head('一覧')}"` | フラグメントの要素を、引数を束縛して展開する |
 | `th:object="${todoForm}"` + `th:field="*{title}"` | `id="title" name="title" value="..."`（型変換に失敗した値があればそれ、`@DateTimeFormat` で書式化） |
 | `th:errors`・`#fields.errors('title')`・`#fields.hasErrors('title')`・`th:errorclass` | `todo_form_binding.field_errors("title")`・`has_field_errors("title")` |
+| `<select th:field="*{priority}">` + `<option th:each="p : ${priorities}" th:value="${p}">` | `<select id="priority" name="priority">` と、プロパティの値と同じ option に `selected="selected"`（Spring と同じく、型変換に失敗した値ではなくプロパティの値と比べる） |
+| `#{todo.title}` | messages.properties の値を書き込む |
+| `#{todos.summary(${summary.total}, ${summary.completed})}` | `全 {{ summary.total().message_arg() }} 件…`（java.text.MessageFormat と同じく `{0}` を置き換え、`'...'` は引用。数値は 3 桁ごとに区切る） |
+| `#{${'priority.' + todo.priority}}` | `{% match todo.priority.name() %}{% when "HIGH" %}高{% when "LOW" %}低...{% endmatch %}`（キーの候補は messages.properties から） |
 
 ### 3.8 例外ハンドラ・エラーページ
 
@@ -270,20 +313,63 @@ j2r は `@Nullable` の付いた型を `Option<T>` にし、付いていない�
 - Spring Boot がどのマッピングにも当たらないリクエストに `templates/error/404.html` を返すのは、ルータの fallback で
   同じテンプレートを返して再現する。
 
-### 3.9 テスト
+### 3.9 テスト（MockMvc → Rust の結合テスト。j2r が変換）
 
-Spring のテスト（MockMvc）はまだ変換しないので、Rust 版の結合テスト（`examples/todo-app/rust/tests/`）は手で書く。
-j2r で作り直しても `tests/` と Cargo.toml の `# j2r:keep` から後ろ（dev-dependencies）は残る。
+テストのソース（Gradle プラグインは test ソースセット、コマンドラインは `--test-sources`）の `@SpringBootTest` のクラスを、
+`tests/` の結合テストにする。MockMvc に当たる補助 `tests/mock_mvc/mod.rs` も生成し、Java のテストとほぼ同じ形で書く。
 
-- MockMvc は、`app(state)` で作った `Router` を `tower::ServiceExt::oneshot` で直接呼ぶ。
-  フラッシュ属性を確かめるには、セッション Cookie を次のリクエストに持ち回る（`tests/todo_controller_test.rs` の `Client`）。
-- 実 DB を使う `@SpringBootTest` は `#[sqlx::test(migrator = "todo::MIGRATOR")]` にする。テストごとに空の DB を作って
-  マイグレーションを流すので、`@BeforeEach` で表を空にする処理は要らない（`DATABASE_URL` の利用者に CREATEDB 権限が必要）。
+```rust
+struct TodoControllerTest {                     // @Autowired のフィールド
+    mock_mvc: MockMvc,
+    todo_service: TodoService,
+    jdbc_template: PgPool,
+}
+
+impl TodoControllerTest {
+    async fn new(pool: PgPool) -> Self {        // アプリを組み立て、@BeforeEach を呼ぶ
+        let state = AppState::new(pool.clone(), Beans { clock: FixedClockConfig::fixed_clock() });
+        let test = Self { mock_mvc: MockMvc::new(app(state.clone())), todo_service: state.todo_service.clone(), jdbc_template: pool };
+        test.clean_up().await;
+        test
+    }
+
+    async fn create_and_list(&self) {
+        self.mock_mvc
+            .perform(post("/todos").param("title", "  牛乳を買う ").param("dueDate", "2026-10-01"))
+            .await
+            .and_expect(status().is_3xx_redirection())
+            .and_expect(redirected_url("/todos"))
+            .and_expect(flash().attribute("message", "「牛乳を買う」を追加しました"));
+    }
+}
+
+#[sqlx::test(migrator = "todo::MIGRATOR")]
+async fn create_and_list(pool: PgPool) {
+    TodoControllerTest::new(pool).await.create_and_list().await;
+}
+```
+
+| Java（JUnit 5・Spring Test） | Rust |
+|---|---|
+| `@SpringBootTest` + `@AutoConfigureMockMvc` のクラス、`@Autowired` のフィールド | フィクスチャの構造体（MockMvc → `MockMvc`、サービス・Bean → `AppState` から、`JdbcTemplate` → `PgPool`） |
+| `@Test` / `@BeforeEach` / `@AfterEach` / `@Disabled` | `#[sqlx::test]` の関数 / `new` の中で呼ぶ / テストの最後に呼ぶ / `#[ignore]` |
+| 入れ子の `@TestConfiguration`（`@Import` したものも）の `@Bean` | `Beans` の同じ型のフィールドを差し替える |
+| `mockMvc.perform(get("/todos/{id}", id).param(...).accept(...))` | `self.mock_mvc.perform(get(&format!("/todos/{}", id)).param(...).accept(...)).await` |
+| `.andExpect(status().isOk())`・`redirectedUrl`・`view().name`・`flash().attribute`・`content().string(containsString(...))`・`not(...)` | `.and_expect(status().is_ok())` など同じ名前（snake_case） |
+| `assertEquals` / `assertTrue` / `assertFalse` / `assertNull` / `assertNotNull` | `assert_eq!` / `assert!` / `assert!(!...)` / `assert!(x.is_none())` / `assert!(x.is_some())` |
+| `jdbcTemplate.update(sql, args...)` | `sqlx::query(sql).bind(...).execute(&self.jdbc_template).await.unwrap()`（`?` は `$1` などにする） |
+| サービスの呼び出し（`throws Exception`） | `.await.unwrap()` |
+| `Clock.fixed(LocalDateTime.of(...).atZone(zone).toInstant(), zone)` | `Arc::new(FixedClock(NaiveDate::from_ymd_opt(...).unwrap().and_hms_opt(...).unwrap()))` |
+
+- MockMvc と同じく、`perform` ごとに新しいセッションで呼ぶ（Cookie は持ち回らない）。フラッシュ属性とビュー名は、
+  生成したアプリがレスポンスの extensions に付けたものを見る（`flash.redirect`・`render`）。
+- `#[sqlx::test]` はテストごとに空の DB を作ってマイグレーションを流す（`DATABASE_URL` の利用者に CREATEDB 権限が必要）。
+  `@BeforeEach` で表を空にする処理もそのまま変換する（空の DB なので何もしない）。
 
 ## 4. 移行で変えないもの
 
 画面・URL・フォームの `name` 属性・リダイレクト先・ステータスコード・メッセージ文言は変えない。
-[examples/todo-app/compare.sh](../examples/todo-app/compare.sh) が両方のアプリに同じ 28 個のリクエストを送り、
+[examples/todo-app/compare.sh](../examples/todo-app/compare.sh) が両方のアプリに同じ 33 個のリクエストを送り、
 ステータス・リダイレクト先・HTML（空白の違いと文字参照の書き方の違いだけを吸収）が一致することを確かめる。
 
 ## 5. 挙動の違いと注意点
@@ -298,7 +384,10 @@ j2r で作り直しても `tests/` と Cargo.toml の `# j2r:keep` から後ろ�
 | 大文字小文字を無視した比較 | `equalsIgnoreCase` | `to_lowercase()` どうしの比較 |
 | エラーページ | `Accept` に `text/html` が無いと JSON を返す | 常に HTML |
 | 不正なパス変数（`/todos/abc/edit`）・パラメータ | 400（ホワイトラベルページ） | 400（axum の平文メッセージ） |
-| フラッシュ属性の寿命 | 次のリクエスト（リダイレクト先）で消える | `Flash` を受け取るハンドラ（ビューを返すハンドラなど）が取り出したときに消える |
+| フラッシュ属性の寿命 | リダイレクト先（パスとパラメータ）に一致するリクエストで消える。180 秒で期限切れ | 同じ（`spring_web::Flash`） |
+| enum の既定値 | フィールドの初期値は null | 最初の定数（`Default`。フォーム・エンティティを `Default` で作るため） |
+| messages.properties にないキー | `??key_ja_JP??`（ロケール付き） | `??key??`（変換時に警告） |
+| メッセージのロケール | `Accept-Language` で messages_xx.properties を選ぶ | messages.properties だけを使う |
 | 静的リソース・テンプレート | jar に入る | テンプレートはバイナリに入る。`static/` は作業ディレクトリから読む |
 | セッションの保存先 | サーバのメモリ（Tomcat） | サーバのメモリ（`MemoryStore`）。複数台にするなら tower-sessions の Redis / PostgreSQL ストア |
 | トランザクション分離レベル | PostgreSQL の既定（READ COMMITTED） | 同じ |
@@ -308,11 +397,11 @@ j2r で作り直しても `tests/` と Cargo.toml の `# j2r:keep` から後ろ�
 
 | 対象 | コマンド | 内容 |
 |---|---|---|
-| Spring Boot 版 | `./gradlew build` | MockMvc の結合テスト 7 件（PostgreSQL を使う） |
+| Spring Boot 版 | `./gradlew build` | MockMvc の結合テスト 8 件（PostgreSQL を使う） |
 | Rust 版の生成 | `./gradlew translateToRust`（spring-boot で） | `rust/` を作り直す。CI は作り直した結果がコミットしたものと同じことを確かめる |
-| Rust 版 | `DATABASE_URL=... cargo test` | Router の結合テスト 7 件（Spring 版と同じシナリオ。手で書いたもの） |
-| 両方 | `./compare.sh` | 同じ 28 リクエストへの応答（ステータス・リダイレクト先・HTML）が一致すること |
-| j2r | `./gradlew build`（リポジトリのルートで） | `tests/spring` のゴールデンテストと、生成した crate の `cargo check`（警告なし） |
+| Rust 版 | `cargo clippy --all-targets -- -D warnings`、`DATABASE_URL=... cargo test` | 警告なし。MockMvc のテストから変換した結合テスト 8 件 |
+| 両方 | `./compare.sh` | 同じ 33 リクエストへの応答（ステータス・リダイレクト先・HTML）が一致すること |
+| j2r | `./gradlew build`（リポジトリのルートで） | `tests/spring` のゴールデンテスト（library・catalog）と、生成した crate の `cargo check --all-targets`（警告なし） |
 
 CI（`.github/workflows/ci.yml` の `todo-app` ジョブ）は PostgreSQL のサービスコンテナを立てて、上の 4 つを実行する。
 
@@ -322,8 +411,9 @@ CI（`.github/workflows/ci.yml` の `todo-app` ジョブ）は PostgreSQL のサ
 
 Gradle プラグインでは、Spring Boot のプロジェクトに次のように書いて `./gradlew translateToRust` を実行する
 （例: [examples/todo-app/spring-boot/build.gradle.kts](../examples/todo-app/spring-boot/build.gradle.kts)）。
-javac で型検査するため、main ソースセットのコンパイルクラスパス（Spring・MyBatis の jar）を使う。
-Mapper XML・テンプレート・静的リソース・schema.sql・application.yml・messages.properties は main ソースセットの resources から読む。
+javac で型検査するため、コンパイルクラスパス（Spring・MyBatis の jar。テストも変換するので test ソースセットのもの）を使う。
+Mapper XML・テンプレート・静的リソース・schema.sql・application.yml・messages.properties は main ソースセットの resources から、
+テストは test ソースセットの java から読む（`testSources` で変えられる）。
 
 ```kotlin
 j2r {
@@ -336,12 +426,13 @@ j2r {
 コマンドラインでは次のようにする。
 
 ```sh
-j2r --framework SPRING -o rust -n todo -cp <コンパイルクラスパス> --resources src/main/resources src/main/java
+j2r --framework SPRING -o rust -n todo -cp <テストのコンパイルクラスパス> --resources src/main/resources \
+    --test-sources src/test/java src/main/java
 ```
 
 出力はアプリの crate（ライブラリ + バイナリ）。`cargo run` で起動し、Spring 版と同じ環境変数（`DATABASE_URL`・`PORT` など
-application.yml のプレースホルダ）で設定する。作り直すと `src/`・`templates/`・`static/`・`migrations/`・Cargo.toml を
-書き換え、`tests/` と Cargo.toml の `# j2r:keep` から後ろは残す。
+application.yml のプレースホルダ）で設定する。作り直すと `src/`・`templates/`・`static/`・`migrations/`・Cargo.toml と、
+変換したテスト（`tests/` の中の生成したファイル）を書き換える。手で書いたほかのテストと Cargo.toml の `# j2r:keep` から後ろは残す。
 
 ```
 rust/
@@ -360,7 +451,10 @@ rust/
     ├── clock_config.rs          # @Configuration
     ├── spring_web.rs            # 補助: RequestParams・Flash・BindingResult・redirect など
     ├── clock.rs                 # 補助: java.time.Clock
-    └── mybatis.rs               # 補助: 動的 SQL（<where> / <set>）
+    └── mybatis.rs               # 補助: 動的 SQL（<where> / <set> / <trim>）・resultMap
+tests/
+├── todo_controller_test.rs      # @SpringBootTest + MockMvc のテスト
+└── mock_mvc/mod.rs              # 補助: MockMvc・ResultMatcher・Hamcrest の Matcher
 ```
 
 コントローラがなければ（Mapper・サービスだけのプロジェクト）、Web 層なしのライブラリ crate を出力する。
@@ -375,26 +469,30 @@ rust/
 | `@Mapper` のインタフェース + Mapper XML（namespace が一致するもの）・注釈の SQL | sqlx の関数のモジュール（§3.5） |
 | `@Service` のクラス | 構造体とメソッド（§3.4） |
 | それらが使うクラス・record・enum・例外クラス | 構造体・列挙型・`crate::error::Error` のバリアント（§3.4・§3.6） |
-| `@RestController`・`@Component`、どこからも使われないクラス | 変換しない（情報の診断 `J2R-SPRING-SKIPPED`） |
+| テストのソースの `@SpringBootTest`（MockMvc）のクラス・`@TestConfiguration` | `tests/` の結合テスト（§3.9） |
+| `@RestController`・`@Component`、どこからも使われないクラス、`@SpringBootTest` 以外のテスト | 変換しない（情報の診断 `J2R-SPRING-SKIPPED`） |
 
 メソッド本体で使える Java の構文・API は、ローカル変数、代入、if・拡張 for、return・throw、条件演算子、文字列連結、
 算術・比較・論理演算、getter / setter・record のアクセサ・自分のクラスのメソッドの呼び出しと、
 `String`（`strip` `trim` `toLowerCase` `isEmpty` `isBlank` `equals` `equalsIgnoreCase` `startsWith` など）・
 `Optional`（`orElseThrow` `orElse` `isPresent` など）・`LocalDate` / `LocalDateTime`（`now(clock)` `isBefore` `isAfter` など）・
-`Clock`（`systemDefaultZone` `systemUTC`）・`List`（`size` `isEmpty`）・`Objects`・enum（`name` `ordinal` `values`）の主なメソッド。
+`Clock`（`systemDefaultZone` `systemUTC` `fixed`）・`List`（`of` `size` `isEmpty` `add` `get` `contains`、`new ArrayList<>()`）・
+`Objects`・enum（`name` `ordinal` `values`）の主なメソッド。
 変換できない構文・API・MyBatis や Thymeleaf の機能は `todo!()`（テンプレートでは空）にして警告（`J2R-SPRING-UNSUPPORTED`）を出す。
 
 ### 7.3 まだ対応していないもの
 
-- Web: `@RestController`（JSON）、`@RequestBody`、`@SessionAttributes`、インターセプタ・フィルタ、Spring Security、国際化
-  （`#{...}` のメッセージ式）、`th:with`・`th:switch`・`th:block` 以外の Thymeleaf の拡張、`<select>` の `th:field`、
-  レイアウト方言（`layout:decorate`）
-- テスト: MockMvc のテストの変換（Rust 版の結合テストは手で書く）
-- MyBatis: `<foreach>`・`<trim>`・`<bind>`・`${...}`（文字列の埋め込み）・`resultMap`・`@Results`、
-  enum や入れ子のオブジェクトの列へのマッピング（`map-underscore-to-camel-case: true` の前提で列名とフィールド名を対応付ける）
-- サービス: 別のサービスの呼び出し（トランザクションの伝播）、try / catch、`@Transactional` の `propagation`・`rollbackFor`、
+- Web: `@RestController`（JSON）、`@RequestBody`、`@SessionAttributes`、インターセプタ・フィルタ、Spring Security、
+  ロケールごとのメッセージ（messages_xx.properties）、`#{...}` のキーの 2 つ以上の値の連結、`th:with`・`th:switch`・`th:block`
+  以外の Thymeleaf の拡張、ラジオボタン・複数選択の `th:field`、レイアウト方言（`layout:decorate`）、
+  引数のある `@ModelAttribute` のメソッド
+- テスト: `@WebMvcTest`・`@MockitoBean`（モック）、`model()`・`jsonPath()` などの ResultMatcher、`perform` をまたぐセッション、
+  `JdbcTemplate` の `update` 以外（`queryForObject` など）、`assertThrows`・パラメータ化テスト
+- MyBatis: `<association>`・`<collection>`・`<discriminator>`・`<constructor>`・`typeHandler`、`<resultMap extends>`、
+  `<trim>` の入れ子、null になりうるコレクションの `<foreach>`
+- サービス: try / catch、`NESTED` のセーブポイント（`REQUIRED` と同じに扱う）、`MANDATORY`・`NEVER` の検査、
   エンティティ以外のクラスの生成、ストリーム API、ラムダ（`Optional` の引数を除く）
-- エンティティ・フォーム: 引数のあるコンストラクタ、継承、enum のフィールド、フィールドの初期化子
+- エンティティ・フォーム: 引数のあるコンストラクタ、継承、インスタンス初期化ブロック
 - 設定: `@Bean` メソッドの引数、`application.yml` の `spring.datasource.*`・`server.port`・`spring.sql.init.mode` 以外の値
 
 ### 7.4 実装
@@ -404,14 +502,17 @@ rust/
 
 | クラス | 役割 |
 |---|---|
-| `SpringModel` | 型を役割（コントローラ・例外ハンドラ・設定・フォーム・Mapper・サービス・エンティティ・record・enum・例外）に分類する |
-| `SpringTranslator` | 関数の形（async か・Result を返すか・引数の借用）を先に決め（`Plans`）、ファイルと lib.rs・Cargo.toml を出力する |
+| `SpringModel` | 型を役割（コントローラ・例外ハンドラ・設定・フォーム・Mapper・サービス・エンティティ・record・enum・例外・テスト）に分類する |
+| `SpringTranslator` | 関数の形（async か・Result を返すか・引数の借用・トランザクションの伝播）を先に決め（`Plans`）、ファイルと lib.rs・Cargo.toml を出力する |
 | `TypeResolver` / `RT` | Java の型と `@Nullable` から Rust の型（所有・借用・Option）を決める |
 | `BodyLowerer` / `LibraryCalls` | メソッド本体を変換する（型合わせ・最後の使用での移動・null の検査のパターン・JDK API）。`Hooks` でコントローラの Model などを置き換える |
 | `MyBatisXml` / `Ognl` / `MapperGenerator` | Mapper XML と OGNL を読み、sqlx の関数にする |
 | `ServiceGenerator` / `DomainGenerator` / `FormGenerator` | サービス・ドメインの型・フォームのバインドと検証・Error を生成する |
 | `WebGenerator` | ハンドラ・ルート・ビューの構造体・AppState / Beans・例外ハンドラ・config.rs・main.rs |
+| `TestGenerator` | `@SpringBootTest` + MockMvc のテストを `tests/` の結合テストにする（補助は `j2r/spring/mock_mvc.rs`） |
 | `ThymeleafHtml` / `ThymeleafExpr` / `TemplateTranslator` | テンプレートを（元の書き方を保って）読み、Thymeleaf の式を型付きで askama に変換する |
 
-テストは `tests/spring`（Spring・MyBatis・JSpecify・Jakarta Validation の注釈はスタブで型検査する）のゴールデンテストと、
-生成した crate の `cargo check`（`SpringGoldenTest`）。askama のテンプレートもこの cargo check で型検査される。
+テストは `tests/spring`（Spring・MyBatis・JSpecify・Jakarta Validation・JUnit・Spring Test の API はスタブで型検査する）の
+ゴールデンテストと、生成した crate（変換したテストを含む）の `cargo check --all-targets`（`SpringGoldenTest`）。
+askama のテンプレートもこの cargo check で型検査される。`library` は基本の変換、`catalog` は動的 SQL・resultMap・
+トランザクションの伝播とロールバックの規則・メッセージ・select・MockMvc のテストを扱う。

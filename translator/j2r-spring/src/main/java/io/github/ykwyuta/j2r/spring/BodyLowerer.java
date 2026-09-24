@@ -103,6 +103,8 @@ final class BodyLowerer {
         private final Map<String, Integer> uses = new HashMap<>();
         /** ローカル変数を変更する箇所の数（再代入・setter・&mut で渡す）。0 より大きければ let mut。 */
         private final Map<String, Integer> mutations = new HashMap<>();
+        /** 再代入するローカル変数（Option の変数は、中身の変更では let mut にしない）。 */
+        private final Set<String> reassigned = new HashSet<>();
         private final Map<String, RV> overrides = new HashMap<>();
         private int loopDepth;
 
@@ -171,10 +173,25 @@ final class BodyLowerer {
                 case Expr.Local l -> ctx.uses.merge(l.name(), 1, Integer::sum);
                 case Expr.Assign a when a.target() instanceof Expr.Local l -> {
                     ctx.mutation(l.name(), 1);
+                    ctx.reassigned.add(l.name());
                     ctx.uses.merge(l.name(), -1, Integer::sum);
                 }
-                case Expr.CompoundAssign a when a.target() instanceof Expr.Local l -> ctx.mutation(l.name(), 1);
-                case Expr.IncDec a when a.target() instanceof Expr.Local l -> ctx.mutation(l.name(), 1);
+                case Expr.CompoundAssign a when a.target() instanceof Expr.Local l -> {
+                    ctx.mutation(l.name(), 1);
+                    ctx.reassigned.add(l.name());
+                }
+                case Expr.IncDec a when a.target() instanceof Expr.Local l -> {
+                    ctx.mutation(l.name(), 1);
+                    ctx.reassigned.add(l.name());
+                }
+                case Expr.Call c when plans.methods.containsKey(c.method().key()) -> {
+                    Plans.Method callee = plans.methods.get(c.method().key());
+                    for (int i = 0; i < c.args().size() && i < callee.params().size(); i++) {
+                        if (callee.params().get(i) instanceof RT.Ref r && r.mut() && unwrapCast(c.args().get(i)) instanceof Expr.Local l) {
+                            ctx.mutation(l.name(), 1);
+                        }
+                    }
+                }
                 case Expr.Call c when c.receiver() instanceof Expr.Local l && plans.setters.containsKey(c.method().key()) ->
                         ctx.mutation(l.name(), 1);
                 case Expr.Call c when c.receiver() instanceof Expr.Local l && LibraryCalls.mutates(c.method()) -> ctx.mutation(l.name(), 1);
@@ -395,7 +412,8 @@ final class BodyLowerer {
             type = types.declared(key, lv.type());
         }
         ctx.declare(lv.name(), rust, type);
-        out.add(new RStmt.Let(rust, ctx.isMutable(lv.name()), null, init));
+        boolean mut = type instanceof RT.Opt ? ctx.reassigned.contains(lv.name()) : ctx.isMutable(lv.name());
+        out.add(new RStmt.Let(rust, mut, null, init));
     }
 
     /** 型引数がわからない型（{@code new ArrayList<>()} など。宣言の型を使う）。 */
@@ -422,10 +440,11 @@ final class BodyLowerer {
             if (check.key().startsWith("l:") && !check.key().contains(".")) {
                 // ローカル変数は Some の中身を取り出して同じ名前で束縛し直す（元の Option は使えなくなるので移動してよい）。
                 String name = check.key().substring(2);
+                boolean mut = ctx.isMutable(name);
                 if (isReturnNone(orElse, ctx)) {
-                    out.add(new RStmt.Let(check.binding(), false, null, new RExpr.Try(check.raw().expr())));
+                    out.add(new RStmt.Let(check.binding(), mut, null, new RExpr.Try(check.raw().expr())));
                 } else {
-                    out.add(new RStmt.LetElse("Some(" + check.binding() + ")", check.raw().expr(), orElse));
+                    out.add(new RStmt.LetElse("Some(" + (mut ? "mut " : "") + check.binding() + ")", check.raw().expr(), orElse));
                 }
                 ctx.declare(name, check.binding(), ((RT.Opt) check.raw().type()).inner());
             } else {

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title th:text="#{items.title}">Items</title>
+</head>
+<body>
+<p class="flash" th:if="${message}" th:text="${message}">message</p>
+<p th:text="#{items.count(${count})}">0 items</p>
+<p th:text="#{items.note(${count})}">note</p>
+<ul>
+    <li th:each="item : ${items}">
+        <span th:text="${item.name}">name</span>
+        <span th:text="#{${'category.' + item.category}}">Book</span>
+        <form th:action="@{/items/{id}/discount(id=${item.id})}" method="post"><button>-10%</button></form>
+    </li>
+</ul>
+</body>
+</html>

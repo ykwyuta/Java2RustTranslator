@@ -137,6 +137,15 @@ final class LibraryCalls {
             case "java.util.List#of/0" -> {
                 return rv(new RExpr.Path("Vec::new()"), new RT.VecT(new RT.Unknown("raw List")));
             }
+            case "java.util.List#of/1", "java.util.List#of/2", "java.util.List#of/3", "java.util.List#of/4", "java.util.List#of/5" -> {
+                List<BodyLowerer.RV> items = new java.util.ArrayList<>();
+                for (Expr a : c.args()) {
+                    items.add(l.expr(a, ctx));
+                }
+                RT elem = RT.owned(items.get(0).type());
+                List<RExpr> values = items.stream().map(v -> l.coerce(v, elem)).toList();
+                return rv(new RExpr.Macro("vec", values), new RT.VecT(elem));
+            }
             case "java.lang.String#valueOf/1" -> {
                 BodyLowerer.RV a = l.expr(c.args().get(0), ctx);
                 return rv(new RExpr.MethodCall(a.expr(), "to_string", List.of()), RT.STR);

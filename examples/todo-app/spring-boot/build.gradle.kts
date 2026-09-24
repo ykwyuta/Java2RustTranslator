@@ -34,7 +34,7 @@ tasks.withType<Test> {
     useJUnitPlatform()
 }
 
-// ./gradlew translateToRust で、アプリ全体（コントローラ・テンプレート・サービス・Mapper・設定）を ../rust に変換する。
+// ./gradlew translateToRust で、アプリ全体（コントローラ・テンプレート・サービス・Mapper・設定）と MockMvc のテストを ../rust に変換する。
 j2r {
     framework.set("spring")
     crateName.set("todo")

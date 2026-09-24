@@ -114,7 +114,7 @@ impl BookService {
     /// 画面に出す名前。
     pub fn label(&self, book: &Book) -> String {
         if let Some(author) = book.author.as_deref() {
-            format!("{} / {}", book.title, author)
+            format!("{} / {author}", book.title)
         } else {
             book.title.clone()
         }

@@ -49,6 +49,7 @@ j2r {
     // cargoCheck.set(true)                  // 変換後に cargo check も実行する
     // framework.set("spring")               // Spring Boot + MyBatis の変換規則を使う（§9）
     // resourceDirs.from("src/main/resources") // --framework spring の Mapper XML・schema.sql（既定: main の resources）
+    // testSources.from("src/test/java")        // --framework spring で変換する MockMvc のテスト（既定: test の java）
 }
 ```
 
@@ -191,9 +192,13 @@ Spring Boot + Spring MVC + MyBatis + Thymeleaf のアプリ全体を、axum + sq
 `application.yml`・`messages.properties`・`@Service`・`@Mapper`（+ Mapper XML）・それらが使うクラス / record / enum / 例外が対象。
 
 - リソース（`src/main/resources`）を `--resources` で渡す（Gradle プラグインは自動で渡す）。
-- 出力先の `src`・`templates`・`static`・`migrations` は毎回作り直す。`Cargo.toml` の `# j2r:keep` の行より後ろと `tests/` は残る。
+- テストのソース（`src/test/java`）を `--test-sources` で渡すと、`@SpringBootTest` + MockMvc のテストを `tests/` の Rust の結合テスト
+  （`#[sqlx::test]`）にする（Gradle プラグインは test ソースセットを自動で渡す。`j2r { testSources ... }` で変えられる）。
+- 出力先の `src`・`templates`・`static`・`migrations` は毎回作り直す。`Cargo.toml` の `# j2r:keep` の行より後ろと、
+  `tests/` の中の手で書いたファイルは残る。
 
-- 型検査に Spring・MyBatis の jar が要るので、コンパイルクラスパスを渡す（Gradle プラグインは自動で渡す）。
+- 型検査に Spring・MyBatis の jar が要るので、コンパイルクラスパスを渡す（テストも変換するならテストのコンパイルクラスパス。
+  Gradle プラグインは自動で渡す）。
 - 参照型の null は JSpecify の `@Nullable`（`@NullMarked` のパッケージ）で決める。`@Nullable` の型が `Option<T>` になる。
 - 変換規則・変換する範囲・未対応の機能は [07-spring-to-rust.md](07-spring-to-rust.md) の §3・§7。
 - 利用例: [examples/todo-app](../examples/todo-app)（`spring-boot/` で `./gradlew translateToRust` を実行すると `rust/` を作り直す）。
